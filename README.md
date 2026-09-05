@@ -7,14 +7,17 @@ Dettagli su architettura, convenzioni e contratto di forkabilità: vedi [CLAUDE.
 ## Servizi
 
 - [`services/turni`](services/turni) — gestione turni (Go)
+- [`services/anagrafica`](services/anagrafica) — utenti, ruoli, autenticazione (Go)
 - [`web`](web) — frontend React + TypeScript
+
+Entrambi i servizi Go condividono un solo Postgres, uno schema per servizio, creato al primo avvio via GORM AutoMigrate (vedi [ADR-0019](docs/adr/0019-gorm-e-automigrate.md), [ADR-0020](docs/adr/0020-turni-gorm.md)) — nessuno script SQL da applicare a mano.
 
 ## Sviluppo locale
 
 ```bash
 cd deploy
-cp .env.example .env   # compilare POSTGRES_PASSWORD; CLOUDFLARE_TUNNEL_TOKEN serve solo in prod
-docker compose up -d --build postgres turni
+cp .env.example .env   # compilare POSTGRES_PASSWORD; vedi services/anagrafica/README.md per la chiave JWT; CLOUDFLARE_TUNNEL_TOKEN serve solo in prod
+docker compose up -d --build postgres anagrafica turni
 
 cd ../web
 npm install
