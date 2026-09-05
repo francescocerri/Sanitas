@@ -2,24 +2,28 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/francescocerri/sanitas/services/turni/internal/authclient"
 	"github.com/francescocerri/sanitas/services/turni/internal/turno"
 )
 
 type Server struct {
 	repo          *turno.Repository
+	authClient    *authclient.Client
 	allowedOrigin string
 	logger        *slog.Logger
 }
 
-func NewServer(repo *turno.Repository, allowedOrigin string, logger *slog.Logger) *Server {
-	return &Server{repo: repo, allowedOrigin: allowedOrigin, logger: logger}
+func NewServer(repo *turno.Repository, authClient *authclient.Client, allowedOrigin string, logger *slog.Logger) *Server {
+	return &Server{repo: repo, authClient: authClient, allowedOrigin: allowedOrigin, logger: logger}
 }
 
 // v1 versions the resource endpoints only: /healthz and /docs/ are
@@ -31,11 +35,34 @@ const v1 = "/v1"
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
-	mux.HandleFunc("GET "+v1+"/shifts", s.handleListTurni)
-	mux.HandleFunc("POST "+v1+"/shifts", s.handleCreateTurno)
-	mux.HandleFunc("GET "+v1+"/shifts/{id}", s.handleGetTurno)
+	mux.HandleFunc("GET "+v1+"/shifts", s.requireAuth(s.handleListTurni))
+	mux.HandleFunc("POST "+v1+"/shifts", s.requireAuth(s.handleCreateTurno))
+	mux.HandleFunc("GET "+v1+"/shifts/{id}", s.requireAuth(s.handleGetTurno))
 	mux.Handle("GET /docs/", docsHandler())
 	return s.withLogging(s.withCORS(mux))
+}
+
+type claimsContextKey struct{}
+
+// requireAuth verifies the Bearer JWT against anagrafica's public key (see
+// internal/authclient) — this service issues no tokens of its own, it only
+// consumes them. Same strict "Bearer <token>" requirement as anagrafica's
+// own requireAuth (see docs/adr/0016): no bare-token exception.
+func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok || token == "" {
+			writeError(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+		claims, err := s.authClient.Verify(token)
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, "invalid token")
+			return
+		}
+		ctx := context.WithValue(r.Context(), claimsContextKey{}, claims)
+		next(w, r.WithContext(ctx))
+	}
 }
 
 // CORS is deliberately minimal (one configurable origin, GET/POST only): the
@@ -154,7 +181,9 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 // @Summary	List turni
 // @Tags		turni
 // @Produce	json
+// @Security	BearerAuth
 // @Success	200	{array}	turno.Turno
+// @Failure	401	"Authentication required"
 // @Router		/v1/shifts [get]
 func (s *Server) handleListTurni(w http.ResponseWriter, r *http.Request) {
 	turni, err := s.repo.List(r.Context())
@@ -170,9 +199,11 @@ func (s *Server) handleListTurni(w http.ResponseWriter, r *http.Request) {
 // @Tags		turni
 // @Accept		json
 // @Produce	json
+// @Security	BearerAuth
 // @Param		turno	body		turno.Turno	true	"New turno (id and stato in the input are ignored)"
 // @Success	201		{object}	turno.Turno
 // @Failure	400		"Invalid payload"
+// @Failure	401		"Authentication required"
 // @Router		/v1/shifts [post]
 func (s *Server) handleCreateTurno(w http.ResponseWriter, r *http.Request) {
 	var input turno.Turno
@@ -192,8 +223,10 @@ func (s *Server) handleCreateTurno(w http.ResponseWriter, r *http.Request) {
 // @Summary	Get a turno by id
 // @Tags		turni
 // @Produce	json
+// @Security	BearerAuth
 // @Param		id	path		string	true	"Turno id (UUID)"
 // @Success	200	{object}	turno.Turno
+// @Failure	401	"Authentication required"
 // @Failure	404	"Turno not found"
 // @Router		/v1/shifts/{id} [get]
 func (s *Server) handleGetTurno(w http.ResponseWriter, r *http.Request) {

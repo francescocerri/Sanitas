@@ -43,6 +43,10 @@ paths:
             items:
               $ref: '#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno'
             type: array
+        "401":
+          description: Authentication required
+      security:
+      - BearerAuth: []
       summary: List turni
       tags:
       - turni
@@ -65,6 +69,10 @@ paths:
             $ref: '#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno'
         "400":
           description: Invalid payload
+        "401":
+          description: Authentication required
+      security:
+      - BearerAuth: []
       summary: Create a new turno
       tags:
       - turni
@@ -83,9 +91,21 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno'
+        "401":
+          description: Authentication required
         "404":
           description: Turno not found
+      security:
+      - BearerAuth: []
       summary: Get a turno by id
       tags:
       - turni
+securityDefinitions:
+  BearerAuth:
+    description: |-
+      turni issues no tokens itself — type "Bearer" followed by a space and
+      the access token obtained from anagrafica's POST /v1/login (e.g. "Bearer eyJhbGci...").
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

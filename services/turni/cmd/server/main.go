@@ -11,15 +11,32 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/francescocerri/sanitas/services/turni/internal/authclient"
 	"github.com/francescocerri/sanitas/services/turni/internal/config"
 	"github.com/francescocerri/sanitas/services/turni/internal/httpapi"
 	"github.com/francescocerri/sanitas/services/turni/internal/turno"
+)
+
+// jwksFetchAttempts/jwksFetchInterval: anagrafica and turni start together
+// in docker-compose with no ordering guarantee between them (anagrafica has
+// no container healthcheck to depend_on), so the first fetch attempt(s)
+// failing is the normal case, not an error — this bounds the wait instead
+// of retrying forever.
+const (
+	jwksFetchAttempts = 5
+	jwksFetchInterval = 2 * time.Second
 )
 
 // @title			Sanitas — Turni API
 // @version		0.1.0
 // @description	Turno (shift) management. The data model is intentionally skeletal (see docs/adr/0005
 // @description	in the repository): it validates the end-to-end pipeline, not the final domain design.
+//
+// @securityDefinitions.apikey	BearerAuth
+// @in							header
+// @name						Authorization
+// @description				turni issues no tokens itself — type "Bearer" followed by a space and
+// @description				the access token obtained from anagrafica's POST /v1/login (e.g. "Bearer eyJhbGci...").
 //
 // No @BasePath: Swagger 2.0 has no per-path basePath override, and this API
 // mixes versioned (/v1/...) and unversioned (/healthz) routes — a global
@@ -50,8 +67,14 @@ func main() {
 	}
 	defer pool.Close()
 
+	authClient := authclient.New(cfg.AuthJWKSURL)
+	if err := fetchJWKSWithRetry(ctx, authClient, logger); err != nil {
+		logger.Error("fetch JWKS from anagrafica failed", "error", err)
+		os.Exit(1)
+	}
+
 	repo := turno.NewRepository(pool)
-	server := httpapi.NewServer(repo, cfg.CORSAllowedOrigin, logger)
+	server := httpapi.NewServer(repo, authClient, cfg.CORSAllowedOrigin, logger)
 
 	httpServer := &http.Server{
 		Addr:    ":" + cfg.Port,
@@ -83,4 +106,23 @@ func main() {
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown error", "error", err)
 	}
+}
+
+// fetchJWKSWithRetry keeps trying (a few times, a short pause apart) instead
+// of failing on the first attempt — see the const doc comment above for why
+// a transient failure here is expected, not exceptional.
+func fetchJWKSWithRetry(ctx context.Context, client *authclient.Client, logger *slog.Logger) error {
+	var err error
+	for attempt := 1; attempt <= jwksFetchAttempts; attempt++ {
+		if err = client.Refresh(ctx); err == nil {
+			return nil
+		}
+		logger.Info("fetch JWKS: attempt failed, retrying", "attempt", attempt, "error", err)
+		select {
+		case <-time.After(jwksFetchInterval):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return err
 }

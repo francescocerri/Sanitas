@@ -38,9 +38,16 @@ services:
       # senza prefisso) continuano a funzionare senza riscrivere nulla.
       DATABASE_URL: postgres://${POSTGRES_USER:-sanitas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sanitas}?sslmode=disable&search_path=turni
       CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:5173}
+      # turni non emette token, verifica solo quelli emessi da anagrafica —
+      # rete interna del compose, sempre porta 8080 (vedi docs/adr/0017).
+      AUTH_JWKS_URL: http://anagrafica:8080/.well-known/jwks.json
     depends_on:
       postgres:
         condition: service_healthy
+      # Nessun healthcheck su anagrafica oggi: turni gestisce un primo
+      # fallimento nel recupero della JWKS con retry al proprio avvio.
+      anagrafica:
+        condition: service_started
     ports:
       # Porta lato host configurabile: la 8080 è comunemente occupata da
       # altri servizi in sviluppo. Il servizio dentro il container resta
