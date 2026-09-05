@@ -16,7 +16,7 @@ function App() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/turni`)
+    fetch(`${API_BASE_URL}/v1/turni`)
       .then((res) => {
         if (!res.ok) throw new Error(`API turni: ${res.status}`)
         return res.json() as Promise<Turno[]>

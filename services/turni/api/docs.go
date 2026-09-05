@@ -150,7 +150,7 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
 	Version:          "0.1.0",
 	Host:             "",
-	BasePath:         "",
+	BasePath:         "/v1",
 	Schemes:          []string{},
 	Title:            "Sanitas — Turni API",
 	Description:      "Turno (shift) management. The data model is intentionally skeletal (see docs/adr/0005\nin the repository): it validates the end-to-end pipeline, not the final domain design.",
