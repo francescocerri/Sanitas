@@ -3,11 +3,19 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/francescocerri/sanitas/services/anagrafica/internal/user"
 )
+
+// refreshTokenTTL: long-lived compared to the access token (24h, see
+// user.KeyPair), so a session survives without re-entering credentials.
+// Rotated on every use (see handleRefresh) — easy to shorten later if 30
+// days turns out too generous, not a decision that blocks anything else.
+const refreshTokenTTL = 30 * 24 * time.Hour
 
 type claimsContextKey struct{}
 
@@ -16,10 +24,14 @@ type claimsContextKey struct{}
 // available to the handler via claimsFromContext. A future service that
 // only holds the public key (fetched from GET /.well-known/jwks.json)
 // would do the same verification without ever calling back here.
+//
+// Requires the standard "Bearer <token>" header — Swagger UI's Authorize
+// dialog for this scheme can't auto-prepend it (a Swagger 2.0 apiKey
+// limitation, see @securityDefinitions.apikey in cmd/server/main.go), so
+// type "Bearer " yourself before pasting the token there.
 func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get("Authorization")
-		token, ok := strings.CutPrefix(header, "Bearer ")
+		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if !ok || token == "" {
 			writeError(w, http.StatusUnauthorized, "authentication required")
 			return
@@ -57,12 +69,35 @@ type loginRequest struct {
 	Password   string `json:"password"`
 }
 
+// authTokens is the response shape shared by login and refresh: an access
+// token (short-lived JWT) plus a refresh token (long-lived, opaque, single
+// use — see handleRefresh).
+type authTokens struct {
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+// issueTokenPair issues a fresh access token for u and a fresh refresh
+// token (stored as an invite_tokens row with purpose "refresh" — see
+// docs/adr/0016, the table already generalizes on purpose).
+func (s *Server) issueTokenPair(ctx context.Context, u user.User) (authTokens, error) {
+	token, err := s.keys.IssueToken(u)
+	if err != nil {
+		return authTokens{}, err
+	}
+	refreshToken, err := s.repo.CreateInviteToken(ctx, u.ID, "refresh", refreshTokenTTL)
+	if err != nil {
+		return authTokens{}, err
+	}
+	return authTokens{Token: token, RefreshToken: refreshToken}, nil
+}
+
 // @Summary	Login
 // @Tags		auth
 // @Accept		json
 // @Produce	json
 // @Param		credenziali	body		loginRequest	true	"Email or username + password"
-// @Success	200			{object}	map[string]string
+// @Success	200			{object}	authTokens
 // @Failure	400			"Invalid payload"
 // @Failure	401			"Invalid credentials"
 // @Router		/v1/login [post]
@@ -83,13 +118,92 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := s.keys.IssueToken(u)
+	tokens, err := s.issueTokenPair(r.Context(), u)
 	if err != nil {
-		s.logger.Error("issue token", "error", err)
+		s.logger.Error("issue token pair", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"token": token})
+	writeJSON(w, http.StatusOK, tokens)
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+// @Summary	Refresh the access token
+// @Description	Consumes the given refresh token (single use — see docs/adr/0016) and
+// @Description	returns a new access token plus a new refresh token.
+// @Tags		auth
+// @Accept		json
+// @Produce	json
+// @Param		refresh	body		refreshRequest	true	"Refresh token"
+// @Success	200		{object}	authTokens
+// @Failure	400		"Invalid payload"
+// @Failure	401		"Invalid, expired, or already used token"
+// @Router		/v1/refresh [post]
+func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	var req refreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+
+	userID, err := s.repo.ConsumeInviteToken(r.Context(), req.RefreshToken, "refresh")
+	if err != nil {
+		if errors.Is(err, user.ErrInvalidToken) {
+			writeError(w, http.StatusUnauthorized, "invalid, expired, or already used token")
+			return
+		}
+		s.logger.Error("consume refresh token", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	u, err := s.repo.GetByID(r.Context(), userID)
+	if err != nil {
+		s.logger.Error("get user for refresh", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	tokens, err := s.issueTokenPair(r.Context(), u)
+	if err != nil {
+		s.logger.Error("issue token pair", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, tokens)
+}
+
+// @Summary	Logout
+// @Description	Invalidates the given refresh token. An access token already issued stays
+// @Description	valid until its own expiry (24h) — no revocation mechanism for those yet,
+// @Description	see docs/adr/0013.
+// @Tags		auth
+// @Accept		json
+// @Param		refresh	body	refreshRequest	true	"Refresh token"
+// @Success	204		"Logged out"
+// @Failure	400		"Invalid payload"
+// @Failure	401		"Invalid, expired, or already used token"
+// @Router		/v1/logout [post]
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	var req refreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+
+	if _, err := s.repo.ConsumeInviteToken(r.Context(), req.RefreshToken, "refresh"); err != nil {
+		if errors.Is(err, user.ErrInvalidToken) {
+			writeError(w, http.StatusUnauthorized, "invalid, expired, or already used token")
+			return
+		}
+		s.logger.Error("consume refresh token on logout", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // @Summary	Get the authenticated user's profile

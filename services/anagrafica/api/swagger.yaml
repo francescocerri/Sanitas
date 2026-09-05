@@ -23,6 +23,13 @@ definitions:
       token:
         type: string
     type: object
+  internal_httpapi.authTokens:
+    properties:
+      refresh_token:
+        type: string
+      token:
+        type: string
+    type: object
   internal_httpapi.changePasswordRequest:
     properties:
       new_password:
@@ -70,6 +77,11 @@ definitions:
       identifier:
         type: string
       password:
+        type: string
+    type: object
+  internal_httpapi.refreshRequest:
+    properties:
+      refresh_token:
         type: string
     type: object
 info:
@@ -121,14 +133,37 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/internal_httpapi.authTokens'
         "400":
           description: Invalid payload
         "401":
           description: Invalid credentials
       summary: Login
+      tags:
+      - auth
+  /v1/logout:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Invalidates the given refresh token. An access token already issued stays
+        valid until its own expiry (24h) — no revocation mechanism for those yet,
+        see docs/adr/0013.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: refresh
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.refreshRequest'
+      responses:
+        "204":
+          description: Logged out
+        "400":
+          description: Invalid payload
+        "401":
+          description: Invalid, expired, or already used token
+      summary: Logout
       tags:
       - auth
   /v1/me:
@@ -168,6 +203,34 @@ paths:
       security:
       - BearerAuth: []
       summary: Change the authenticated user's password
+      tags:
+      - auth
+  /v1/refresh:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Consumes the given refresh token (single use — see docs/adr/0016) and
+        returns a new access token plus a new refresh token.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: refresh
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.refreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_httpapi.authTokens'
+        "400":
+          description: Invalid payload
+        "401":
+          description: Invalid, expired, or already used token
+      summary: Refresh the access token
       tags:
       - auth
   /v1/users:
@@ -222,4 +285,11 @@ paths:
       summary: Activate an account via the invite token, setting the password
       tags:
       - users
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and the access token from POST
+      /v1/login (e.g. "Bearer eyJhbGci...").
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

@@ -78,10 +78,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/internal_httpapi.authTokens"
                         }
                     },
                     "400": {
@@ -89,6 +86,40 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Invalid credentials"
+                    }
+                }
+            }
+        },
+        "/v1/logout": {
+            "post": {
+                "description": "Invalidates the given refresh token. An access token already issued stays\nvalid until its own expiry (24h) — no revocation mechanism for those yet,\nsee docs/adr/0013.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Logout",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "refresh",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_httpapi.refreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Logged out"
+                    },
+                    "400": {
+                        "description": "Invalid payload"
+                    },
+                    "401": {
+                        "description": "Invalid, expired, or already used token"
                     }
                 }
             }
@@ -154,6 +185,46 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Old password incorrect"
+                    }
+                }
+            }
+        },
+        "/v1/refresh": {
+            "post": {
+                "description": "Consumes the given refresh token (single use — see docs/adr/0016) and\nreturns a new access token plus a new refresh token.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Refresh the access token",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "refresh",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_httpapi.refreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_httpapi.authTokens"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload"
+                    },
+                    "401": {
+                        "description": "Invalid, expired, or already used token"
                     }
                 }
             }
@@ -280,6 +351,17 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_httpapi.authTokens": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_httpapi.changePasswordRequest": {
             "type": "object",
             "properties": {
@@ -348,6 +430,22 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "internal_httpapi.refreshRequest": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Type \"Bearer\" followed by a space and the access token from POST /v1/login (e.g. \"Bearer eyJhbGci...\").",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }`
