@@ -4,12 +4,7 @@ Status: Accettata
 
 ## Contesto
 
-Requisito: le API REST devono essere documentate con OpenAPI/Swagger (vedi sezione "Documentazione" in `CLAUDE.md`). Opzioni valutate per generare/servire la spec in un servizio Go:
-
-1. Annotazioni nei commenti degli handler + tool di generazione (es. `swaggo/swag`) — comodo ma aggiunge un tool di build esterno e un modo di scrivere commenti non idiomatico, con rischio di disallineamento se il tool non gira in CI.
-2. Spec OpenAPI scritta a mano, versionata come contratto esplicito.
-
-Per servire la Swagger UI: vendorizzare `swagger-ui-dist` (alcuni MB di JS/CSS) nel repo, oppure caricarla da CDN.
+Requisito: le API REST devono essere documentate con OpenAPI/Swagger (vedi sezione "Documentazione" in `CLAUDE.md`).
 
 ## Decisione
 

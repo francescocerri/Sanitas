@@ -4,7 +4,7 @@ Status: Accettata
 
 ## Contesto
 
-Serve un database relazionale per servizi come `turni`. Alternative valutate: SQLite per servizio (zero costo, zero manutenzione, ma meno standard per un dominio con relazioni tra entità che cresceranno con `anagrafica`, `mezzi-magazzino`) vs PostgreSQL self-hosted (più standard, richiede un'istanza da mantenere).
+Serve un database relazionale per servizi come `turni`, adatto a un dominio con relazioni tra entità che cresceranno con `anagrafica` e `mezzi-magazzino`.
 
 ## Decisione
 

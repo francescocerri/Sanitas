@@ -6,8 +6,6 @@ Status: Accettata
 
 Il progetto nasce per il Comitato CRI di Pavullo ma è pensato per essere forkato da altre associazioni di soccorso sanitario volontario (Croce Verde, Croce Blu, ecc.), non solo da altri comitati CRI. Un nome legato a "Croce Rossa" o al colore rosso avrebbe comunicato implicitamente "questo è un prodotto CRI", scoraggiando associazioni con branding diverso dal riutilizzarlo.
 
-Nomi valutati: OpenCRI, CRI Hub, ComitatoOS, Staffetta, Presidio, Croce Aperta, Soccorso Aperto, Sanitas.
-
 ## Decisione
 
 Nome del progetto: **Sanitas** (dal latino, "salute/sanità"). Neutro rispetto a colore/associazione specifica, comunica il dominio (soccorso sanitario) senza legarsi a un singolo brand.

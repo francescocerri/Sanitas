@@ -4,10 +4,7 @@ Status: Accettata
 
 ## Contesto
 
-L'obiettivo esplicito del progetto è essere riusato da più associazioni indipendenti (comitati CRI, Croce Verde, Croce Blu, ecc.), ciascuna con propri dati, branding e deployment. Due modelli possibili:
-
-1. **Fork + configurazione**: ogni associazione forka il repo, personalizza una cartella di configurazione, deploya una propria istanza indipendente.
-2. **Multi-tenant single-deployment**: un'unica installazione condivisa serve più associazioni, con isolamento dati a livello applicativo/DB.
+L'obiettivo esplicito del progetto è essere riusato da più associazioni indipendenti (comitati CRI, Croce Verde, Croce Blu, ecc.), ciascuna con propri dati, branding e deployment.
 
 ## Decisione
 

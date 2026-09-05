@@ -4,7 +4,7 @@ Status: Accettata
 
 ## Contesto
 
-Progetto pensato per essere forkato da altre associazioni. Opzioni valutate: permissive (MIT, Apache-2.0) vs copyleft (AGPL-3.0, EUPL-1.2, che obbligherebbero chi migliora un fork a ridare indietro le modifiche).
+Progetto pensato per essere forkato da altre associazioni.
 
 ## Decisione
 

@@ -6,14 +6,9 @@ Status: Accettata
 
 Vincolo esplicito: costo di esercizio molto molto basso, tendente a zero, mantenuto nel tempo. L'utente è skillato su AWS ma consapevole che il free tier EC2/RDS scade dopo 12 mesi (poi si paga). L'utente possiede già un Raspberry Pi a casa (costo marginale ~zero, dato che l'hardware è già suo).
 
-Opzioni valutate:
-1. Raspberry Pi a casa, sempre — costo ricorrente reale zero, ma uptime legato alla rete domestica.
-2. AWS da subito (free tier 12 mesi) — più affidabile, ma dopo un anno inizia a costare.
-3. Raspberry Pi ora, con pipeline di deploy pensata per essere portabile ad AWS in futuro.
-
 ## Decisione
 
-Opzione 3. Produzione su **Docker Compose sul Raspberry Pi**, esposto via **Cloudflare Tunnel** (`cloudflared`): nessuna porta aperta sul router, niente IP dinamico da gestire, TLS gratuito gestito da Cloudflare. Il deploy continuo gira su un **GitHub Actions self-hosted runner installato sul Raspberry Pi stesso**: la CI (build/test/scan) gira su runner GitHub-hosted gratuiti, il job di deploy gira sul runner self-hosted, quindi build Docker nativa ARM senza cross-compilazione né necessità di esporre SSH verso casa.
+Produzione su **Docker Compose sul Raspberry Pi**, esposto via **Cloudflare Tunnel** (`cloudflared`): nessuna porta aperta sul router, niente IP dinamico da gestire, TLS gratuito gestito da Cloudflare. Il deploy continuo gira su un **GitHub Actions self-hosted runner installato sul Raspberry Pi stesso**: la CI (build/test/scan) gira su runner GitHub-hosted gratuiti, il job di deploy gira sul runner self-hosted, quindi build Docker nativa ARM senza cross-compilazione né necessità di esporre SSH verso casa.
 
 Tutto containerizzato e configurato via env var, in modo che una futura migrazione ad AWS (EC2/ECS) richieda solo di ripuntare il job di deploy a una nuova macchina, senza toccare il codice dei servizi.
 
