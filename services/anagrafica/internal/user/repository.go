@@ -47,15 +47,17 @@ func isUniqueViolation(err error) bool {
 
 // CreateActiveUser creates a user with a password already set (used only
 // for the bootstrap admin — every other account starts pending, see
-// CreatePendingUser).
-func (r *Repository) CreateActiveUser(ctx context.Context, email, username, passwordHash string, isAdmin bool) (User, error) {
+// CreatePendingUser). No admin flag: the bootstrap admin's ability to
+// manage accounts comes entirely from the technical role Bootstrap assigns
+// it afterwards, same mechanism as any other user — see docs/adr/0018.
+func (r *Repository) CreateActiveUser(ctx context.Context, email, username, passwordHash string) (User, error) {
 	var u User
 	err := r.pool.QueryRow(ctx, `
-		INSERT INTO users (email, username, password_hash, is_admin)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id::text, email, username, is_admin, created_at`,
-		email, username, passwordHash, isAdmin,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt)
+		INSERT INTO users (email, username, password_hash)
+		VALUES ($1, $2, $3)
+		RETURNING id::text, email, username, created_at`,
+		email, username, passwordHash,
+	).Scan(&u.ID, &u.Email, &u.Username, &u.CreatedAt)
 	if isUniqueViolation(err) {
 		return User{}, ErrDuplicateUser
 	}
@@ -73,9 +75,9 @@ func (r *Repository) CreatePendingUser(ctx context.Context, email, username stri
 	err := r.pool.QueryRow(ctx, `
 		INSERT INTO users (email, username)
 		VALUES ($1, $2)
-		RETURNING id::text, email, username, is_admin, created_at`,
+		RETURNING id::text, email, username, created_at`,
 		email, username,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt)
+	).Scan(&u.ID, &u.Email, &u.Username, &u.CreatedAt)
 	if isUniqueViolation(err) {
 		return User{}, ErrDuplicateUser
 	}
@@ -93,9 +95,9 @@ func (r *Repository) GetByLogin(ctx context.Context, identifier string) (User, s
 	var u User
 	var passwordHash *string
 	err := r.pool.QueryRow(ctx, `
-		SELECT id::text, email, username, is_admin, created_at, password_hash
+		SELECT id::text, email, username, created_at, password_hash
 		FROM users WHERE email = $1 OR username = $1`, identifier,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt, &passwordHash)
+	).Scan(&u.ID, &u.Email, &u.Username, &u.CreatedAt, &passwordHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, "", ErrNotFound
 	}
@@ -106,32 +108,42 @@ func (r *Repository) GetByLogin(ctx context.Context, identifier string) (User, s
 		// Account created but the invite was never redeemed yet.
 		return User{}, "", ErrNotFound
 	}
-	roles, err := r.GetRolesForUser(ctx, u.ID)
-	if err != nil {
+	if err := r.populateRolesAndPermissions(ctx, &u); err != nil {
 		return User{}, "", err
 	}
-	u.Roles = roles
 	return u, *passwordHash, nil
 }
 
 func (r *Repository) GetByID(ctx context.Context, id string) (User, error) {
 	var u User
 	err := r.pool.QueryRow(ctx, `
-		SELECT id::text, email, username, is_admin, created_at
+		SELECT id::text, email, username, created_at
 		FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.IsAdmin, &u.CreatedAt)
+	).Scan(&u.ID, &u.Email, &u.Username, &u.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
 	if err != nil {
 		return User{}, fmt.Errorf("user: get by id: %w", err)
 	}
-	roles, err := r.GetRolesForUser(ctx, u.ID)
-	if err != nil {
+	if err := r.populateRolesAndPermissions(ctx, &u); err != nil {
 		return User{}, err
 	}
-	u.Roles = roles
 	return u, nil
+}
+
+func (r *Repository) populateRolesAndPermissions(ctx context.Context, u *User) error {
+	roles, err := r.GetRolesForUser(ctx, u.ID)
+	if err != nil {
+		return err
+	}
+	u.Roles = roles
+	permissions, err := r.GetPermissionsForUser(ctx, u.ID)
+	if err != nil {
+		return err
+	}
+	u.Permissions = permissions
+	return nil
 }
 
 func (r *Repository) GetPasswordHash(ctx context.Context, userID string) (string, error) {
@@ -159,16 +171,26 @@ func (r *Repository) SetPassword(ctx context.Context, userID, passwordHash strin
 
 // UpsertRole is called at startup for every role in the seed file (see
 // docs/adr/0012) — idempotent, so restarting the service after a fork edits
-// its roles config applies the change without a full schema reset.
-func (r *Repository) UpsertRole(ctx context.Context, slug, displayName string) error {
-	_, err := r.pool.Exec(ctx, `
-		INSERT INTO roles (slug, display_name) VALUES ($1, $2)
-		ON CONFLICT (slug) DO UPDATE SET display_name = EXCLUDED.display_name`,
-		slug, displayName)
-	if err != nil {
-		return fmt.Errorf("user: upsert role: %w", err)
+// its roles config applies the change without a full schema reset. Returns
+// the role's id: Bootstrap needs it to assign the technical admin role
+// (see docs/adr/0018), nobody else currently does.
+func (r *Repository) UpsertRole(ctx context.Context, slug, displayName string, permissions []string) (string, error) {
+	if permissions == nil {
+		// pgx sends a nil Go slice as SQL NULL, not an empty array — the
+		// column is NOT NULL (a role with no "permissions" in its seed
+		// entry means "grants nothing", not "unset").
+		permissions = []string{}
 	}
-	return nil
+	var id string
+	err := r.pool.QueryRow(ctx, `
+		INSERT INTO roles (slug, display_name, permissions) VALUES ($1, $2, $3)
+		ON CONFLICT (slug) DO UPDATE SET display_name = EXCLUDED.display_name, permissions = EXCLUDED.permissions
+		RETURNING id::text`,
+		slug, displayName, permissions).Scan(&id)
+	if err != nil {
+		return "", fmt.Errorf("user: upsert role: %w", err)
+	}
+	return id, nil
 }
 
 // RoleIDsBySlug resolves role slugs to ids, so the caller can catch an
@@ -223,6 +245,33 @@ func (r *Repository) GetRolesForUser(ctx context.Context, userID string) ([]stri
 		slugs = append(slugs, slug)
 	}
 	return slugs, rows.Err()
+}
+
+// GetPermissionsForUser unions the permissions of every role assigned to
+// the user, deduplicated — a permission granted by more than one of a
+// user's roles still shows up once. See docs/adr/0018.
+func (r *Repository) GetPermissionsForUser(ctx context.Context, userID string) ([]string, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT permission
+		FROM user_roles
+		JOIN roles ON roles.id = user_roles.role_id
+		CROSS JOIN LATERAL unnest(roles.permissions) AS permission
+		WHERE user_roles.user_id = $1
+		ORDER BY permission`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("user: permissions for user: %w", err)
+	}
+	defer rows.Close()
+
+	permissions := []string{}
+	for rows.Next() {
+		var permission string
+		if err := rows.Scan(&permission); err != nil {
+			return nil, fmt.Errorf("user: permissions for user: scan: %w", err)
+		}
+		permissions = append(permissions, permission)
+	}
+	return permissions, rows.Err()
 }
 
 // CreateToken creates a single-use token for the given purpose ("invite",

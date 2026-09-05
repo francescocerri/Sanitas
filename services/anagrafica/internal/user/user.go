@@ -4,12 +4,12 @@ package user
 import "time"
 
 type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Username  string    `json:"username"`
-	IsAdmin   bool      `json:"is_admin"`
-	Roles     []string  `json:"roles"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          string    `json:"id"`
+	Email       string    `json:"email"`
+	Username    string    `json:"username"`
+	Roles       []string  `json:"roles"`
+	Permissions []string  `json:"permissions"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // Role is seed data, not a fixed enum: role names are committee-specific

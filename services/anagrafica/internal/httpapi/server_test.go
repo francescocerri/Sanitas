@@ -288,13 +288,13 @@ func login(t *testing.T, server *Server, identifier, password string) string {
 	return resp["token"]
 }
 
-func TestCreateUser_RequiresAdmin(t *testing.T) {
+func TestCreateUser_RequiresPermission(t *testing.T) {
 	server, repo := newTestServer(t)
 	ctx := context.Background()
 	if err := user.Bootstrap(ctx, repo, "admin@example.org", "admin", "supersegreta"); err != nil {
 		t.Fatalf("Bootstrap: %v", err)
 	}
-	if err := repo.UpsertRole(ctx, "president", "Presidente"); err != nil {
+	if _, err := repo.UpsertRole(ctx, "president", "Presidente", nil); err != nil {
 		t.Fatalf("UpsertRole: %v", err)
 	}
 
@@ -303,6 +303,8 @@ func TestCreateUser_RequiresAdmin(t *testing.T) {
 		t.Fatalf("expected 401 without a token, got %d", noAuth.Code)
 	}
 
+	// The bootstrap admin has users:manage via its technical role (see
+	// docs/adr/0018), not a raw is_admin flag (removed) — this must succeed.
 	adminToken := login(t, server, "admin", "supersegreta")
 	created := doJSON(t, server, http.MethodPost, "/v1/users",
 		createUserRequest{Email: "mario@example.org", Username: "mario", Roles: []string{"president"}}, adminToken)
@@ -318,6 +320,89 @@ func TestCreateUser_RequiresAdmin(t *testing.T) {
 	}
 	if len(resp.Roles) != 1 || resp.Roles[0] != "president" {
 		t.Fatalf("unexpected roles: %v", resp.Roles)
+	}
+}
+
+// activateAndLogin redeems the invite token embedded in inviteURL and logs
+// the newly activated account in, returning a ready-to-use access token —
+// reused by tests exercising a non-bootstrap user's own permissions.
+func activateAndLogin(t *testing.T, server *Server, inviteURL, username, password string) string {
+	t.Helper()
+	parsed, err := url.Parse(inviteURL)
+	if err != nil {
+		t.Fatalf("parse invite url: %v", err)
+	}
+	token := parsed.Query().Get("token")
+	if token == "" {
+		t.Fatal("expected a token query param in the invite url")
+	}
+	activate := doJSON(t, server, http.MethodPost, "/v1/users/activate",
+		activateUserRequest{Token: token, Password: password}, "")
+	if activate.Code != http.StatusNoContent {
+		t.Fatalf("activate: expected 204, got %d: %s", activate.Code, activate.Body.String())
+	}
+	return login(t, server, username, password)
+}
+
+func TestCreateUser_DeniedWithoutPermission(t *testing.T) {
+	server, repo := newTestServer(t)
+	ctx := context.Background()
+	if err := user.Bootstrap(ctx, repo, "admin@example.org", "admin", "supersegreta"); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	if _, err := repo.UpsertRole(ctx, "base_volunteer", "Volontario base", nil); err != nil {
+		t.Fatalf("UpsertRole: %v", err)
+	}
+	adminToken := login(t, server, "admin", "supersegreta")
+
+	created := doJSON(t, server, http.MethodPost, "/v1/users",
+		createUserRequest{Email: "luca@example.org", Username: "luca", Roles: []string{"base_volunteer"}}, adminToken)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", created.Code, created.Body.String())
+	}
+	var resp createUserResponse
+	if err := json.Unmarshal(created.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	lucaToken := activateAndLogin(t, server, resp.InviteURL, "luca", "nuovapassword")
+
+	denied := doJSON(t, server, http.MethodPost, "/v1/users",
+		createUserRequest{Email: "altro@example.org", Username: "altro"}, lucaToken)
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for a role without users:manage, got %d: %s", denied.Code, denied.Body.String())
+	}
+}
+
+// The core point of granular per-role permissions: a role earns users:manage
+// entirely from config (here simulating it directly via UpsertRole), same as
+// a committee could grant to e.g. "president" — no is_admin flag involved,
+// it was removed (see docs/adr/0018).
+func TestCreateUser_GrantedViaRolePermission(t *testing.T) {
+	server, repo := newTestServer(t)
+	ctx := context.Background()
+	if err := user.Bootstrap(ctx, repo, "admin@example.org", "admin", "supersegreta"); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	if _, err := repo.UpsertRole(ctx, "president", "Presidente", []string{user.PermUsersManage}); err != nil {
+		t.Fatalf("UpsertRole: %v", err)
+	}
+	adminToken := login(t, server, "admin", "supersegreta")
+
+	created := doJSON(t, server, http.MethodPost, "/v1/users",
+		createUserRequest{Email: "presidente@example.org", Username: "presidente", Roles: []string{"president"}}, adminToken)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", created.Code, created.Body.String())
+	}
+	var resp createUserResponse
+	if err := json.Unmarshal(created.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	presidentToken := activateAndLogin(t, server, resp.InviteURL, "presidente", "nuovapassword")
+
+	granted := doJSON(t, server, http.MethodPost, "/v1/users",
+		createUserRequest{Email: "nuovo@example.org", Username: "nuovo"}, presidentToken)
+	if granted.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for a role with users:manage, got %d: %s", granted.Code, granted.Body.String())
 	}
 }
 

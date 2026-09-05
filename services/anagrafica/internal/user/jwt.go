@@ -69,9 +69,9 @@ func parseRSAPrivateKey(der []byte) (*rsa.PrivateKey, error) {
 // Claims carried by every token this service issues.
 type Claims struct {
 	jwt.RegisteredClaims
-	Username string   `json:"username"`
-	Roles    []string `json:"roles"`
-	IsAdmin  bool     `json:"is_admin"`
+	Username    string   `json:"username"`
+	Roles       []string `json:"roles"`
+	Permissions []string `json:"permissions"`
 }
 
 func (k *KeyPair) IssueToken(u User) (string, error) {
@@ -81,9 +81,9 @@ func (k *KeyPair) IssueToken(u User) (string, error) {
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
-		Username: u.Username,
-		Roles:    u.Roles,
-		IsAdmin:  u.IsAdmin,
+		Username:    u.Username,
+		Roles:       u.Roles,
+		Permissions: u.Permissions,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = k.kid

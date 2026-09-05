@@ -8,11 +8,21 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/francescocerri/sanitas/services/turni/internal/authclient"
 	"github.com/francescocerri/sanitas/services/turni/internal/turno"
+)
+
+// Permission slugs this service checks — same string values as anagrafica's
+// user.PermShiftsRead/PermShiftsWrite (independent Go modules, no shared
+// code, see ADR-0003/ADR-0017) — which role gets which is per-committee
+// config on anagrafica's side, not something turni decides — see docs/adr/0018.
+const (
+	permShiftsRead  = "shifts:read"
+	permShiftsWrite = "shifts:write"
 )
 
 type Server struct {
@@ -35,9 +45,9 @@ const v1 = "/v1"
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
-	mux.HandleFunc("GET "+v1+"/shifts", s.requireAuth(s.handleListTurni))
-	mux.HandleFunc("POST "+v1+"/shifts", s.requireAuth(s.handleCreateTurno))
-	mux.HandleFunc("GET "+v1+"/shifts/{id}", s.requireAuth(s.handleGetTurno))
+	mux.HandleFunc("GET "+v1+"/shifts", s.requirePermission(permShiftsRead, s.handleListTurni))
+	mux.HandleFunc("POST "+v1+"/shifts", s.requirePermission(permShiftsWrite, s.handleCreateTurno))
+	mux.HandleFunc("GET "+v1+"/shifts/{id}", s.requirePermission(permShiftsRead, s.handleGetTurno))
 	mux.Handle("GET /docs/", docsHandler())
 	return s.withLogging(s.withCORS(mux))
 }
@@ -63,6 +73,21 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 		ctx := context.WithValue(r.Context(), claimsContextKey{}, claims)
 		next(w, r.WithContext(ctx))
 	}
+}
+
+// requirePermission builds on requireAuth: the caller's token must carry
+// permission among its claims. No bypass of any kind — every authorization
+// decision goes through a role's assigned permissions, same as anagrafica
+// (no separate admin flag anywhere in this codebase — see docs/adr/0018).
+func (s *Server) requirePermission(permission string, next http.HandlerFunc) http.HandlerFunc {
+	return s.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		claims, _ := r.Context().Value(claimsContextKey{}).(*authclient.Claims)
+		if claims == nil || !slices.Contains(claims.Permissions, permission) {
+			writeError(w, http.StatusForbidden, "missing required permission: "+permission)
+			return
+		}
+		next(w, r)
+	})
 }
 
 // CORS is deliberately minimal (one configurable origin, GET/POST only): the
@@ -178,12 +203,13 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// @Summary	List turni
+// @Summary	List turni (requires the shifts:read permission)
 // @Tags		turni
 // @Produce	json
 // @Security	BearerAuth
 // @Success	200	{array}	turno.Turno
 // @Failure	401	"Authentication required"
+// @Failure	403	"Missing required permission: shifts:read"
 // @Router		/v1/shifts [get]
 func (s *Server) handleListTurni(w http.ResponseWriter, r *http.Request) {
 	turni, err := s.repo.List(r.Context())
@@ -195,7 +221,7 @@ func (s *Server) handleListTurni(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, turni)
 }
 
-// @Summary	Create a new turno
+// @Summary	Create a new turno (requires the shifts:write permission)
 // @Tags		turni
 // @Accept		json
 // @Produce	json
@@ -204,6 +230,7 @@ func (s *Server) handleListTurni(w http.ResponseWriter, r *http.Request) {
 // @Success	201		{object}	turno.Turno
 // @Failure	400		"Invalid payload"
 // @Failure	401		"Authentication required"
+// @Failure	403		"Missing required permission: shifts:write"
 // @Router		/v1/shifts [post]
 func (s *Server) handleCreateTurno(w http.ResponseWriter, r *http.Request) {
 	var input turno.Turno
@@ -220,13 +247,14 @@ func (s *Server) handleCreateTurno(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, created)
 }
 
-// @Summary	Get a turno by id
+// @Summary	Get a turno by id (requires the shifts:read permission)
 // @Tags		turni
 // @Produce	json
 // @Security	BearerAuth
 // @Param		id	path		string	true	"Turno id (UUID)"
 // @Success	200	{object}	turno.Turno
 // @Failure	401	"Authentication required"
+// @Failure	403	"Missing required permission: shifts:read"
 // @Failure	404	"Turno not found"
 // @Router		/v1/shifts/{id} [get]
 func (s *Server) handleGetTurno(w http.ResponseWriter, r *http.Request) {
