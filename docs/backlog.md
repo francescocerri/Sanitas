@@ -13,20 +13,26 @@ Quando un'attività è "una feature non banale" (per la convenzione in `CLAUDE.m
 - [ ] **Progettazione del dominio reale** (assegnazione turni, conflitti, disponibilità volontari) — il modello attuale è volutamente scheletrico (vedi [ADR-0005](adr/0005-database-postgres-self-hosted.md)). Richiede una sessione di Plan Mode dedicata.
 - [ ] **Introdurre uno strumento di migrazioni** quando lo schema dovrà evolvere su dati reali (non ancora necessario, vedi [ADR-0005](adr/0005-database-postgres-self-hosted.md)).
 
+## Servizio `anagrafica`
+
+- [x] **Fase A**: scaffold del servizio, schema (utenti, ruoli, ruoli-utente, token di invito), login, creazione utenti da admin + attivazione via token, cambio password. Ruoli come dati seed per-comitato (vedi [ADR-0012](adr/0012-ruoli-come-dati-seed.md)), autenticazione bcrypt + JWT RS256 con JWKS (vedi [ADR-0013](adr/0013-autenticazione-bcrypt-jwt.md)). Stesse convenzioni cross-cutting/test di `turni` (ADR-0009/0010/0011).
+- [ ] **Fase B**: invio email reale (inviti + forgot-password) via Gmail SMTP — oggi l'URL di invito è solo restituito nella risposta API, non spedito.
+- [ ] **Permessi granulari per ruolo** (visibilità diversa per ruolo, lato BE e FE) — oggi solo `is_admin` grezzo; da progettare quando esisteranno schermate/endpoint su cui applicarli (vedi ADR-0013).
+- [ ] Integrazione `turni` ↔ `anagrafica`: validare `volontario_id` contro utenti reali invece del placeholder testuale attuale.
+
 ## Altri microservizi (non ancora iniziati)
 
-- [ ] `anagrafica` — anagrafica volontari/soci
 - [ ] `mezzi-magazzino` — gestione mezzi e magazzino
 - [ ] `servizi-emergenze` — servizi ed emergenze
 
-Ognuno replicherà, una volta definite, le stesse convenzioni (commenti, Swagger, linee guida Go, test) stabilite per `turni` — da tenere sincronizzate.
+Ognuno replicherà le stesse convenzioni (commenti, Swagger, linee guida Go, test) stabilite per `turni`/`anagrafica` — da tenere sincronizzate.
 
 ## Infrastruttura / cross-cutting
 
 - [ ] Setup fisico del Raspberry Pi: Docker, token del tunnel Cloudflare, registrazione del GitHub Actions self-hosted runner (vedi [`deploy/README.md`](../deploy/README.md)) — attività dell'utente, fuori da Claude Code.
 - [ ] Confermare la visibilità del repository GitHub (assunto pubblico, coerente con licenza MIT e obiettivo di forkabilità) e verificare il push.
 - [ ] Strategia di backup del database (es. `pg_dump` periodico verso storage esterno) — vedi [ADR-0004](adr/0004-target-di-deploy.md) e [ADR-0005](adr/0005-database-postgres-self-hosted.md).
-- [ ] Creare la struttura `config/<slug>/` per gli override per-associazione (branding, dati, endpoint) — prevista in `CLAUDE.md`, non ancora creata.
+- [x] Creare la struttura `config/<slug>/` per gli override per-associazione — fatto per `anagrafica` (`config/pavullo/anagrafica/roles.json`, vedi ADR-0012); altri override (branding, dati, endpoint) da aggiungere man mano che servono.
 
 ## Processo
 

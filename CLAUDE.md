@@ -30,11 +30,11 @@ Prima di scrivere codice per una nuova feature, chiediti: "questo assumerebbe qu
 ## Struttura repo
 
 ```
-services/<nome-servizio>/   # es. turni (implementato), anagrafica, mezzi-magazzino, servizi-emergenze
+services/<nome-servizio>/   # turni, anagrafica (implementati); mezzi-magazzino, servizi-emergenze da fare
                              # ciascuno Go module a sé stante, con cmd/server, internal/, api/, migrations/, Dockerfile
                              # api/ = spec Swagger generata dalle annotazioni sopra gli handler (swaggo/swag), servita su /docs/
 web/                         # app React (Vite + TS)
-config/<committee-slug>/    # override per-comitato (branding, dati, endpoint) — non ancora creata
+config/<committee-slug>/    # override per-comitato (es. config/pavullo/anagrafica/roles.json) — creata via via che servono
 docs/
   backlog.md                # attività pianificate ma non ancora fatte — fonte di verità sul "cosa manca"
   adr/                       # una decisione architetturale per file, con contesto e conseguenze

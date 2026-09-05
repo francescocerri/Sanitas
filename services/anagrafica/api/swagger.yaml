@@ -1,0 +1,225 @@
+definitions:
+  github_com_francescocerri_sanitas_services_anagrafica_internal_user.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      is_admin:
+        type: boolean
+      roles:
+        items:
+          type: string
+        type: array
+      username:
+        type: string
+    type: object
+  internal_httpapi.activateUserRequest:
+    properties:
+      password:
+        type: string
+      token:
+        type: string
+    type: object
+  internal_httpapi.changePasswordRequest:
+    properties:
+      new_password:
+        type: string
+      old_password:
+        type: string
+    type: object
+  internal_httpapi.createUserRequest:
+    properties:
+      email:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      username:
+        type: string
+    type: object
+  internal_httpapi.createUserResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      invite_url:
+        description: |-
+          InviteURL is handed back directly in this response instead of being
+          emailed: sending it for real (Gmail SMTP) is a separate follow-up
+          activity, this phase only lays the token groundwork. The admin
+          forwards it to the volunteer by whatever channel they already use.
+        type: string
+      is_admin:
+        type: boolean
+      roles:
+        items:
+          type: string
+        type: array
+      username:
+        type: string
+    type: object
+  internal_httpapi.loginRequest:
+    properties:
+      identifier:
+        type: string
+      password:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: |-
+    Utenti, ruoli, autenticazione. Fase A: creazione utenti da amministratore,
+    attivazione via token, login, cambio password. L'invio email reale
+    (inviti/forgot-password) è una fase successiva — vedi docs/adr/0013.
+  title: Sanitas — Anagrafica API
+  version: 0.1.0
+paths:
+  /.well-known/jwks.json:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Chiave pubblica per verificare i JWT (formato JWKS)
+      tags:
+      - system
+  /healthz:
+    get:
+      responses:
+        "200":
+          description: Service healthy
+        "503":
+          description: Database unreachable
+      summary: Liveness check
+      tags:
+      - system
+  /v1/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Email o username + password
+        in: body
+        name: credenziali
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Payload non valido
+        "401":
+          description: Credenziali non valide
+      summary: Login
+      tags:
+      - auth
+  /v1/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_francescocerri_sanitas_services_anagrafica_internal_user.User'
+        "401":
+          description: Autenticazione richiesta
+      security:
+      - BearerAuth: []
+      summary: Profilo dell'utente autenticato
+      tags:
+      - auth
+  /v1/password/cambia:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Vecchia e nuova password
+        in: body
+        name: password
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.changePasswordRequest'
+      responses:
+        "204":
+          description: Password cambiata
+        "400":
+          description: Payload non valido
+        "401":
+          description: Vecchia password non corretta
+      security:
+      - BearerAuth: []
+      summary: Cambia la password dell'utente autenticato
+      tags:
+      - auth
+  /v1/utenti:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Email, username, ruoli (slug)
+        in: body
+        name: utente
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.createUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_httpapi.createUserResponse'
+        "400":
+          description: Payload non valido o ruolo sconosciuto
+        "403":
+          description: Permesso di amministrazione richiesto
+        "409":
+          description: Email o username già in uso
+      security:
+      - BearerAuth: []
+      summary: Crea un nuovo utente (solo amministratori)
+      tags:
+      - utenti
+  /v1/utenti/attiva:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Token di invito e nuova password
+        in: body
+        name: attivazione
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.activateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Account attivato
+        "400":
+          description: Payload non valido
+        "401":
+          description: Token non valido, scaduto o già usato
+      summary: Attiva un account tramite il token di invito, impostando la password
+      tags:
+      - utenti
+swagger: "2.0"

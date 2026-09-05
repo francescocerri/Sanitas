@@ -1,0 +1,12 @@
+[
+  { "slug": "president", "display_name": "Presidente" },
+  { "slug": "shift_manager", "display_name": "Responsabile turni" },
+  { "slug": "vehicle_manager", "display_name": "Responsabile mezzi" },
+  { "slug": "uniform_manager", "display_name": "Responsabile vestiario" },
+  { "slug": "warehouse_manager", "display_name": "Responsabile magazzino" },
+  { "slug": "trainer_ms", "display_name": "Trainer MS" },
+  { "slug": "trainer_tssa", "display_name": "Trainer TSSA" },
+  { "slug": "base_volunteer", "display_name": "Volontario base" },
+  { "slug": "social_services_volunteer", "display_name": "Volontario sociali" },
+  { "slug": "emergency_volunteer", "display_name": "Volontario emergenza" }
+]
