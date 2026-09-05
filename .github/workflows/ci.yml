@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  go:
+  go-turni:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -16,6 +16,25 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: services/turni/go.mod
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - name: Verifica che api/ (Swagger) sia allineata alle annotazioni nel codice
+        run: |
+          go run github.com/swaggo/swag/cmd/swag@v1.16.4 init -g cmd/server/main.go -d . -o api --parseInternal --parseDependency
+          git diff --exit-code -- api/
+
+  go-anagrafica:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/anagrafica
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: services/anagrafica/go.mod
       - run: go build ./...
       - run: go vet ./...
       - run: go test ./...
