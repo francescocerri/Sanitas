@@ -26,5 +26,8 @@ config/*/secrets/
 .vscode/
 *.swp
 
+# Claude Code local session artifacts (worktrees, local settings)
+.claude/
+
 # Logs
 *.log
