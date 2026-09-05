@@ -37,6 +37,53 @@ services:
       # sempre su 8080 (PORT sopra) — cambia solo il mapping esterno.
       - "${TURNI_HOST_PORT:-8080}:8080"
 
+  # Postgres dedicato per anagrafica: un container per servizio, non
+  # un'istanza condivisa (stesso pattern di ADR-0005, replicato qui invece
+  # di inventare uno schema multi-database in un unico container).
+  anagrafica-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${ANAGRAFICA_POSTGRES_USER:-anagrafica}
+      POSTGRES_PASSWORD: ${ANAGRAFICA_POSTGRES_PASSWORD:?la password del database anagrafica è obbligatoria}
+      POSTGRES_DB: ${ANAGRAFICA_POSTGRES_DB:-anagrafica}
+    volumes:
+      - anagrafica_postgres_data:/var/lib/postgresql/data
+      - ../services/anagrafica/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:${ANAGRAFICA_POSTGRES_HOST_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ANAGRAFICA_POSTGRES_USER:-anagrafica}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  anagrafica:
+    build:
+      context: ../services/anagrafica
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://${ANAGRAFICA_POSTGRES_USER:-anagrafica}:${ANAGRAFICA_POSTGRES_PASSWORD}@anagrafica-postgres:5432/${ANAGRAFICA_POSTGRES_DB:-anagrafica}?sslmode=disable
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:5173}
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private_key.pem
+      ROLES_SEED_PATH: /config/anagrafica/roles.json
+      INVITE_URL_BASE: ${INVITE_URL_BASE:-http://localhost:5173/attiva}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
+      INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+    volumes:
+      # Chiave privata JWT e ruoli del comitato: mai committati, mai
+      # copiati nell'immagine — montati da fuori (vedi services/anagrafica/README.md
+      # per generare la chiave; COMMITTEE_CONFIG_DIR punta a config/<slug>/).
+      - ${JWT_PRIVATE_KEY_HOST_PATH:-../services/anagrafica/jwt_private_key.pem}:/run/secrets/jwt_private_key.pem:ro
+      - ${COMMITTEE_CONFIG_DIR:-../config/pavullo}:/config:ro
+    depends_on:
+      anagrafica-postgres:
+        condition: service_healthy
+    ports:
+      - "${ANAGRAFICA_HOST_PORT:-8090}:8080"
+
   # Espone i servizi via Cloudflare Tunnel: nessuna porta aperta sul router,
   # TLS gestito da Cloudflare. Attivo solo in produzione (Raspberry Pi):
   # docker compose --profile prod up -d
@@ -50,6 +97,8 @@ services:
       - prod
     depends_on:
       - turni
+      - anagrafica
 
 volumes:
   postgres_data:
+  anagrafica_postgres_data:

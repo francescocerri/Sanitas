@@ -6,7 +6,6 @@
         "contact": {},
         "version": "0.1.0"
     },
-    "basePath": "/v1",
     "paths": {
         "/healthz": {
             "get": {
@@ -24,7 +23,7 @@
                 }
             }
         },
-        "/turni": {
+        "/v1/shifts": {
             "get": {
                 "produces": [
                     "application/json"
@@ -80,7 +79,7 @@
                 }
             }
         },
-        "/turni/{id}": {
+        "/v1/shifts/{id}": {
             "get": {
                 "produces": [
                     "application/json"

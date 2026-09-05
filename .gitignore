@@ -15,6 +15,7 @@ web/build/
 .env
 .env.*
 !.env.example
+*.pem
 
 # Config per-comitato (contiene dati reali del deployment, non va committato)
 config/*/secrets/
@@ -24,6 +25,9 @@ config/*/secrets/
 .idea/
 .vscode/
 *.swp
+
+# Claude Code local session artifacts (worktrees, local settings)
+.claude/
 
 # Logs
 *.log

@@ -30,14 +30,16 @@ Prima di scrivere codice per una nuova feature, chiediti: "questo assumerebbe qu
 ## Struttura repo
 
 ```
-services/<nome-servizio>/   # es. turni (implementato), anagrafica, mezzi-magazzino, servizi-emergenze
+services/<nome-servizio>/   # turni, anagrafica (implementati); mezzi-magazzino, servizi-emergenze da fare
                              # ciascuno Go module a sé stante, con cmd/server, internal/, api/, migrations/, Dockerfile
                              # api/ = spec Swagger generata dalle annotazioni sopra gli handler (swaggo/swag), servita su /docs/
 web/                         # app React (Vite + TS)
-config/<committee-slug>/    # override per-comitato (branding, dati, endpoint) — non ancora creata
+config/<committee-slug>/    # override per-comitato (es. config/pavullo/anagrafica/roles.json) — creata via via che servono
 docs/
   backlog.md                # attività pianificate ma non ancora fatte — fonte di verità sul "cosa manca"
   adr/                       # una decisione architetturale per file, con contesto e conseguenze
+  funzionale/                # cosa si può fare oggi sull'applicativo, per area, dal punto di vista di chi lo usa
+  deploy-e-fork/             # percorso completo per far partire il progetto da zero (fork, segreti, deploy, verifica)
 deploy/                     # docker-compose.yml, .env.example, README setup Raspberry Pi
 .github/workflows/          # ci.yml (build/test/vet/govulncheck/npm audit), deploy.yml (self-hosted runner)
 ```
@@ -66,10 +68,16 @@ Aggiornamento dipendenze: **Renovate** (`renovate.json`, preset `config:recommen
 
 ## Documentazione
 
+Tre tipi di documentazione, tenuti sempre aggiornati (non scritti una volta e dimenticati):
+
+- **Tecnica/decisionale**: questo file + [`docs/adr/`](docs/adr/) — architettura, vincoli, il "perché" delle scelte.
+- **Funzionale**: [`docs/funzionale/`](docs/funzionale/) — cosa si può fare oggi sull'applicativo, un file per area, dal punto di vista di chi lo usa (non come è costruito).
+- **Deploy e fork**: [`docs/deploy-e-fork/`](docs/deploy-e-fork/) — tutto il percorso per far partire il progetto da zero (fork, segreti da generare, deploy, verifica), pensato per chi forka.
+
 - **Attività pianificate**: vivono in [`docs/backlog.md`](docs/backlog.md), non nel codice o solo in conversazione — prima di scrivere codice per una feature non banale, l'attività deve essere in backlog (o aggiunta lì contestualmente). Niente "vibe coding": si definiscono le attività, poi si passa al codice.
 - **Decisioni architetturali**: ogni decisione rilevante (nuova o che ne cambia una precedente) va registrata come ADR in [`docs/adr/`](docs/adr/) — un file per decisione, con contesto e conseguenze. Le decisioni passate non si riscrivono: se cambiano, si aggiunge un nuovo ADR che supera il precedente.
 - **Codice commentato**: i commenti spiegano il *perché* di scelte non ovvie (vincoli, workaround, trade-off), non ripetono cosa fa già dire il codice stesso.
-- **Lingua**: codice, commenti (incluse le annotazioni Swagger) e log strutturati (`log/slog` o equivalente) in inglese — convenzione standard per codice destinato a essere letto/consultato anche da chi non parla italiano. Solo i messaggi nel body delle risposte HTTP (rivolti a chi consuma l'API) restano in italiano, coerentemente con la documentazione di progetto (`CLAUDE.md`, ADR, backlog) e il vocabolario di dominio (`turno`, `volontario`, ecc.), che restano invariati.
+- **Lingua**: codice, commenti (incluse le annotazioni Swagger) e log strutturati (`log/slog` o equivalente) in inglese — convenzione standard per codice destinato a essere letto/consultato anche da chi non parla italiano. Solo i messaggi nel body delle risposte HTTP (rivolti a chi consuma l'API) restano in italiano, coerentemente con la documentazione di progetto (`CLAUDE.md`, ADR, backlog) e il vocabolario di dominio (`turno`, `volontario`, ecc.), che restano invariati. **Eccezione**: i segmenti del path delle route HTTP (es. `/v1/shifts`, `/v1/users`) sono anch'essi in inglese, non solo commenti/log — vedi [ADR-0010](docs/adr/0010-convenzioni-cross-cutting-servizi-go.md). I nomi dei campi JSON nel body di richieste/risposte (es. `volontario_id`, `email`, `username`) restano invece invariati in italiano finché non si deciderà di estendere anche a quelli la convenzione.
 - **API documentate con Swagger generato dal codice**: annotazioni `swaggo/swag` sopra ogni handler, mai una spec scritta e mantenuta a mano — vedi [ADR-0009](docs/adr/0009-swagger-generato-dal-codice.md). Un check in CI garantisce che la spec generata combaci con quella committata.
 
 ## Convenzioni di lavoro con Claude Code
@@ -78,6 +86,7 @@ Aggiornamento dipendenze: **Renovate** (`renovate.json`, preset `config:recommen
 - Passare da `/code-review` prima di ogni merge.
 - Aggiornare questo file ogni volta che cambia una decisione architetturale rilevante (in aggiunta all'ADR dedicato, se la decisione è abbastanza importante da meritarne uno).
 - Commit: Conventional Commits. Branching: feature branch + PR.
+- **Mai committare senza l'ok esplicito dell'utente**: preparare e verificare le modifiche, poi chiedere conferma prima di ogni `git commit` — non solo prima del push/PR.
 - **Test**: integration test con `testcontainers-go` (Postgres usa-e-getta, `go test ./...` senza setup manuale) — vedi [ADR-0011](docs/adr/0011-test-automatici-testcontainers.md). **Ogni nuovo endpoint o modifica a un endpoint esistente richiede i test corrispondenti prima del merge**, su tutti i servizi.
 - Seguire le linee guida standard per servizi Go a microservizi: logging strutturato (`log/slog`), error handling con wrapping ed errori di dominio, timeout su `http.Server` — vedi [ADR-0010](docs/adr/0010-convenzioni-cross-cutting-servizi-go.md). Struttura a layer non introdotta finché il dominio reale non è progettato (stessa ADR). Da replicare identico in ogni nuovo servizio.
 - **Prima di ogni `git push`/apertura o aggiornamento di una PR**: rieseguire in locale l'intera suite di verifica (`go build`, `go vet`, `go test`, `gofmt -l`, `govulncheck`, rigenerazione Swagger con `swag init` e controllo che non ci sia drift) — non fidarsi solo della CI remota, verificarlo anche in locale prima del push.
