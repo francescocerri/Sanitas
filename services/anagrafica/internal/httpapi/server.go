@@ -34,9 +34,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /.well-known/jwks.json", s.handleJWKS)
 	mux.HandleFunc("POST "+v1+"/login", s.handleLogin)
 	mux.HandleFunc("GET "+v1+"/me", s.requireAuth(s.handleMe))
-	mux.HandleFunc("POST "+v1+"/utenti", s.requireAdmin(s.handleCreateUser))
-	mux.HandleFunc("POST "+v1+"/utenti/attiva", s.handleActivateUser)
-	mux.HandleFunc("POST "+v1+"/password/cambia", s.requireAuth(s.handleChangePassword))
+	mux.HandleFunc("POST "+v1+"/users", s.requireAdmin(s.handleCreateUser))
+	mux.HandleFunc("POST "+v1+"/users/activate", s.handleActivateUser)
+	mux.HandleFunc("POST "+v1+"/password/change", s.requireAuth(s.handleChangePassword))
 	mux.Handle("GET /docs/", docsHandler())
 	return s.withLogging(s.withCORS(mux))
 }

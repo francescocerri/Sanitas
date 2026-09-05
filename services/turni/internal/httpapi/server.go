@@ -24,15 +24,16 @@ func NewServer(repo *turno.Repository, allowedOrigin string, logger *slog.Logger
 
 // v1 versions the resource endpoints only: /healthz and /docs/ are
 // operational/meta, not part of the API contract that evolves, so they
-// stay unversioned (matches @BasePath /v1 in cmd/server/main.go).
+// stay unversioned (see docs/adr/0010 — no global @BasePath in the swag
+// annotations, each @Router spells out its real full path instead).
 const v1 = "/v1"
 
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
-	mux.HandleFunc("GET "+v1+"/turni", s.handleListTurni)
-	mux.HandleFunc("POST "+v1+"/turni", s.handleCreateTurno)
-	mux.HandleFunc("GET "+v1+"/turni/{id}", s.handleGetTurno)
+	mux.HandleFunc("GET "+v1+"/shifts", s.handleListTurni)
+	mux.HandleFunc("POST "+v1+"/shifts", s.handleCreateTurno)
+	mux.HandleFunc("GET "+v1+"/shifts/{id}", s.handleGetTurno)
 	mux.Handle("GET /docs/", docsHandler())
 	return s.withLogging(s.withCORS(mux))
 }
@@ -154,7 +155,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 // @Tags		turni
 // @Produce	json
 // @Success	200	{array}	turno.Turno
-// @Router		/turni [get]
+// @Router		/v1/shifts [get]
 func (s *Server) handleListTurni(w http.ResponseWriter, r *http.Request) {
 	turni, err := s.repo.List(r.Context())
 	if err != nil {
@@ -172,7 +173,7 @@ func (s *Server) handleListTurni(w http.ResponseWriter, r *http.Request) {
 // @Param		turno	body		turno.Turno	true	"New turno (id and stato in the input are ignored)"
 // @Success	201		{object}	turno.Turno
 // @Failure	400		"Invalid payload"
-// @Router		/turni [post]
+// @Router		/v1/shifts [post]
 func (s *Server) handleCreateTurno(w http.ResponseWriter, r *http.Request) {
 	var input turno.Turno
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -194,7 +195,7 @@ func (s *Server) handleCreateTurno(w http.ResponseWriter, r *http.Request) {
 // @Param		id	path		string	true	"Turno id (UUID)"
 // @Success	200	{object}	turno.Turno
 // @Failure	404	"Turno not found"
-// @Router		/turni/{id} [get]
+// @Router		/v1/shifts/{id} [get]
 func (s *Server) handleGetTurno(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	t, err := s.repo.Get(r.Context(), id)

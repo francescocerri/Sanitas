@@ -20,7 +20,12 @@ import (
 // @version		0.1.0
 // @description	Turno (shift) management. The data model is intentionally skeletal (see docs/adr/0005
 // @description	in the repository): it validates the end-to-end pipeline, not the final domain design.
-// @BasePath		/v1
+//
+// No @BasePath: Swagger 2.0 has no per-path basePath override, and this API
+// mixes versioned (/v1/...) and unversioned (/healthz) routes — a global
+// BasePath would make Swagger UI's "Try it out" call the wrong URL for the
+// unversioned ones (see docs/adr/0010). Each @Router below spells out its
+// real registered path instead.
 func main() {
 	// JSON to stdout: meant to be read by `docker logs`/a log aggregator,
 	// not by a human on a screen (see ADR-0010).

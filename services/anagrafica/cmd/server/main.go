@@ -18,9 +18,9 @@ import (
 
 // @title			Sanitas — Anagrafica API
 // @version		0.1.0
-// @description	Utenti, ruoli, autenticazione. Fase A: creazione utenti da amministratore,
-// @description	attivazione via token, login, cambio password. L'invio email reale
-// @description	(inviti/forgot-password) è una fase successiva — vedi docs/adr/0013.
+// @description	Users, roles, authentication. Phase A: admin-created users, activation via
+// @description	token, login, password change. Sending real email (invites/forgot-password)
+// @description	is a later phase — see docs/adr/0013.
 //
 // No @BasePath: Swagger 2.0 has no per-path basePath override, and this API
 // mixes versioned (/v1/...) and unversioned (/healthz, /.well-known/...)

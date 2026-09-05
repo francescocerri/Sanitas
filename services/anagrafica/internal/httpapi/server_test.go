@@ -170,13 +170,13 @@ func TestCreateUser_RequiresAdmin(t *testing.T) {
 		t.Fatalf("UpsertRole: %v", err)
 	}
 
-	noAuth := doJSON(t, server, http.MethodPost, "/v1/utenti", createUserRequest{Email: "mario@example.org", Username: "mario"}, "")
+	noAuth := doJSON(t, server, http.MethodPost, "/v1/users", createUserRequest{Email: "mario@example.org", Username: "mario"}, "")
 	if noAuth.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 without a token, got %d", noAuth.Code)
 	}
 
 	adminToken := login(t, server, "admin", "supersegreta")
-	created := doJSON(t, server, http.MethodPost, "/v1/utenti",
+	created := doJSON(t, server, http.MethodPost, "/v1/users",
 		createUserRequest{Email: "mario@example.org", Username: "mario", Roles: []string{"president"}}, adminToken)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", created.Code, created.Body.String())
@@ -201,7 +201,7 @@ func TestActivateUser_ThenLogin(t *testing.T) {
 	}
 	adminToken := login(t, server, "admin", "supersegreta")
 
-	created := doJSON(t, server, http.MethodPost, "/v1/utenti",
+	created := doJSON(t, server, http.MethodPost, "/v1/users",
 		createUserRequest{Email: "mario@example.org", Username: "mario"}, adminToken)
 	var createResp createUserResponse
 	if err := json.Unmarshal(created.Body.Bytes(), &createResp); err != nil {
@@ -216,14 +216,14 @@ func TestActivateUser_ThenLogin(t *testing.T) {
 		t.Fatal("expected a token query param in the invite url")
 	}
 
-	activate := doJSON(t, server, http.MethodPost, "/v1/utenti/attiva",
+	activate := doJSON(t, server, http.MethodPost, "/v1/users/activate",
 		activateUserRequest{Token: token, Password: "nuovapassword"}, "")
 	if activate.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", activate.Code, activate.Body.String())
 	}
 
 	// Reusing the same token must fail.
-	reuse := doJSON(t, server, http.MethodPost, "/v1/utenti/attiva",
+	reuse := doJSON(t, server, http.MethodPost, "/v1/users/activate",
 		activateUserRequest{Token: token, Password: "altra"}, "")
 	if reuse.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on token reuse, got %d", reuse.Code)
@@ -243,7 +243,7 @@ func TestChangePassword(t *testing.T) {
 	}
 	token := login(t, server, "admin", "vecchiapassword")
 
-	change := doJSON(t, server, http.MethodPost, "/v1/password/cambia",
+	change := doJSON(t, server, http.MethodPost, "/v1/password/change",
 		changePasswordRequest{OldPassword: "vecchiapassword", NewPassword: "nuovapassword"}, token)
 	if change.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", change.Code, change.Body.String())
@@ -270,7 +270,7 @@ func TestCreateUserLogsBodyWithPIIRedacted(t *testing.T) {
 	var logBuf bytes.Buffer
 	server.logger = slog.New(slog.NewJSONHandler(&logBuf, nil))
 
-	created := doJSON(t, server, http.MethodPost, "/v1/utenti",
+	created := doJSON(t, server, http.MethodPost, "/v1/users",
 		createUserRequest{Email: "riservato@example.org", Username: "riservato"}, adminToken)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", created.Code, created.Body.String())
@@ -296,7 +296,7 @@ func TestActivateUserLogsTokenRedacted(t *testing.T) {
 	}
 	adminToken := login(t, server, "admin", "supersegreta")
 
-	created := doJSON(t, server, http.MethodPost, "/v1/utenti",
+	created := doJSON(t, server, http.MethodPost, "/v1/users",
 		createUserRequest{Email: "mario@example.org", Username: "mario"}, adminToken)
 	var createResp createUserResponse
 	if err := json.Unmarshal(created.Body.Bytes(), &createResp); err != nil {
@@ -311,7 +311,7 @@ func TestActivateUserLogsTokenRedacted(t *testing.T) {
 	var logBuf bytes.Buffer
 	server.logger = slog.New(slog.NewJSONHandler(&logBuf, nil))
 
-	activate := doJSON(t, server, http.MethodPost, "/v1/utenti/attiva",
+	activate := doJSON(t, server, http.MethodPost, "/v1/users/activate",
 		activateUserRequest{Token: rawToken, Password: "nuovapassword"}, "")
 	if activate.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", activate.Code, activate.Body.String())

@@ -26,17 +26,17 @@ type createUserResponse struct {
 	InviteURL string `json:"invite_url"`
 }
 
-// @Summary	Crea un nuovo utente (solo amministratori)
-// @Tags		utenti
+// @Summary	Create a new user (admin only)
+// @Tags		users
 // @Accept		json
 // @Produce	json
 // @Security	BearerAuth
-// @Param		utente	body		createUserRequest	true	"Email, username, ruoli (slug)"
+// @Param		utente	body		createUserRequest	true	"Email, username, roles (slug)"
 // @Success	201		{object}	createUserResponse
-// @Failure	400		"Payload non valido o ruolo sconosciuto"
-// @Failure	403		"Permesso di amministrazione richiesto"
-// @Failure	409		"Email o username già in uso"
-// @Router		/v1/utenti [post]
+// @Failure	400		"Invalid payload or unknown role"
+// @Failure	403		"Admin permission required"
+// @Failure	409		"Email or username already in use"
+// @Router		/v1/users [post]
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -96,15 +96,15 @@ type activateUserRequest struct {
 	Password string `json:"password"`
 }
 
-// @Summary	Attiva un account tramite il token di invito, impostando la password
-// @Tags		utenti
+// @Summary	Activate an account via the invite token, setting the password
+// @Tags		users
 // @Accept		json
 // @Produce	json
-// @Param		attivazione	body	activateUserRequest	true	"Token di invito e nuova password"
-// @Success	204			"Account attivato"
-// @Failure	400			"Payload non valido"
-// @Failure	401			"Token non valido, scaduto o già usato"
-// @Router		/v1/utenti/attiva [post]
+// @Param		attivazione	body	activateUserRequest	true	"Invite token and new password"
+// @Success	204			"Account activated"
+// @Failure	400			"Invalid payload"
+// @Failure	401			"Invalid, expired, or already used token"
+// @Router		/v1/users/activate [post]
 func (s *Server) handleActivateUser(w http.ResponseWriter, r *http.Request) {
 	var req activateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

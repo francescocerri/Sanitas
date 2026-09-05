@@ -61,10 +61,10 @@ type loginRequest struct {
 // @Tags		auth
 // @Accept		json
 // @Produce	json
-// @Param		credenziali	body		loginRequest	true	"Email o username + password"
+// @Param		credenziali	body		loginRequest	true	"Email or username + password"
 // @Success	200			{object}	map[string]string
-// @Failure	400			"Payload non valido"
-// @Failure	401			"Credenziali non valide"
+// @Failure	400			"Invalid payload"
+// @Failure	401			"Invalid credentials"
 // @Router		/v1/login [post]
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
@@ -92,12 +92,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"token": token})
 }
 
-// @Summary	Profilo dell'utente autenticato
+// @Summary	Get the authenticated user's profile
 // @Tags		auth
 // @Produce	json
 // @Security	BearerAuth
 // @Success	200	{object}	user.User
-// @Failure	401	"Autenticazione richiesta"
+// @Failure	401	"Authentication required"
 // @Router		/v1/me [get]
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	claims := claimsFromContext(r)
@@ -110,7 +110,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, u)
 }
 
-// @Summary	Chiave pubblica per verificare i JWT (formato JWKS)
+// @Summary	Public key to verify JWTs (JWKS format)
 // @Tags		system
 // @Produce	json
 // @Success	200	{object}	map[string]any

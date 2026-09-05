@@ -23,7 +23,7 @@ const docTemplate = `{
                 "tags": [
                     "system"
                 ],
-                "summary": "Chiave pubblica per verificare i JWT (formato JWKS)",
+                "summary": "Public key to verify JWTs (JWKS format)",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -65,7 +65,7 @@ const docTemplate = `{
                 "summary": "Login",
                 "parameters": [
                     {
-                        "description": "Email o username + password",
+                        "description": "Email or username + password",
                         "name": "credenziali",
                         "in": "body",
                         "required": true,
@@ -85,10 +85,10 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Payload non valido"
+                        "description": "Invalid payload"
                     },
                     "401": {
-                        "description": "Credenziali non valide"
+                        "description": "Invalid credentials"
                     }
                 }
             }
@@ -106,7 +106,7 @@ const docTemplate = `{
                 "tags": [
                     "auth"
                 ],
-                "summary": "Profilo dell'utente autenticato",
+                "summary": "Get the authenticated user's profile",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -115,12 +115,12 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Autenticazione richiesta"
+                        "description": "Authentication required"
                     }
                 }
             }
         },
-        "/v1/password/cambia": {
+        "/v1/password/change": {
             "post": {
                 "security": [
                     {
@@ -133,10 +133,10 @@ const docTemplate = `{
                 "tags": [
                     "auth"
                 ],
-                "summary": "Cambia la password dell'utente autenticato",
+                "summary": "Change the authenticated user's password",
                 "parameters": [
                     {
-                        "description": "Vecchia e nuova password",
+                        "description": "Old and new password",
                         "name": "password",
                         "in": "body",
                         "required": true,
@@ -147,18 +147,18 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "204": {
-                        "description": "Password cambiata"
+                        "description": "Password changed"
                     },
                     "400": {
-                        "description": "Payload non valido"
+                        "description": "Invalid payload"
                     },
                     "401": {
-                        "description": "Vecchia password non corretta"
+                        "description": "Old password incorrect"
                     }
                 }
             }
         },
-        "/v1/utenti": {
+        "/v1/users": {
             "post": {
                 "security": [
                     {
@@ -172,12 +172,12 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "utenti"
+                    "users"
                 ],
-                "summary": "Crea un nuovo utente (solo amministratori)",
+                "summary": "Create a new user (admin only)",
                 "parameters": [
                     {
-                        "description": "Email, username, ruoli (slug)",
+                        "description": "Email, username, roles (slug)",
                         "name": "utente",
                         "in": "body",
                         "required": true,
@@ -194,18 +194,18 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Payload non valido o ruolo sconosciuto"
+                        "description": "Invalid payload or unknown role"
                     },
                     "403": {
-                        "description": "Permesso di amministrazione richiesto"
+                        "description": "Admin permission required"
                     },
                     "409": {
-                        "description": "Email o username già in uso"
+                        "description": "Email or username already in use"
                     }
                 }
             }
         },
-        "/v1/utenti/attiva": {
+        "/v1/users/activate": {
             "post": {
                 "consumes": [
                     "application/json"
@@ -214,12 +214,12 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "utenti"
+                    "users"
                 ],
-                "summary": "Attiva un account tramite il token di invito, impostando la password",
+                "summary": "Activate an account via the invite token, setting the password",
                 "parameters": [
                     {
-                        "description": "Token di invito e nuova password",
+                        "description": "Invite token and new password",
                         "name": "attivazione",
                         "in": "body",
                         "required": true,
@@ -230,13 +230,13 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "204": {
-                        "description": "Account attivato"
+                        "description": "Account activated"
                     },
                     "400": {
-                        "description": "Payload non valido"
+                        "description": "Invalid payload"
                     },
                     "401": {
-                        "description": "Token non valido, scaduto o già usato"
+                        "description": "Invalid, expired, or already used token"
                     }
                 }
             }
@@ -359,7 +359,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "",
 	Schemes:          []string{},
 	Title:            "Sanitas — Anagrafica API",
-	Description:      "Utenti, ruoli, autenticazione. Fase A: creazione utenti da amministratore,\nattivazione via token, login, cambio password. L'invio email reale\n(inviti/forgot-password) è una fase successiva — vedi docs/adr/0013.",
+	Description:      "Users, roles, authentication. Phase A: admin-created users, activation via\ntoken, login, password change. Sending real email (invites/forgot-password)\nis a later phase — see docs/adr/0013.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

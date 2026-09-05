@@ -12,15 +12,15 @@ type changePasswordRequest struct {
 	NewPassword string `json:"new_password"`
 }
 
-// @Summary	Cambia la password dell'utente autenticato
+// @Summary	Change the authenticated user's password
 // @Tags		auth
 // @Accept		json
 // @Security	BearerAuth
-// @Param		password	body	changePasswordRequest	true	"Vecchia e nuova password"
-// @Success	204			"Password cambiata"
-// @Failure	400			"Payload non valido"
-// @Failure	401			"Vecchia password non corretta"
-// @Router		/v1/password/cambia [post]
+// @Param		password	body	changePasswordRequest	true	"Old and new password"
+// @Success	204			"Password changed"
+// @Failure	400			"Invalid payload"
+// @Failure	401			"Old password incorrect"
+// @Router		/v1/password/change [post]
 func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	var req changePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
