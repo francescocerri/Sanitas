@@ -41,7 +41,7 @@ go run ./cmd/server
 
 Nessuno script da montare: il servizio crea da sé lo schema e le tabelle al primo avvio (GORM AutoMigrate — vedi [ADR-0019](../../docs/adr/0019-gorm-e-automigrate.md)).
 
-Il container Postgres qui sopra è solo per questo scenario (binario locale senza Docker Compose): un'istanza usa-e-getta a sé stante, non quella condivisa con `turni` di produzione (vedi ADR-0014) — `search_path=anagrafica` serve perché la migrazione crea le tabelle dentro quello schema, non in `public`.
+Il container Postgres qui sopra è solo per questo scenario (binario locale senza Docker Compose): un'istanza usa-e-getta a sé stante, non quella condivisa con `turni` di produzione (vedi ADR-0014) — `search_path=anagrafica` serve perché AutoMigrate crea le tabelle dentro quello schema, non in `public`. Il modello è in `internal/user` (`User`, `Role`, `UserRole`, `Token`, tag `gorm:` sui campi) — niente file SQL da cercare per capire lo schema.
 
 Il binario carica `.env` da solo se presente (vedi `internal/config`) — non serve fare `source` a mano.
 
