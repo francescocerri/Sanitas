@@ -92,7 +92,7 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 			if err := recover(); err != nil {
 				s.logger.Error("panic while handling request",
 					"method", r.Method, "path", r.URL.Path, "panic", err)
-				writeError(w, http.StatusInternalServerError, "errore interno")
+				writeError(w, http.StatusInternalServerError, "internal error")
 			}
 		}()
 
@@ -145,7 +145,7 @@ func redactJSONBody(raw []byte) string {
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	if err := s.repo.Ping(r.Context()); err != nil {
 		s.logger.Error("healthz: database unreachable", "error", err)
-		writeError(w, http.StatusServiceUnavailable, "db non raggiungibile")
+		writeError(w, http.StatusServiceUnavailable, "database unreachable")
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -160,7 +160,7 @@ func (s *Server) handleListTurni(w http.ResponseWriter, r *http.Request) {
 	turni, err := s.repo.List(r.Context())
 	if err != nil {
 		s.logger.Error("list turni", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, turni)
@@ -177,13 +177,13 @@ func (s *Server) handleListTurni(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateTurno(w http.ResponseWriter, r *http.Request) {
 	var input turno.Turno
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		writeError(w, http.StatusBadRequest, "payload non valido")
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	created, err := s.repo.Create(r.Context(), input)
 	if err != nil {
 		s.logger.Error("create turno", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
@@ -201,11 +201,11 @@ func (s *Server) handleGetTurno(w http.ResponseWriter, r *http.Request) {
 	t, err := s.repo.Get(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, turno.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "turno non trovato")
+			writeError(w, http.StatusNotFound, "shift not found")
 			return
 		}
 		s.logger.Error("get turno", "error", err, "id", id)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, t)

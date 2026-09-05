@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	ErrNotFound      = errors.New("utente non trovato")
-	ErrDuplicateUser = errors.New("email o username già in uso")
-	ErrInvalidToken  = errors.New("token non valido, scaduto o già usato")
+	ErrNotFound      = errors.New("user not found")
+	ErrDuplicateUser = errors.New("email or username already in use")
+	ErrInvalidToken  = errors.New("invalid, expired, or already used token")
 )
 
 type Repository struct {

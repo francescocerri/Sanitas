@@ -40,21 +40,21 @@ type createUserResponse struct {
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "payload non valido")
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 
 	roleIDsBySlug, err := s.repo.RoleIDsBySlug(r.Context(), req.Roles)
 	if err != nil {
 		s.logger.Error("resolve roles", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	roleIDs := make([]string, 0, len(req.Roles))
 	for _, slug := range req.Roles {
 		id, ok := roleIDsBySlug[slug]
 		if !ok {
-			writeError(w, http.StatusBadRequest, "ruolo sconosciuto: "+slug)
+			writeError(w, http.StatusBadRequest, "unknown role: "+slug)
 			return
 		}
 		roleIDs = append(roleIDs, id)
@@ -63,17 +63,17 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	created, err := s.repo.CreatePendingUser(r.Context(), req.Email, req.Username)
 	if err != nil {
 		if errors.Is(err, user.ErrDuplicateUser) {
-			writeError(w, http.StatusConflict, "email o username già in uso")
+			writeError(w, http.StatusConflict, "email or username already in use")
 			return
 		}
 		s.logger.Error("create pending user", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	if err := s.repo.AssignRoles(r.Context(), created.ID, roleIDs); err != nil {
 		s.logger.Error("assign roles", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	created.Roles = req.Roles
@@ -81,7 +81,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	token, err := s.repo.CreateInviteToken(r.Context(), created.ID, "invite", inviteTokenTTL)
 	if err != nil {
 		s.logger.Error("create invite token", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -108,30 +108,30 @@ type activateUserRequest struct {
 func (s *Server) handleActivateUser(w http.ResponseWriter, r *http.Request) {
 	var req activateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "payload non valido")
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 
 	userID, err := s.repo.ConsumeInviteToken(r.Context(), req.Token, "invite")
 	if err != nil {
 		if errors.Is(err, user.ErrInvalidToken) {
-			writeError(w, http.StatusUnauthorized, "token non valido, scaduto o già usato")
+			writeError(w, http.StatusUnauthorized, "invalid, expired, or already used token")
 			return
 		}
 		s.logger.Error("consume invite token", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	hash, err := user.HashPassword(req.Password)
 	if err != nil {
 		s.logger.Error("hash password", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if err := s.repo.SetPassword(r.Context(), userID, hash); err != nil {
 		s.logger.Error("set password", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

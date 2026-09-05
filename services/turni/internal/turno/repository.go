@@ -12,7 +12,7 @@ import (
 // ErrNotFound is the domain error for "no matching row" — pgx.ErrNoRows is
 // translated here, so callers above this layer (HTTP) don't need to know
 // about the Postgres driver to tell a 404 apart from a real error.
-var ErrNotFound = errors.New("turno non trovato")
+var ErrNotFound = errors.New("shift not found")
 
 type Repository struct {
 	pool *pgxpool.Pool

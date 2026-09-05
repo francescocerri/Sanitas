@@ -19,14 +19,20 @@ import (
 
 var testPool *pgxpool.Pool
 
+// testVolontarioID is a real anagrafica.users row seeded by testdb.StartPostgres
+// — turni.turni.volontario_id is now an FK, so tests need an existing user
+// to reference instead of an arbitrary placeholder string.
+var testVolontarioID string
+
 func TestMain(m *testing.M) {
 	ctx := context.Background()
-	pool, cleanup, err := testdb.StartPostgres(ctx)
+	pool, volontarioID, cleanup, err := testdb.StartPostgres(ctx)
 	if err != nil {
 		panic(err)
 	}
 	defer cleanup()
 	testPool = pool
+	testVolontarioID = volontarioID
 
 	os.Exit(m.Run())
 }
@@ -62,7 +68,7 @@ func TestCreateAndGetTurno(t *testing.T) {
 	server := newTestServer(t)
 
 	body, _ := json.Marshal(turno.Turno{
-		VolontarioID: "v1",
+		VolontarioID: testVolontarioID,
 		Data:         "2026-09-10",
 		OraInizio:    "08:00",
 		OraFine:      "14:00",
@@ -106,7 +112,7 @@ func TestGetTurnoNotFound(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode error response: %v", err)
 	}
-	if body["error"] != "turno non trovato" {
+	if body["error"] != "shift not found" {
 		t.Fatalf("unexpected error body: %v", body)
 	}
 }
@@ -130,7 +136,7 @@ func TestCreateTurnoLogsBodyWithPIIRedacted(t *testing.T) {
 	server.logger = slog.New(slog.NewJSONHandler(&logBuf, nil))
 
 	body, _ := json.Marshal(turno.Turno{
-		VolontarioID: "a-real-volunteer-id",
+		VolontarioID: testVolontarioID,
 		Data:         "2026-09-10",
 		OraInizio:    "08:00",
 		OraFine:      "14:00",
@@ -143,7 +149,7 @@ func TestCreateTurnoLogsBodyWithPIIRedacted(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 	logged := logBuf.String()
-	if bytes.Contains(logBuf.Bytes(), []byte("a-real-volunteer-id")) {
+	if bytes.Contains(logBuf.Bytes(), []byte(testVolontarioID)) {
 		t.Fatalf("PII leaked into the log: %s", logged)
 	}
 	if !bytes.Contains(logBuf.Bytes(), []byte("[redacted]")) {

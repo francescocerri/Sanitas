@@ -1,3 +1,9 @@
+-- Own schema, not the shared database's public one — see docs/adr/0014.
+-- Runs in its own psql session (docker-entrypoint-initdb.d invokes each
+-- script separately), so this SET only affects this script.
+CREATE SCHEMA IF NOT EXISTS anagrafica;
+SET search_path TO anagrafica;
+
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT NOT NULL UNIQUE,

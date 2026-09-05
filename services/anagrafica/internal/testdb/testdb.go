@@ -45,7 +45,11 @@ func StartPostgres(ctx context.Context) (*pgxpool.Pool, func(), error) {
 		return nil, nil, fmt.Errorf("testdb: start postgres container: %w", err)
 	}
 
-	connString, err := container.ConnectionString(ctx, "sslmode=disable")
+	// search_path=anagrafica: the migration now creates its tables inside
+	// an "anagrafica" schema, not the database's default public one (the
+	// two services share one database — see docs/adr/0014) — this keeps
+	// existing unqualified queries (FROM users, no schema prefix) working.
+	connString, err := container.ConnectionString(ctx, "sslmode=disable", "search_path=anagrafica")
 	if err != nil {
 		return nil, nil, fmt.Errorf("testdb: connection string: %w", err)
 	}

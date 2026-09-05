@@ -104,7 +104,7 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 			if err := recover(); err != nil {
 				s.logger.Error("panic while handling request",
 					"method", r.Method, "path", r.URL.Path, "panic", err)
-				writeError(w, http.StatusInternalServerError, "errore interno")
+				writeError(w, http.StatusInternalServerError, "internal error")
 			}
 		}()
 
@@ -149,7 +149,7 @@ func redactJSONBody(raw []byte) string {
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	if err := s.repo.Ping(r.Context()); err != nil {
 		s.logger.Error("healthz: database unreachable", "error", err)
-		writeError(w, http.StatusServiceUnavailable, "db non raggiungibile")
+		writeError(w, http.StatusServiceUnavailable, "database unreachable")
 		return
 	}
 	w.WriteHeader(http.StatusOK)

@@ -18,7 +18,12 @@ Quando un'attività è "una feature non banale" (per la convenzione in `CLAUDE.m
 - [x] **Fase A**: scaffold del servizio, schema (utenti, ruoli, ruoli-utente, token di invito), login, creazione utenti da admin + attivazione via token, cambio password. Ruoli come dati seed per-comitato (vedi [ADR-0012](adr/0012-ruoli-come-dati-seed.md)), autenticazione bcrypt + JWT RS256 con JWKS (vedi [ADR-0013](adr/0013-autenticazione-bcrypt-jwt.md)). Stesse convenzioni cross-cutting/test di `turni` (ADR-0009/0010/0011).
 - [ ] **Fase B**: invio email reale (inviti + forgot-password) via Gmail SMTP — oggi l'URL di invito è solo restituito nella risposta API, non spedito.
 - [ ] **Permessi granulari per ruolo** (visibilità diversa per ruolo, lato BE e FE) — oggi solo `is_admin` grezzo; da progettare quando esisteranno schermate/endpoint su cui applicarli (vedi ADR-0013).
-- [ ] Integrazione `turni` ↔ `anagrafica`: validare `volontario_id` contro utenti reali invece del placeholder testuale attuale.
+- [x] Integrazione `turni` ↔ `anagrafica`: `volontario_id` è ora una FK reale verso `anagrafica.users(id)`, database condiviso con schema separati per servizio (vedi [ADR-0014](adr/0014-database-condiviso-schema-separati.md)).
+
+## Database / ORM
+
+- [x] **Fase 1**: consolidamento su un unico Postgres condiviso tra `turni` e `anagrafica`, uno schema per servizio, FK reale `turni.turni.volontario_id → anagrafica.users.id` (vedi [ADR-0014](adr/0014-database-condiviso-schema-separati.md)). `pgx` invariato in entrambi i servizi.
+- [ ] **Fase 2**: adozione di **GORM** per l'accesso ai dati in `anagrafica` e poi `turni`, con gestione dello schema via **AutoMigrate** al posto degli script SQL in `/docker-entrypoint-initdb.d/` — supera parte di [ADR-0005](adr/0005-database-postgres-self-hosted.md), da tracciare con un ADR dedicato quando si farà.
 
 ## Altri microservizi (non ancora iniziati)
 

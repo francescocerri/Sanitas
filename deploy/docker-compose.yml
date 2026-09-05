@@ -1,4 +1,11 @@
 services:
+  # Un solo Postgres condiviso da turni e anagrafica, con uno schema
+  # Postgres per servizio (namespace nativo, non un database separato) —
+  # vedi ADR-0014. turni.turni referenzia anagrafica.users con una FK
+  # reale, quindi lo schema anagrafica deve esistere prima di quello turni:
+  # gli script vengono rinominati nel path di destinazione per imporre
+  # l'ordine (Postgres esegue /docker-entrypoint-initdb.d/ in ordine
+  # lessicografico sul nome nel container, non sul path sorgente).
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -8,7 +15,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-sanitas}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../services/turni/migrations:/docker-entrypoint-initdb.d:ro
+      - ../services/anagrafica/migrations/0001_init.sql:/docker-entrypoint-initdb.d/01-anagrafica-init.sql:ro
+      - ../services/turni/migrations/0001_init.sql:/docker-entrypoint-initdb.d/02-turni-init.sql:ro
     ports:
       # Solo su localhost (non su tutta la LAN): comodo per ispezionare il DB
       # con un client come DBeaver, in produzione riduce la superficie esposta
@@ -26,7 +34,9 @@ services:
     restart: unless-stopped
     environment:
       PORT: 8080
-      DATABASE_URL: postgres://${POSTGRES_USER:-sanitas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sanitas}?sslmode=disable
+      # search_path punta al proprio schema: le query esistenti (FROM turni,
+      # senza prefisso) continuano a funzionare senza riscrivere nulla.
+      DATABASE_URL: postgres://${POSTGRES_USER:-sanitas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sanitas}?sslmode=disable&search_path=turni
       CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:5173}
     depends_on:
       postgres:
@@ -37,34 +47,13 @@ services:
       # sempre su 8080 (PORT sopra) — cambia solo il mapping esterno.
       - "${TURNI_HOST_PORT:-8080}:8080"
 
-  # Postgres dedicato per anagrafica: un container per servizio, non
-  # un'istanza condivisa (stesso pattern di ADR-0005, replicato qui invece
-  # di inventare uno schema multi-database in un unico container).
-  anagrafica-postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${ANAGRAFICA_POSTGRES_USER:-anagrafica}
-      POSTGRES_PASSWORD: ${ANAGRAFICA_POSTGRES_PASSWORD:?la password del database anagrafica è obbligatoria}
-      POSTGRES_DB: ${ANAGRAFICA_POSTGRES_DB:-anagrafica}
-    volumes:
-      - anagrafica_postgres_data:/var/lib/postgresql/data
-      - ../services/anagrafica/migrations:/docker-entrypoint-initdb.d:ro
-    ports:
-      - "127.0.0.1:${ANAGRAFICA_POSTGRES_HOST_PORT:-5433}:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${ANAGRAFICA_POSTGRES_USER:-anagrafica}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   anagrafica:
     build:
       context: ../services/anagrafica
     restart: unless-stopped
     environment:
       PORT: 8080
-      DATABASE_URL: postgres://${ANAGRAFICA_POSTGRES_USER:-anagrafica}:${ANAGRAFICA_POSTGRES_PASSWORD}@anagrafica-postgres:5432/${ANAGRAFICA_POSTGRES_DB:-anagrafica}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER:-sanitas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sanitas}?sslmode=disable&search_path=anagrafica
       CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:5173}
       JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private_key.pem
       ROLES_SEED_PATH: /config/anagrafica/roles.json
@@ -79,7 +68,7 @@ services:
       - ${JWT_PRIVATE_KEY_HOST_PATH:-../services/anagrafica/jwt_private_key.pem}:/run/secrets/jwt_private_key.pem:ro
       - ${COMMITTEE_CONFIG_DIR:-../config/pavullo}:/config:ro
     depends_on:
-      anagrafica-postgres:
+      postgres:
         condition: service_healthy
     ports:
       - "${ANAGRAFICA_HOST_PORT:-8090}:8080"
@@ -101,4 +90,3 @@ services:
 
 volumes:
   postgres_data:
-  anagrafica_postgres_data:

@@ -12,10 +12,12 @@ openssl genrsa -out jwt_private_key.pem 2048
 
 ## Eseguire in locale (con Postgres via Docker Compose)
 
+`anagrafica` condivide lo stesso Postgres di `turni`, in un proprio schema (vedi [ADR-0014](../../docs/adr/0014-database-condiviso-schema-separati.md)) — non serve avviare un container Postgres a parte.
+
 ```bash
 cd ../../deploy
 cp .env.example .env   # imposta almeno le password Postgres
-docker compose up -d --build anagrafica-postgres anagrafica
+docker compose up -d --build postgres anagrafica
 ```
 
 ```bash
@@ -34,9 +36,11 @@ docker run -d --name anagrafica-postgres-dev -p 5433:5432 \
   postgres:16-alpine
 
 openssl genrsa -out jwt_private_key.pem 2048
-cp .env.example .env   # valori già coerenti col container sopra
+export DATABASE_URL="postgres://anagrafica:devlocalpassword@localhost:5433/anagrafica?sslmode=disable&search_path=anagrafica"
 go run ./cmd/server
 ```
+
+Il container Postgres qui sopra è solo per questo scenario (binario locale senza Docker Compose): un'istanza usa-e-getta a sé stante, non quella condivisa con `turni` di produzione (vedi ADR-0014) — `search_path=anagrafica` serve perché la migrazione crea le tabelle dentro quello schema, non in `public`.
 
 Il binario carica `.env` da solo se presente (vedi `internal/config`) — non serve fare `source` a mano.
 

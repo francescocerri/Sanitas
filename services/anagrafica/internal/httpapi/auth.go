@@ -21,12 +21,12 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 		header := r.Header.Get("Authorization")
 		token, ok := strings.CutPrefix(header, "Bearer ")
 		if !ok || token == "" {
-			writeError(w, http.StatusUnauthorized, "autenticazione richiesta")
+			writeError(w, http.StatusUnauthorized, "authentication required")
 			return
 		}
 		claims, err := s.keys.Verify(token)
 		if err != nil {
-			writeError(w, http.StatusUnauthorized, "token non valido")
+			writeError(w, http.StatusUnauthorized, "invalid token")
 			return
 		}
 		ctx := context.WithValue(r.Context(), claimsContextKey{}, claims)
@@ -40,7 +40,7 @@ func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return s.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		claims, _ := r.Context().Value(claimsContextKey{}).(*user.Claims)
 		if claims == nil || !claims.IsAdmin {
-			writeError(w, http.StatusForbidden, "permesso di amministrazione richiesto")
+			writeError(w, http.StatusForbidden, "admin permission required")
 			return
 		}
 		next(w, r)
@@ -69,24 +69,24 @@ type loginRequest struct {
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "payload non valido")
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 
 	u, hash, err := s.repo.GetByLogin(r.Context(), req.Identifier)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "credenziali non valide")
+		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 	if !user.VerifyPassword(hash, req.Password) {
-		writeError(w, http.StatusUnauthorized, "credenziali non valide")
+		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
 	token, err := s.keys.IssueToken(u)
 	if err != nil {
 		s.logger.Error("issue token", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"token": token})
@@ -104,7 +104,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	u, err := s.repo.GetByID(r.Context(), claims.Subject)
 	if err != nil {
 		s.logger.Error("get me", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, u)

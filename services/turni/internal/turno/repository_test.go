@@ -15,14 +15,20 @@ import (
 // the cost of each test having to clean up after itself (see truncate below).
 var testPool *pgxpool.Pool
 
+// testVolontarioID is a real anagrafica.users row seeded by testdb.StartPostgres
+// — turni.turni.volontario_id is now an FK, so tests need an existing user
+// to reference instead of an arbitrary placeholder string.
+var testVolontarioID string
+
 func TestMain(m *testing.M) {
 	ctx := context.Background()
-	pool, cleanup, err := testdb.StartPostgres(ctx)
+	pool, volontarioID, cleanup, err := testdb.StartPostgres(ctx)
 	if err != nil {
 		panic(err)
 	}
 	defer cleanup()
 	testPool = pool
+	testVolontarioID = volontarioID
 
 	os.Exit(m.Run())
 }
@@ -42,7 +48,7 @@ func TestRepository_CreateAndGet(t *testing.T) {
 	ctx := context.Background()
 
 	created, err := repo.Create(ctx, Turno{
-		VolontarioID: "v1",
+		VolontarioID: testVolontarioID,
 		Data:         "2026-09-10",
 		OraInizio:    "08:00",
 		OraFine:      "14:00",
@@ -94,11 +100,11 @@ func TestRepository_ListOrdersByDataAndOraInizio(t *testing.T) {
 	repo := newTestRepository(t)
 	ctx := context.Background()
 
-	later, err := repo.Create(ctx, Turno{VolontarioID: "v1", Data: "2026-09-10", OraInizio: "14:00", OraFine: "18:00"})
+	later, err := repo.Create(ctx, Turno{VolontarioID: testVolontarioID, Data: "2026-09-10", OraInizio: "14:00", OraFine: "18:00"})
 	if err != nil {
 		t.Fatalf("Create later: %v", err)
 	}
-	earlier, err := repo.Create(ctx, Turno{VolontarioID: "v1", Data: "2026-09-10", OraInizio: "08:00", OraFine: "12:00"})
+	earlier, err := repo.Create(ctx, Turno{VolontarioID: testVolontarioID, Data: "2026-09-10", OraInizio: "08:00", OraFine: "12:00"})
 	if err != nil {
 		t.Fatalf("Create earlier: %v", err)
 	}
@@ -112,5 +118,23 @@ func TestRepository_ListOrdersByDataAndOraInizio(t *testing.T) {
 	}
 	if got[0].ID != earlier.ID || got[1].ID != later.ID {
 		t.Fatalf("expected %s before %s, got order %s, %s", earlier.ID, later.ID, got[0].ID, got[1].ID)
+	}
+}
+
+// A turno referencing a volontario_id that doesn't exist in anagrafica.users
+// must be rejected — the FK is a real data-integrity constraint (see
+// docs/adr/0014), not just a naming convention.
+func TestRepository_CreateRejectsUnknownVolontarioID(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+
+	_, err := repo.Create(ctx, Turno{
+		VolontarioID: "00000000-0000-0000-0000-000000000000",
+		Data:         "2026-09-10",
+		OraInizio:    "08:00",
+		OraFine:      "14:00",
+	})
+	if err == nil {
+		t.Fatal("expected an error for an unknown volontario_id, got nil")
 	}
 }

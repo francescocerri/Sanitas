@@ -24,7 +24,7 @@ type changePasswordRequest struct {
 func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	var req changePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "payload non valido")
+		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
 
@@ -32,23 +32,23 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	currentHash, err := s.repo.GetPasswordHash(r.Context(), claims.Subject)
 	if err != nil {
 		s.logger.Error("get password hash", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if !user.VerifyPassword(currentHash, req.OldPassword) {
-		writeError(w, http.StatusUnauthorized, "vecchia password non corretta")
+		writeError(w, http.StatusUnauthorized, "incorrect old password")
 		return
 	}
 
 	newHash, err := user.HashPassword(req.NewPassword)
 	if err != nil {
 		s.logger.Error("hash password", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if err := s.repo.SetPassword(r.Context(), claims.Subject, newHash); err != nil {
 		s.logger.Error("set password", "error", err)
-		writeError(w, http.StatusInternalServerError, "errore interno")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
