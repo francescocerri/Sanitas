@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sanitas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?la password del database è obbligatoria}
+      POSTGRES_DB: ${POSTGRES_DB:-sanitas}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../services/turni/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sanitas}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  turni:
+    build:
+      context: ../services/turni
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://${POSTGRES_USER:-sanitas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sanitas}?sslmode=disable
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:5173}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  # Espone i servizi via Cloudflare Tunnel: nessuna porta aperta sul router,
+  # TLS gestito da Cloudflare. Attivo solo in produzione (Raspberry Pi):
+  # docker compose --profile prod up -d
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?token del tunnel Cloudflare obbligatorio}
+    profiles:
+      - prod
+    depends_on:
+      - turni
+
+volumes:
+  postgres_data:
