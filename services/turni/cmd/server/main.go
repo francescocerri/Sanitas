@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -20,9 +21,12 @@ import (
 // @description	Gestione turni. Modello dati volutamente scheletrico (vedi docs/adr/0005 nel repository):
 // @description	valida la pipeline end-to-end, non è la progettazione definitiva del dominio.
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("configurazione non valida: %v", err)
+		logger.Error("configurazione non valida", "error", err)
+		os.Exit(1)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -30,32 +34,37 @@ func main() {
 
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("connessione al database fallita: %v", err)
+		logger.Error("connessione al database fallita", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
 	repo := turno.NewRepository(pool)
-	server := httpapi.NewServer(repo, cfg.CORSAllowedOrigin)
+	server := httpapi.NewServer(repo, cfg.CORSAllowedOrigin, logger)
 
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           server.Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {
-		log.Printf("turni service in ascolto sulla porta %s", cfg.Port)
+		logger.Info("turni service in ascolto", "port", cfg.Port)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("errore http server: %v", err)
+			logger.Error("errore http server", "error", err)
+			os.Exit(1)
 		}
 	}()
 
 	<-ctx.Done()
-	log.Println("shutdown in corso...")
+	logger.Info("shutdown in corso")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		log.Printf("errore durante shutdown: %v", err)
+		logger.Error("errore durante shutdown", "error", err)
 	}
 }

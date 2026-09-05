@@ -3,9 +3,9 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
-
-	"github.com/jackc/pgx/v5"
+	"time"
 
 	"github.com/francescocerri/sanitas/services/turni/internal/turno"
 )
@@ -13,10 +13,11 @@ import (
 type Server struct {
 	repo          *turno.Repository
 	allowedOrigin string
+	logger        *slog.Logger
 }
 
-func NewServer(repo *turno.Repository, allowedOrigin string) *Server {
-	return &Server{repo: repo, allowedOrigin: allowedOrigin}
+func NewServer(repo *turno.Repository, allowedOrigin string, logger *slog.Logger) *Server {
+	return &Server{repo: repo, allowedOrigin: allowedOrigin, logger: logger}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -26,7 +27,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /turni", s.handleCreateTurno)
 	mux.HandleFunc("GET /turni/{id}", s.handleGetTurno)
 	mux.Handle("GET /docs/", docsHandler())
-	return s.withCORS(mux)
+	return s.withLogging(s.withCORS(mux))
 }
 
 func (s *Server) withCORS(next http.Handler) http.Handler {
@@ -44,6 +45,42 @@ func (s *Server) withCORS(next http.Handler) http.Handler {
 	})
 }
 
+// statusRecorder cattura lo status code scritto dall'handler, per poterlo
+// includere nel log di accesso (http.ResponseWriter non lo espone di suo).
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (rec *statusRecorder) WriteHeader(status int) {
+	rec.status = status
+	rec.ResponseWriter.WriteHeader(status)
+}
+
+// withLogging accorpa access log strutturato e panic recovery — pattern
+// standard in Go: senza recovery qui, un panic in un handler chiuderebbe
+// la connessione senza una risposta né un log utile a diagnosticarlo.
+func (s *Server) withLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+
+		defer func() {
+			if err := recover(); err != nil {
+				s.logger.Error("panic durante la gestione della richiesta",
+					"method", r.Method, "path", r.URL.Path, "panic", err)
+				writeError(w, http.StatusInternalServerError, "errore interno")
+			}
+		}()
+
+		next.ServeHTTP(rec, r)
+
+		s.logger.Info("richiesta gestita",
+			"method", r.Method, "path", r.URL.Path,
+			"status", rec.status, "duration_ms", time.Since(start).Milliseconds())
+	})
+}
+
 // @Summary	Liveness check
 // @Tags		sistema
 // @Success	200	"Servizio operativo"
@@ -51,7 +88,8 @@ func (s *Server) withCORS(next http.Handler) http.Handler {
 // @Router		/healthz [get]
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	if err := s.repo.Ping(r.Context()); err != nil {
-		http.Error(w, "db non raggiungibile", http.StatusServiceUnavailable)
+		s.logger.Error("healthz: db non raggiungibile", "error", err)
+		writeError(w, http.StatusServiceUnavailable, "db non raggiungibile")
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -65,7 +103,8 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListTurni(w http.ResponseWriter, r *http.Request) {
 	turni, err := s.repo.List(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.logger.Error("list turni", "error", err)
+		writeError(w, http.StatusInternalServerError, "errore interno")
 		return
 	}
 	writeJSON(w, http.StatusOK, turni)
@@ -82,12 +121,13 @@ func (s *Server) handleListTurni(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateTurno(w http.ResponseWriter, r *http.Request) {
 	var input turno.Turno
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "payload non valido", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "payload non valido")
 		return
 	}
 	created, err := s.repo.Create(r.Context(), input)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.logger.Error("create turno", "error", err)
+		writeError(w, http.StatusInternalServerError, "errore interno")
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
@@ -104,11 +144,12 @@ func (s *Server) handleGetTurno(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	t, err := s.repo.Get(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			http.Error(w, "turno non trovato", http.StatusNotFound)
+		if errors.Is(err, turno.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "turno non trovato")
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.logger.Error("get turno", "error", err, "id", id)
+		writeError(w, http.StatusInternalServerError, "errore interno")
 		return
 	}
 	writeJSON(w, http.StatusOK, t)
@@ -118,4 +159,8 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, map[string]string{"error": message})
 }
