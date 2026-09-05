@@ -20,6 +20,7 @@ import (
 // @version		0.1.0
 // @description	Turno (shift) management. The data model is intentionally skeletal (see docs/adr/0005
 // @description	in the repository): it validates the end-to-end pipeline, not the final domain design.
+// @BasePath		/v1
 func main() {
 	// JSON to stdout: meant to be read by `docker logs`/a log aggregator,
 	// not by a human on a screen (see ADR-0010).

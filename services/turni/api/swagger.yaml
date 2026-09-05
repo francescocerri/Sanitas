@@ -1,3 +1,4 @@
+basePath: /v1
 definitions:
   github_com_francescocerri_sanitas_services_turni_internal_turno.Turno:
     properties:

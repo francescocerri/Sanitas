@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -20,12 +22,17 @@ func NewServer(repo *turno.Repository, allowedOrigin string, logger *slog.Logger
 	return &Server{repo: repo, allowedOrigin: allowedOrigin, logger: logger}
 }
 
+// v1 versions the resource endpoints only: /healthz and /docs/ are
+// operational/meta, not part of the API contract that evolves, so they
+// stay unversioned (matches @BasePath /v1 in cmd/server/main.go).
+const v1 = "/v1"
+
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
-	mux.HandleFunc("GET /turni", s.handleListTurni)
-	mux.HandleFunc("POST /turni", s.handleCreateTurno)
-	mux.HandleFunc("GET /turni/{id}", s.handleGetTurno)
+	mux.HandleFunc("GET "+v1+"/turni", s.handleListTurni)
+	mux.HandleFunc("POST "+v1+"/turni", s.handleCreateTurno)
+	mux.HandleFunc("GET "+v1+"/turni/{id}", s.handleGetTurno)
 	mux.Handle("GET /docs/", docsHandler())
 	return s.withLogging(s.withCORS(mux))
 }
@@ -63,10 +70,22 @@ func (rec *statusRecorder) WriteHeader(status int) {
 // withLogging combines structured access logging and panic recovery —
 // standard Go pattern: without recovery here, a panic in a handler would
 // close the connection with no response and no log to diagnose it from.
+// For POST requests it also logs the body (PII redacted, see
+// redactJSONBody) for audit/debugging — reading it here and putting it
+// back via io.NopCloser so the handler can still decode it normally.
 func (s *Server) withLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+
+		var loggedBody string
+		if r.Method == http.MethodPost {
+			raw, err := io.ReadAll(r.Body)
+			if err == nil {
+				r.Body = io.NopCloser(bytes.NewReader(raw))
+				loggedBody = redactJSONBody(raw)
+			}
+		}
 
 		defer func() {
 			if err := recover(); err != nil {
@@ -78,10 +97,43 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 
 		next.ServeHTTP(rec, r)
 
-		s.logger.Info("request handled",
+		attrs := []any{
 			"method", r.Method, "path", r.URL.Path,
-			"status", rec.status, "duration_ms", time.Since(start).Milliseconds())
+			"status", rec.status, "duration_ms", time.Since(start).Milliseconds(),
+		}
+		if loggedBody != "" {
+			attrs = append(attrs, "body", loggedBody)
+		}
+		s.logger.Info("request handled", attrs...)
 	})
+}
+
+// piiJSONFields lists the JSON field names this service's request bodies
+// may contain that identify a person — today just volontario_id (a text
+// placeholder until the anagrafica service exists, but it stands in for a
+// real person). Extend this list as new PII-bearing fields are added.
+var piiJSONFields = map[string]bool{
+	"volontario_id": true,
+}
+
+// redactJSONBody returns raw parsed as generic JSON with any piiJSONFields
+// values replaced, for safe logging. Never returns raw bytes on a parse
+// failure — logging unparsed input could leak PII we failed to recognize.
+func redactJSONBody(raw []byte) string {
+	var parsed map[string]any
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return "<unparsable body>"
+	}
+	for key := range parsed {
+		if piiJSONFields[key] {
+			parsed[key] = "[redacted]"
+		}
+	}
+	redacted, err := json.Marshal(parsed)
+	if err != nil {
+		return "<unloggable body>"
+	}
+	return string(redacted)
 }
 
 // @Summary	Liveness check
