@@ -79,7 +79,8 @@ Aggiornamento dipendenze: **Renovate** (`renovate.json`, preset `config:recommen
 - Aggiornare questo file ogni volta che cambia una decisione architetturale rilevante (in aggiunta all'ADR dedicato, se la decisione è abbastanza importante da meritarne uno).
 - Commit: Conventional Commits. Branching: feature branch + PR.
 - Test: unit test per servizio Go; test di integrazione via docker-compose quando più servizi comunicheranno tra loro.
-- Seguire le linee guida standard per servizi Go a microservizi (struttura a layer, logging strutturato, error handling consistente, ecc.) — le specifiche concrete si definiscono e si tracciano in `docs/backlog.md`/ADR mano a mano che si applicano, per evitare di riscrivere codice esistente "a sensazione".
+- Seguire le linee guida standard per servizi Go a microservizi: logging strutturato (`log/slog`), error handling con wrapping ed errori di dominio, timeout su `http.Server` — vedi [ADR-0010](docs/adr/0010-convenzioni-cross-cutting-servizi-go.md). Struttura a layer non introdotta finché il dominio reale non è progettato (stessa ADR). Da replicare identico in ogni nuovo servizio.
+- **Prima di ogni `git push`/apertura o aggiornamento di una PR**: rieseguire in locale l'intera suite di verifica (`go build`, `go vet`, `go test`, `gofmt -l`, `govulncheck`, rigenerazione Swagger con `swag init` e controllo che non ci sia drift) — non fidarsi solo della CI remota, verificarlo anche in locale prima del push.
 
 ## Nota per chi fa il fork
 
