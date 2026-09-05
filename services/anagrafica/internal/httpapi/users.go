@@ -26,7 +26,7 @@ type createUserResponse struct {
 	InviteURL string `json:"invite_url"`
 }
 
-// @Summary	Create a new user (admin only)
+// @Summary	Create a new user (requires the users:manage permission)
 // @Tags		users
 // @Accept		json
 // @Produce	json
@@ -34,7 +34,7 @@ type createUserResponse struct {
 // @Param		utente	body		createUserRequest	true	"Email, username, roles (slug)"
 // @Success	201		{object}	createUserResponse
 // @Failure	400		"Invalid payload or unknown role"
-// @Failure	403		"Admin permission required"
+// @Failure	403		"Missing required permission: users:manage"
 // @Failure	409		"Email or username already in use"
 // @Router		/v1/users [post]
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {

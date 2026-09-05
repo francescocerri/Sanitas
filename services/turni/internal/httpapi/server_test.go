@@ -94,7 +94,10 @@ func bigEndianExponent(e int) []byte {
 	return b[i:]
 }
 
-func (iss *testIssuer) token(t *testing.T) string {
+// token signs a JWT carrying the given permissions — the shape
+// requirePermission actually checks (see docs/adr/0018). Roles aren't
+// checked by any logic in turni, so tests only ever need to set permissions.
+func (iss *testIssuer) token(t *testing.T, permissions []string) string {
 	t.Helper()
 	claims := authclient.Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -102,7 +105,8 @@ func (iss *testIssuer) token(t *testing.T) string {
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
-		Username: "test-user",
+		Username:    "test-user",
+		Permissions: permissions,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = iss.kid
@@ -113,13 +117,11 @@ func (iss *testIssuer) token(t *testing.T) string {
 	return signed
 }
 
-// newTestServer wires a real turno.Repository to the shared test database —
-// no mock/interface, consistent with ADR-0010 (no layer introduced until
-// the domain model needs one) — plus a test JWKS issuer so requireAuth has
-// something real to verify against. Returns a ready-to-use valid bearer
-// token: authorization (roles/is_admin) isn't checked in turni yet, so every
-// test needing a logged-in caller can share the same one.
-func newTestServer(t *testing.T) (*Server, string) {
+// newTestServerWithIssuer wires a real turno.Repository to the shared test
+// database — no mock/interface, consistent with ADR-0010 (no layer
+// introduced until the domain model needs one) — plus a test JWKS issuer so
+// requireAuth/requirePermission have something real to verify against.
+func newTestServerWithIssuer(t *testing.T) (*Server, *testIssuer) {
 	t.Helper()
 	t.Cleanup(func() {
 		if _, err := testPool.Exec(context.Background(), "TRUNCATE turni"); err != nil {
@@ -135,8 +137,15 @@ func newTestServer(t *testing.T) (*Server, string) {
 		t.Fatalf("authClient.Refresh: %v", err)
 	}
 
-	server := NewServer(repo, authClient, "http://localhost:5173", logger)
-	return server, issuer.token(t)
+	return NewServer(repo, authClient, "http://localhost:5173", logger), issuer
+}
+
+// newTestServer is newTestServerWithIssuer for the common case: a token
+// with every shifts permission, for tests that aren't exercising
+// authorization itself (see TestShifts_RequirePermission for that).
+func newTestServer(t *testing.T) (*Server, string) {
+	server, issuer := newTestServerWithIssuer(t)
+	return server, issuer.token(t, []string{permShiftsRead, permShiftsWrite})
 }
 
 func TestHealthz(t *testing.T) {
@@ -244,6 +253,52 @@ func TestShifts_RequireAuth(t *testing.T) {
 	server.Routes().ServeHTTP(validRec, valid)
 	if validRec.Code != http.StatusOK {
 		t.Fatalf("expected 200 with a valid token, got %d: %s", validRec.Code, validRec.Body.String())
+	}
+}
+
+// A valid token isn't enough on its own — the right permission must be
+// among its claims, checked per action (see docs/adr/0018): shifts:read
+// for the two GETs, shifts:write for creating one.
+func TestShifts_RequirePermission(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+
+	noPermissions := issuer.token(t, nil)
+	rec := httptest.NewRequest(http.MethodGet, "/v1/shifts", nil)
+	rec.Header.Set("Authorization", "Bearer "+noPermissions)
+	w := httptest.NewRecorder()
+	server.Routes().ServeHTTP(w, rec)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("GET /v1/shifts with no permissions: expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+
+	readOnly := issuer.token(t, []string{permShiftsRead})
+
+	readReq := httptest.NewRequest(http.MethodGet, "/v1/shifts", nil)
+	readReq.Header.Set("Authorization", "Bearer "+readOnly)
+	readRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(readRec, readReq)
+	if readRec.Code != http.StatusOK {
+		t.Fatalf("GET /v1/shifts with shifts:read: expected 200, got %d: %s", readRec.Code, readRec.Body.String())
+	}
+
+	body, _ := json.Marshal(turno.Turno{VolontarioID: testVolontarioID, Data: "2026-09-10", OraInizio: "08:00", OraFine: "14:00"})
+	writeReq := httptest.NewRequest(http.MethodPost, "/v1/shifts", bytes.NewReader(body))
+	writeReq.Header.Set("Content-Type", "application/json")
+	writeReq.Header.Set("Authorization", "Bearer "+readOnly)
+	writeRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(writeRec, writeReq)
+	if writeRec.Code != http.StatusForbidden {
+		t.Fatalf("POST /v1/shifts with only shifts:read: expected 403, got %d: %s", writeRec.Code, writeRec.Body.String())
+	}
+
+	writeToken := issuer.token(t, []string{permShiftsWrite})
+	writeReq2 := httptest.NewRequest(http.MethodPost, "/v1/shifts", bytes.NewReader(body))
+	writeReq2.Header.Set("Content-Type", "application/json")
+	writeReq2.Header.Set("Authorization", "Bearer "+writeToken)
+	writeRec2 := httptest.NewRecorder()
+	server.Routes().ServeHTTP(writeRec2, writeReq2)
+	if writeRec2.Code != http.StatusCreated {
+		t.Fatalf("POST /v1/shifts with shifts:write: expected 201, got %d: %s", writeRec2.Code, writeRec2.Body.String())
 	}
 }
 

@@ -11,19 +11,20 @@ CREATE TABLE IF NOT EXISTS users (
     -- Null until the invite is accepted (see tokens) and the user
     -- sets their own password.
     password_hash TEXT,
-    -- System permission to manage accounts, distinct from the organizational
-    -- roles below (a "president" isn't necessarily an account administrator).
-    is_admin BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Roles are seed data, not a fixed set: they're committee-specific
 -- (e.g. "trainer_tssa" means nothing outside CRI) and are upserted at
--- startup from a config file — see docs/adr/0012.
+-- startup from a config file — see docs/adr/0012. permissions is a fixed,
+-- code-known vocabulary (see internal/user/permissions.go) — which roles
+-- get which permission is the per-committee part, not the permission names
+-- themselves — see docs/adr/0018.
 CREATE TABLE IF NOT EXISTS roles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     slug TEXT NOT NULL UNIQUE,
-    display_name TEXT NOT NULL
+    display_name TEXT NOT NULL,
+    permissions TEXT[] NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS user_roles (

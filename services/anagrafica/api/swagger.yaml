@@ -7,8 +7,10 @@ definitions:
         type: string
       id:
         type: string
-      is_admin:
-        type: boolean
+      permissions:
+        items:
+          type: string
+        type: array
       roles:
         items:
           type: string
@@ -63,8 +65,10 @@ definitions:
           activity, this phase only lays the token groundwork. The admin
           forwards it to the volunteer by whatever channel they already use.
         type: string
-      is_admin:
-        type: boolean
+      permissions:
+        items:
+          type: string
+        type: array
       roles:
         items:
           type: string
@@ -254,12 +258,12 @@ paths:
         "400":
           description: Invalid payload or unknown role
         "403":
-          description: Admin permission required
+          description: 'Missing required permission: users:manage'
         "409":
           description: Email or username already in use
       security:
       - BearerAuth: []
-      summary: Create a new user (admin only)
+      summary: Create a new user (requires the users:manage permission)
       tags:
       - users
   /v1/users/activate:

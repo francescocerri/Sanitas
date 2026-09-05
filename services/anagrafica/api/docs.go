@@ -245,7 +245,7 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "Create a new user (admin only)",
+                "summary": "Create a new user (requires the users:manage permission)",
                 "parameters": [
                     {
                         "description": "Email, username, roles (slug)",
@@ -268,7 +268,7 @@ const docTemplate = `{
                         "description": "Invalid payload or unknown role"
                     },
                     "403": {
-                        "description": "Admin permission required"
+                        "description": "Missing required permission: users:manage"
                     },
                     "409": {
                         "description": "Email or username already in use"
@@ -326,8 +326,11 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "is_admin": {
-                    "type": "boolean"
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "roles": {
                     "type": "array",
@@ -406,8 +409,11 @@ const docTemplate = `{
                     "description": "InviteURL is handed back directly in this response instead of being\nemailed: sending it for real (Gmail SMTP) is a separate follow-up\nactivity, this phase only lays the token groundwork. The admin\nforwards it to the volunteer by whatever channel they already use.",
                     "type": "string"
                 },
-                "is_admin": {
-                    "type": "boolean"
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "roles": {
                     "type": "array",

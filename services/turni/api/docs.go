@@ -44,7 +44,7 @@ const docTemplate = `{
                 "tags": [
                     "turni"
                 ],
-                "summary": "List turni",
+                "summary": "List turni (requires the shifts:read permission)",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -57,6 +57,9 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:read"
                     }
                 }
             },
@@ -75,7 +78,7 @@ const docTemplate = `{
                 "tags": [
                     "turni"
                 ],
-                "summary": "Create a new turno",
+                "summary": "Create a new turno (requires the shifts:write permission)",
                 "parameters": [
                     {
                         "description": "New turno (id and stato in the input are ignored)",
@@ -99,6 +102,9 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:write"
                     }
                 }
             }
@@ -116,7 +122,7 @@ const docTemplate = `{
                 "tags": [
                     "turni"
                 ],
-                "summary": "Get a turno by id",
+                "summary": "Get a turno by id (requires the shifts:read permission)",
                 "parameters": [
                     {
                         "type": "string",
@@ -135,6 +141,9 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:read"
                     },
                     "404": {
                         "description": "Turno not found"

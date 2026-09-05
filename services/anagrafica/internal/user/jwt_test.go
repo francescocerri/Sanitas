@@ -40,7 +40,7 @@ func writeTestKeyPair(t *testing.T) *KeyPair {
 func TestIssueAndVerifyToken(t *testing.T) {
 	kp := writeTestKeyPair(t)
 
-	u := User{ID: "11111111-1111-1111-1111-111111111111", Username: "mario", Roles: []string{"president"}, IsAdmin: true}
+	u := User{ID: "11111111-1111-1111-1111-111111111111", Username: "mario", Roles: []string{"president"}, Permissions: []string{PermUsersManage}}
 	token, err := kp.IssueToken(u)
 	if err != nil {
 		t.Fatalf("IssueToken: %v", err)
@@ -50,8 +50,11 @@ func TestIssueAndVerifyToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
-	if claims.Subject != u.ID || claims.Username != u.Username || !claims.IsAdmin {
+	if claims.Subject != u.ID || claims.Username != u.Username {
 		t.Fatalf("unexpected claims: %+v", claims)
+	}
+	if len(claims.Permissions) != 1 || claims.Permissions[0] != PermUsersManage {
+		t.Fatalf("unexpected permissions in claims: %v", claims.Permissions)
 	}
 	if len(claims.Roles) != 1 || claims.Roles[0] != "president" {
 		t.Fatalf("unexpected roles in claims: %v", claims.Roles)

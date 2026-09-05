@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -46,13 +47,15 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// requireAdmin builds on requireAuth: the system permission to manage
-// accounts (distinct from the organizational roles — see docs/adr/0012).
-func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+// requirePermission builds on requireAuth: the caller's token must carry
+// permission among its claims. No bypass of any kind (e.g. no admin flag) —
+// every authorization decision goes through a role's assigned permissions,
+// including for the bootstrap account — see docs/adr/0018.
+func (s *Server) requirePermission(permission string, next http.HandlerFunc) http.HandlerFunc {
 	return s.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		claims, _ := r.Context().Value(claimsContextKey{}).(*user.Claims)
-		if claims == nil || !claims.IsAdmin {
-			writeError(w, http.StatusForbidden, "admin permission required")
+		if claims == nil || !slices.Contains(claims.Permissions, permission) {
+			writeError(w, http.StatusForbidden, "missing required permission: "+permission)
 			return
 		}
 		next(w, r)

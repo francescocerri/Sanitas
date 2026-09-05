@@ -1,12 +1,12 @@
 [
-  { "slug": "president", "display_name": "Presidente" },
-  { "slug": "shift_manager", "display_name": "Responsabile turni" },
-  { "slug": "vehicle_manager", "display_name": "Responsabile mezzi" },
-  { "slug": "uniform_manager", "display_name": "Responsabile vestiario" },
-  { "slug": "warehouse_manager", "display_name": "Responsabile magazzino" },
-  { "slug": "trainer_ms", "display_name": "Trainer MS" },
-  { "slug": "trainer_tssa", "display_name": "Trainer TSSA" },
-  { "slug": "base_volunteer", "display_name": "Volontario base" },
-  { "slug": "social_services_volunteer", "display_name": "Volontario sociali" },
-  { "slug": "emergency_volunteer", "display_name": "Volontario emergenza" }
+  { "slug": "president", "display_name": "Presidente", "permissions": ["users:manage", "shifts:read", "shifts:write"] },
+  { "slug": "shift_manager", "display_name": "Responsabile turni", "permissions": ["shifts:read", "shifts:write"] },
+  { "slug": "vehicle_manager", "display_name": "Responsabile mezzi", "permissions": ["shifts:read"] },
+  { "slug": "uniform_manager", "display_name": "Responsabile vestiario", "permissions": ["shifts:read"] },
+  { "slug": "warehouse_manager", "display_name": "Responsabile magazzino", "permissions": ["shifts:read"] },
+  { "slug": "trainer_ms", "display_name": "Trainer MS", "permissions": ["shifts:read"] },
+  { "slug": "trainer_tssa", "display_name": "Trainer TSSA", "permissions": ["shifts:read"] },
+  { "slug": "base_volunteer", "display_name": "Volontario base", "permissions": ["shifts:read"] },
+  { "slug": "social_services_volunteer", "display_name": "Volontario sociali", "permissions": ["shifts:read"] },
+  { "slug": "emergency_volunteer", "display_name": "Volontario emergenza", "permissions": ["shifts:read"] }
 ]

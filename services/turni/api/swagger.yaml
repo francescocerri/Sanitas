@@ -45,9 +45,11 @@ paths:
             type: array
         "401":
           description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:read'
       security:
       - BearerAuth: []
-      summary: List turni
+      summary: List turni (requires the shifts:read permission)
       tags:
       - turni
     post:
@@ -71,9 +73,11 @@ paths:
           description: Invalid payload
         "401":
           description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:write'
       security:
       - BearerAuth: []
-      summary: Create a new turno
+      summary: Create a new turno (requires the shifts:write permission)
       tags:
       - turni
   /v1/shifts/{id}:
@@ -93,11 +97,13 @@ paths:
             $ref: '#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno'
         "401":
           description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:read'
         "404":
           description: Turno not found
       security:
       - BearerAuth: []
-      summary: Get a turno by id
+      summary: Get a turno by id (requires the shifts:read permission)
       tags:
       - turni
 securityDefinitions:
