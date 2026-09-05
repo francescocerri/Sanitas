@@ -78,7 +78,7 @@ Aggiornamento dipendenze: **Renovate** (`renovate.json`, preset `config:recommen
 - Passare da `/code-review` prima di ogni merge.
 - Aggiornare questo file ogni volta che cambia una decisione architetturale rilevante (in aggiunta all'ADR dedicato, se la decisione è abbastanza importante da meritarne uno).
 - Commit: Conventional Commits. Branching: feature branch + PR.
-- Test: unit test per servizio Go; test di integrazione via docker-compose quando più servizi comunicheranno tra loro.
+- **Test**: integration test con `testcontainers-go` (Postgres usa-e-getta, `go test ./...` senza setup manuale) — vedi [ADR-0011](docs/adr/0011-test-automatici-testcontainers.md). **Ogni nuovo endpoint o modifica a un endpoint esistente richiede i test corrispondenti prima del merge**, su tutti i servizi.
 - Seguire le linee guida standard per servizi Go a microservizi: logging strutturato (`log/slog`), error handling con wrapping ed errori di dominio, timeout su `http.Server` — vedi [ADR-0010](docs/adr/0010-convenzioni-cross-cutting-servizi-go.md). Struttura a layer non introdotta finché il dominio reale non è progettato (stessa ADR). Da replicare identico in ogni nuovo servizio.
 - **Prima di ogni `git push`/apertura o aggiornamento di una PR**: rieseguire in locale l'intera suite di verifica (`go build`, `go vet`, `go test`, `gofmt -l`, `govulncheck`, rigenerazione Swagger con `swag init` e controllo che non ci sia drift) — non fidarsi solo della CI remota, verificarlo anche in locale prima del push.
 
