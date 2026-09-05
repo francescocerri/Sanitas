@@ -9,9 +9,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ErrNotFound è l'errore di dominio per "nessuna riga trovata" — traduce
-// pgx.ErrNoRows qui, così i layer superiori (HTTP) non devono conoscere
-// il driver Postgres per distinguere un 404 da un errore vero.
+// ErrNotFound is the domain error for "no matching row" — pgx.ErrNoRows is
+// translated here, so callers above this layer (HTTP) don't need to know
+// about the Postgres driver to tell a 404 apart from a real error.
 var ErrNotFound = errors.New("turno non trovato")
 
 type Repository struct {
@@ -26,6 +26,9 @@ func (r *Repository) Ping(ctx context.Context) error {
 	return r.pool.Ping(ctx)
 }
 
+// id::text everywhere below: pgx's default type mapping doesn't scan a uuid
+// column straight into a Go string, so we let Postgres cast it to text
+// instead of teaching this layer about pgx's uuid/pgtype machinery.
 func (r *Repository) List(ctx context.Context) ([]Turno, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id::text, volontario_id, data, ora_inizio, ora_fine, stato
@@ -35,6 +38,7 @@ func (r *Repository) List(ctx context.Context) ([]Turno, error) {
 	}
 	defer rows.Close()
 
+	// []Turno{}, not a nil slice: encodes to `[]` in JSON, not `null`.
 	result := []Turno{}
 	for rows.Next() {
 		var t Turno

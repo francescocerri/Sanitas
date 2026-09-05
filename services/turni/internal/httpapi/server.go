@@ -30,6 +30,9 @@ func (s *Server) Routes() http.Handler {
 	return s.withLogging(s.withCORS(mux))
 }
 
+// CORS is deliberately minimal (one configurable origin, GET/POST only): the
+// only client today is the web/ frontend, and there is no cookie/credential
+// use yet that would require a stricter policy.
 func (s *Server) withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.allowedOrigin != "" {
@@ -45,8 +48,8 @@ func (s *Server) withCORS(next http.Handler) http.Handler {
 	})
 }
 
-// statusRecorder cattura lo status code scritto dall'handler, per poterlo
-// includere nel log di accesso (http.ResponseWriter non lo espone di suo).
+// statusRecorder captures the status code written by the handler, so it can
+// be included in the access log (http.ResponseWriter doesn't expose it).
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
@@ -57,9 +60,9 @@ func (rec *statusRecorder) WriteHeader(status int) {
 	rec.ResponseWriter.WriteHeader(status)
 }
 
-// withLogging accorpa access log strutturato e panic recovery — pattern
-// standard in Go: senza recovery qui, un panic in un handler chiuderebbe
-// la connessione senza una risposta né un log utile a diagnosticarlo.
+// withLogging combines structured access logging and panic recovery —
+// standard Go pattern: without recovery here, a panic in a handler would
+// close the connection with no response and no log to diagnose it from.
 func (s *Server) withLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -67,7 +70,7 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 
 		defer func() {
 			if err := recover(); err != nil {
-				s.logger.Error("panic durante la gestione della richiesta",
+				s.logger.Error("panic while handling request",
 					"method", r.Method, "path", r.URL.Path, "panic", err)
 				writeError(w, http.StatusInternalServerError, "errore interno")
 			}
@@ -75,27 +78,27 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 
 		next.ServeHTTP(rec, r)
 
-		s.logger.Info("richiesta gestita",
+		s.logger.Info("request handled",
 			"method", r.Method, "path", r.URL.Path,
 			"status", rec.status, "duration_ms", time.Since(start).Milliseconds())
 	})
 }
 
 // @Summary	Liveness check
-// @Tags		sistema
-// @Success	200	"Servizio operativo"
-// @Failure	503	"Database non raggiungibile"
+// @Tags		system
+// @Success	200	"Service healthy"
+// @Failure	503	"Database unreachable"
 // @Router		/healthz [get]
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	if err := s.repo.Ping(r.Context()); err != nil {
-		s.logger.Error("healthz: db non raggiungibile", "error", err)
+		s.logger.Error("healthz: database unreachable", "error", err)
 		writeError(w, http.StatusServiceUnavailable, "db non raggiungibile")
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
-// @Summary	Elenca i turni
+// @Summary	List turni
 // @Tags		turni
 // @Produce	json
 // @Success	200	{array}	turno.Turno
@@ -110,13 +113,13 @@ func (s *Server) handleListTurni(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, turni)
 }
 
-// @Summary	Crea un nuovo turno
+// @Summary	Create a new turno
 // @Tags		turni
 // @Accept		json
 // @Produce	json
-// @Param		turno	body		turno.Turno	true	"Nuovo turno (id e stato in input vengono ignorati)"
+// @Param		turno	body		turno.Turno	true	"New turno (id and stato in the input are ignored)"
 // @Success	201		{object}	turno.Turno
-// @Failure	400		"Payload non valido"
+// @Failure	400		"Invalid payload"
 // @Router		/turni [post]
 func (s *Server) handleCreateTurno(w http.ResponseWriter, r *http.Request) {
 	var input turno.Turno
@@ -133,12 +136,12 @@ func (s *Server) handleCreateTurno(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, created)
 }
 
-// @Summary	Recupera un turno per id
+// @Summary	Get a turno by id
 // @Tags		turni
 // @Produce	json
-// @Param		id	path		string	true	"ID del turno (UUID)"
+// @Param		id	path		string	true	"Turno id (UUID)"
 // @Success	200	{object}	turno.Turno
-// @Failure	404	"Turno non trovato"
+// @Failure	404	"Turno not found"
 // @Router		/turni/{id} [get]
 func (s *Server) handleGetTurno(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
@@ -161,6 +164,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+// writeError wraps a client-facing message in the same JSON shape used
+// everywhere else in this API — never the raw error passed to it, so an
+// internal detail (a DB connection string, a query) can't leak to the caller.
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }

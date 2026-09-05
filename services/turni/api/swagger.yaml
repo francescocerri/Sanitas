@@ -17,8 +17,8 @@ definitions:
 info:
   contact: {}
   description: |-
-    Gestione turni. Modello dati volutamente scheletrico (vedi docs/adr/0005 nel repository):
-    valida la pipeline end-to-end, non è la progettazione definitiva del dominio.
+    Turno (shift) management. The data model is intentionally skeletal (see docs/adr/0005
+    in the repository): it validates the end-to-end pipeline, not the final domain design.
   title: Sanitas — Turni API
   version: 0.1.0
 paths:
@@ -26,12 +26,12 @@ paths:
     get:
       responses:
         "200":
-          description: Servizio operativo
+          description: Service healthy
         "503":
-          description: Database non raggiungibile
+          description: Database unreachable
       summary: Liveness check
       tags:
-      - sistema
+      - system
   /turni:
     get:
       produces:
@@ -43,14 +43,14 @@ paths:
             items:
               $ref: '#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno'
             type: array
-      summary: Elenca i turni
+      summary: List turni
       tags:
       - turni
     post:
       consumes:
       - application/json
       parameters:
-      - description: Nuovo turno (id e stato in input vengono ignorati)
+      - description: New turno (id and stato in the input are ignored)
         in: body
         name: turno
         required: true
@@ -64,14 +64,14 @@ paths:
           schema:
             $ref: '#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno'
         "400":
-          description: Payload non valido
-      summary: Crea un nuovo turno
+          description: Invalid payload
+      summary: Create a new turno
       tags:
       - turni
   /turni/{id}:
     get:
       parameters:
-      - description: ID del turno (UUID)
+      - description: Turno id (UUID)
         in: path
         name: id
         required: true
@@ -84,8 +84,8 @@ paths:
           schema:
             $ref: '#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno'
         "404":
-          description: Turno non trovato
-      summary: Recupera un turno per id
+          description: Turno not found
+      summary: Get a turno by id
       tags:
       - turni
 swagger: "2.0"
