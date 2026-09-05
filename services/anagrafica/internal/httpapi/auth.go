@@ -78,14 +78,13 @@ type authTokens struct {
 }
 
 // issueTokenPair issues a fresh access token for u and a fresh refresh
-// token (stored as an invite_tokens row with purpose "refresh" — see
-// docs/adr/0016, the table already generalizes on purpose).
+// token (stored as a tokens row with purpose "refresh" — see docs/adr/0016).
 func (s *Server) issueTokenPair(ctx context.Context, u user.User) (authTokens, error) {
 	token, err := s.keys.IssueToken(u)
 	if err != nil {
 		return authTokens{}, err
 	}
-	refreshToken, err := s.repo.CreateInviteToken(ctx, u.ID, "refresh", refreshTokenTTL)
+	refreshToken, err := s.repo.CreateToken(ctx, u.ID, "refresh", refreshTokenTTL)
 	if err != nil {
 		return authTokens{}, err
 	}
@@ -149,7 +148,7 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := s.repo.ConsumeInviteToken(r.Context(), req.RefreshToken, "refresh")
+	userID, err := s.repo.ConsumeToken(r.Context(), req.RefreshToken, "refresh")
 	if err != nil {
 		if errors.Is(err, user.ErrInvalidToken) {
 			writeError(w, http.StatusUnauthorized, "invalid, expired, or already used token")
@@ -194,7 +193,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := s.repo.ConsumeInviteToken(r.Context(), req.RefreshToken, "refresh"); err != nil {
+	if _, err := s.repo.ConsumeToken(r.Context(), req.RefreshToken, "refresh"); err != nil {
 		if errors.Is(err, user.ErrInvalidToken) {
 			writeError(w, http.StatusUnauthorized, "invalid, expired, or already used token")
 			return

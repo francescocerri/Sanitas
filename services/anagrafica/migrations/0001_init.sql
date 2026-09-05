@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT NOT NULL UNIQUE,
     username TEXT NOT NULL UNIQUE,
-    -- Null until the invite is accepted (see invite_tokens) and the user
+    -- Null until the invite is accepted (see tokens) and the user
     -- sets their own password.
     password_hash TEXT,
     -- System permission to manage accounts, distinct from the organizational
@@ -32,9 +32,10 @@ CREATE TABLE IF NOT EXISTS user_roles (
     PRIMARY KEY (user_id, role_id)
 );
 
--- Reused for password-reset tokens in a future phase (purpose discriminates
--- instead of duplicating an near-identical table).
-CREATE TABLE IF NOT EXISTS invite_tokens (
+-- Generic single-use token table, not invite-specific: purpose discriminates
+-- (today "invite" and "refresh" — see docs/adr/0016 — password-reset is a
+-- future phase) instead of duplicating a near-identical table per use case.
+CREATE TABLE IF NOT EXISTS tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     purpose TEXT NOT NULL DEFAULT 'invite',

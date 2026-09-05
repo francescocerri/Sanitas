@@ -67,7 +67,7 @@ func newTestKeyPair(t *testing.T) *user.KeyPair {
 func newTestServer(t *testing.T) (*Server, *user.Repository) {
 	t.Helper()
 	t.Cleanup(func() {
-		if _, err := testPool.Exec(context.Background(), "TRUNCATE users, roles, user_roles, invite_tokens CASCADE"); err != nil {
+		if _, err := testPool.Exec(context.Background(), "TRUNCATE users, roles, user_roles, tokens CASCADE"); err != nil {
 			t.Fatalf("truncate: %v", err)
 		}
 	})

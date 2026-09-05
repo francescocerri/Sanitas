@@ -1,4 +1,4 @@
-# 0016. Refresh token, riusando la tabella `invite_tokens`
+# 0016. Refresh token, riusando la tabella `tokens`
 
 Status: Accettata
 
@@ -8,9 +8,9 @@ L'access token JWT emesso da `POST /v1/login` dura 24h senza alcun modo di rinno
 
 ## Decisione
 
-**Nessuna nuova tabella.** La tabella `invite_tokens` (già usata per i token di attivazione account) ha `purpose TEXT`, `token_hash`, `expires_at`, `used_at` — generica per design, il suo stesso commento anticipava questo riuso. I refresh token sono righe con `purpose = 'refresh'`, creati e consumati con gli stessi `Repository.CreateInviteToken`/`ConsumeInviteToken` già esistenti, nessun metodo nuovo nel repository.
+**Nessuna nuova tabella.** La tabella, originariamente chiamata `invite_tokens` (solo per i token di attivazione account), è stata rinominata in `tokens` — non era più un nome accurato una volta che ci sono finiti dentro anche i refresh token. Ha `purpose TEXT`, `token_hash`, `expires_at`, `used_at` — generica per design, il suo stesso commento anticipava questo riuso. Anche i metodi del repository sono stati rinominati coerentemente: `CreateInviteToken`/`ConsumeInviteToken` → `Repository.CreateToken`/`ConsumeToken`. I refresh token sono righe con `purpose = 'refresh'`, nessun metodo nuovo nel repository.
 
-**Rotazione a ogni refresh**: `ConsumeInviteToken` marca il token usato in una singola query atomica (vedi ADR originale) — riusarlo per il refresh significa che ogni `POST /v1/refresh` consuma il token presentato e ne crea uno nuovo, gratis. Un token già usato non è più valido: ripresentarlo restituisce 401.
+**Rotazione a ogni refresh**: `ConsumeToken` marca il token usato in una singola query atomica (vedi ADR originale) — riusarlo per il refresh significa che ogni `POST /v1/refresh` consuma il token presentato e ne crea uno nuovo, gratis. Un token già usato non è più valido: ripresentarlo restituisce 401.
 
 **Endpoint**:
 - `POST /v1/login` ora restituisce sia l'access token che un refresh token (struct `authTokens`, non più una mappa anonima).
@@ -19,7 +19,7 @@ L'access token JWT emesso da `POST /v1/login` dura 24h senza alcun modo di rinno
 
 **Autenticazione classica, solo `Bearer <token>`**: `requireAuth` richiede rigorosamente il prefisso "Bearer " (nessuna eccezione per un token nudo) — coerente con lo standard. Lo Swagger UI (schema `apiKey`, l'unica opzione per un bearer token sotto Swagger 2.0 — non esiste un tipo "http bearer" con prefisso automatico) non può anteporlo da solo nel campo "Authorize": va scritto a mano insieme al token ogni volta, limite noto e accettato dello strumento, non del servizio.
 
-**Refresh token opaco, non un JWT**: scelta deliberata, non un dettaglio implementativo lasciato al caso. Un JWT è stateless — una volta firmato resta valido fino a scadenza, senza modo di revocarlo prima. Per supportare il logout (invalidare il refresh token su richiesta) servirebbe comunque uno stato lato server (una blocklist di JWT revocati, o una tabella di sessioni), che duplicherebbe esattamente quello che `invite_tokens` già offre. Coerente con lo standard OAuth2 (RFC 6749): il refresh token è definito opaco dal punto di vista del client, l'access token resta l'unico stateless/autocontenuto.
+**Refresh token opaco, non un JWT**: scelta deliberata, non un dettaglio implementativo lasciato al caso. Un JWT è stateless — una volta firmato resta valido fino a scadenza, senza modo di revocarlo prima. Per supportare il logout (invalidare il refresh token su richiesta) servirebbe comunque uno stato lato server (una blocklist di JWT revocati, o una tabella di sessioni), che duplicherebbe esattamente quello che `tokens` già offre. Coerente con lo standard OAuth2 (RFC 6749): il refresh token è definito opaco dal punto di vista del client, l'access token resta l'unico stateless/autocontenuto.
 
 ## Conseguenze
 
@@ -27,3 +27,4 @@ L'access token JWT emesso da `POST /v1/login` dura 24h senza alcun modo di rinno
 - **Nessun rilevamento di riuso/furto** (pattern più avanzato "token family": se un token rubato viene usato prima del legittimo proprietario, non c'è modo di accorgersene né di revocare l'intera sessione) — limite noto, non affrontato in questa fase.
 - **Nessuna revoca dell'access token già emesso**: il logout invalida solo il refresh token; un access token rubato resta valido fino alla sua scadenza naturale (24h) — stesso limite già in ADR-0013, invariato.
 - `turni` non verifica ancora alcun JWT (voce di backlog separata) — il refresh token oggi ha effetto solo su `anagrafica`.
+- **Nessuna pulizia dei token scaduti/usati**: righe di `tokens` restano nel DB a tempo indeterminato anche dopo `used_at`/`expires_at` — non c'è ancora un job che le cancella. Cresce nel tempo ma non compromette la correttezza (le query filtrano già su `used_at IS NULL AND expires_at > now()`); voce di backlog separata.
