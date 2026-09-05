@@ -31,10 +31,13 @@ Prima di scrivere codice per una nuova feature, chiediti: "questo assumerebbe qu
 
 ```
 services/<nome-servizio>/   # es. turni (implementato), anagrafica, mezzi-magazzino, servizi-emergenze
-                             # ciascuno Go module a sé stante, con cmd/server, internal/, migrations/, Dockerfile
+                             # ciascuno Go module a sé stante, con cmd/server, internal/, api/, migrations/, Dockerfile
+                             # api/openapi.yaml = contratto REST del servizio, servito su /openapi.yaml e /docs (Swagger UI)
 web/                         # app React (Vite + TS)
 config/<committee-slug>/    # override per-comitato (branding, dati, endpoint) — non ancora creata
 docs/
+  backlog.md                # attività pianificate ma non ancora fatte — fonte di verità sul "cosa manca"
+  adr/                       # una decisione architetturale per file, con contesto e conseguenze
 deploy/                     # docker-compose.yml, .env.example, README setup Raspberry Pi
 .github/workflows/          # ci.yml (build/test/vet/govulncheck/npm audit), deploy.yml (self-hosted runner)
 ```
@@ -61,13 +64,21 @@ CI (obbligatoria prima del merge):
 
 Aggiornamento dipendenze: **Renovate** (`renovate.json`, preset `config:recommended`) apre PR automatiche per Go modules, npm, immagini Docker base e versioni delle GitHub Actions. Le PR di sicurezza vanno prioritizzate rispetto alle altre.
 
+## Documentazione
+
+- **Attività pianificate**: vivono in [`docs/backlog.md`](docs/backlog.md), non nel codice o solo in conversazione — prima di scrivere codice per una feature non banale, l'attività deve essere in backlog (o aggiunta lì contestualmente). Niente "vibe coding": si definiscono le attività, poi si passa al codice.
+- **Decisioni architetturali**: ogni decisione rilevante (nuova o che ne cambia una precedente) va registrata come ADR in [`docs/adr/`](docs/adr/) — un file per decisione, con contesto e conseguenze. Le decisioni passate non si riscrivono: se cambiano, si aggiunge un nuovo ADR che supera il precedente.
+- **Codice commentato**: i commenti spiegano il *perché* di scelte non ovvie (vincoli, workaround, trade-off), non ripetono cosa fa già dire il codice stesso.
+- **API documentate con OpenAPI/Swagger**: ogni servizio che espone una API REST deve avere una spec OpenAPI aggiornata (e una UI Swagger per esplorarla), non solo il codice degli handler.
+
 ## Convenzioni di lavoro con Claude Code
 
 - Usare **Plan Mode** prima di iniziare ogni nuovo microservizio o feature non banale.
 - Passare da `/code-review` prima di ogni merge.
-- Aggiornare questo file ogni volta che cambia una decisione architetturale rilevante.
+- Aggiornare questo file ogni volta che cambia una decisione architetturale rilevante (in aggiunta all'ADR dedicato, se la decisione è abbastanza importante da meritarne uno).
 - Commit: Conventional Commits. Branching: feature branch + PR.
 - Test: unit test per servizio Go; test di integrazione via docker-compose quando più servizi comunicheranno tra loro.
+- Seguire le linee guida standard per servizi Go a microservizi (struttura a layer, logging strutturato, error handling consistente, ecc.) — le specifiche concrete si definiscono e si tracciano in `docs/backlog.md`/ADR mano a mano che si applicano, per evitare di riscrivere codice esistente "a sensazione".
 
 ## Nota per chi fa il fork
 

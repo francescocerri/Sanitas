@@ -25,6 +25,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /turni", s.handleListTurni)
 	mux.HandleFunc("POST /turni", s.handleCreateTurno)
 	mux.HandleFunc("GET /turni/{id}", s.handleGetTurno)
+	mux.HandleFunc("GET /openapi.yaml", s.handleOpenAPISpec)
+	mux.HandleFunc("GET /docs", s.handleDocs)
 	return s.withCORS(mux)
 }
 

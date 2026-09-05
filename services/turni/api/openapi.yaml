@@ -1,0 +1,101 @@
+openapi: 3.0.3
+info:
+  title: Sanitas — Turni API
+  version: "0.1.0"
+  description: >
+    Gestione turni. Il modello dati è volutamente scheletrico (vedi
+    docs/adr/0005-database-postgres-self-hosted.md nel repository):
+    serve a validare la pipeline end-to-end, non è la progettazione
+    definitiva del dominio turni.
+servers:
+  - url: /
+paths:
+  /healthz:
+    get:
+      summary: Liveness check
+      description: Verifica che il servizio sia in esecuzione e che il database sia raggiungibile.
+      responses:
+        "200":
+          description: Servizio operativo
+        "503":
+          description: Database non raggiungibile
+  /turni:
+    get:
+      summary: Elenca i turni
+      responses:
+        "200":
+          description: Elenco turni, ordinati per data e ora di inizio
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Turno"
+    post:
+      summary: Crea un nuovo turno
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NuovoTurno"
+      responses:
+        "201":
+          description: Turno creato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Turno"
+        "400":
+          description: Payload non valido (JSON malformato o campi mancanti)
+  /turni/{id}:
+    get:
+      summary: Recupera un turno per id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Turno trovato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Turno"
+        "404":
+          description: Nessun turno con questo id
+components:
+  schemas:
+    NuovoTurno:
+      type: object
+      required: [volontario_id, data, ora_inizio, ora_fine]
+      properties:
+        volontario_id:
+          type: string
+          description: >
+            Placeholder testuale: il servizio anagrafica non esiste ancora.
+            In futuro diventerà un riferimento reale al volontario.
+          example: "v1"
+        data:
+          type: string
+          example: "2026-09-10"
+        ora_inizio:
+          type: string
+          example: "08:00"
+        ora_fine:
+          type: string
+          example: "14:00"
+    Turno:
+      allOf:
+        - $ref: "#/components/schemas/NuovoTurno"
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            stato:
+              type: string
+              example: pianificato
