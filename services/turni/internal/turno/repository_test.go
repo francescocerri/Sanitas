@@ -6,14 +6,14 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 
 	"github.com/francescocerri/sanitas/services/turni/internal/testdb"
 )
 
 // One container for the whole package: much faster than one per test, at
 // the cost of each test having to clean up after itself (see truncate below).
-var testPool *pgxpool.Pool
+var testDB *gorm.DB
 
 // testVolontarioID is a real anagrafica.users row seeded by testdb.StartPostgres
 // — turni.turni.volontario_id is now an FK, so tests need an existing user
@@ -22,12 +22,12 @@ var testVolontarioID string
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
-	pool, volontarioID, cleanup, err := testdb.StartPostgres(ctx)
+	db, volontarioID, cleanup, err := testdb.StartPostgres(ctx, Migrate)
 	if err != nil {
 		panic(err)
 	}
 	defer cleanup()
-	testPool = pool
+	testDB = db
 	testVolontarioID = volontarioID
 
 	os.Exit(m.Run())
@@ -36,11 +36,11 @@ func TestMain(m *testing.M) {
 func newTestRepository(t *testing.T) *Repository {
 	t.Helper()
 	t.Cleanup(func() {
-		if _, err := testPool.Exec(context.Background(), "TRUNCATE turni"); err != nil {
+		if err := testDB.Exec("TRUNCATE turni").Error; err != nil {
 			t.Fatalf("truncate turni: %v", err)
 		}
 	})
-	return NewRepository(testPool)
+	return NewRepository(testDB)
 }
 
 func TestRepository_CreateAndGet(t *testing.T) {

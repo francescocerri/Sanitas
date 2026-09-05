@@ -8,12 +8,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	"github.com/francescocerri/sanitas/services/turni/internal/schema"
+	gormpostgres "gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // anagraficaFixtureSQL stands in for anagrafica's real schema — a separate
@@ -29,20 +29,25 @@ CREATE TABLE IF NOT EXISTS anagrafica.users (
 `
 
 // StartPostgres starts a disposable Postgres container, applies the
-// anagrafica fixture and then turni's real schema (schema.SQL — the same
-// embedded text production runs, see cmd/server/main.go) in that order, and
+// anagrafica fixture and then migrate (the same function production
+// startup calls — turno.Migrate, see docs/adr/0019/0020) in that order, and
 // seeds one anagrafica.users row so tests have a real id to satisfy the FK.
-// Returns a ready-to-use pool connected with search_path=turni, the seeded
+// Returns a ready-to-use GORM connection (search_path=turni), the seeded
 // row's id, and a cleanup function. Meant to be called once from a
 // package's TestMain.
-func StartPostgres(ctx context.Context) (*pgxpool.Pool, string, func(), error) {
+//
+// migrate is a parameter, not an import of internal/turno, on purpose:
+// internal/turno's own tests use this package too, and internal/turno
+// importing testdb while testdb imported internal/turno back would be an
+// import cycle.
+func StartPostgres(ctx context.Context, migrate func(*gorm.DB) error) (*gorm.DB, string, func(), error) {
 	container, err := postgres.Run(ctx, "postgres:16-alpine",
 		postgres.WithDatabase("sanitas"),
 		postgres.WithUsername("sanitas"),
 		postgres.WithPassword("test"),
 		// Postgres always starts in two phases — a temporary server for
 		// initdb-time setup, then the real one — so this log line appears
-		// twice regardless of init scripts (there are none here anymore).
+		// twice regardless of init scripts (there are none here).
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
 		),
@@ -56,30 +61,32 @@ func StartPostgres(ctx context.Context) (*pgxpool.Pool, string, func(), error) {
 		return nil, "", nil, fmt.Errorf("testdb: connection string: %w", err)
 	}
 
-	pool, err := pgxpool.New(ctx, connString)
+	db, err := gorm.Open(gormpostgres.Open(connString), &gorm.Config{
+		TranslateError: true,
+		Logger:         gormlogger.Default.LogMode(gormlogger.Silent),
+	})
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("testdb: connect: %w", err)
 	}
 
-	if _, err := pool.Exec(ctx, anagraficaFixtureSQL); err != nil {
-		pool.Close()
+	if err := db.Exec(anagraficaFixtureSQL).Error; err != nil {
 		return nil, "", nil, fmt.Errorf("testdb: apply anagrafica fixture: %w", err)
 	}
-	if _, err := pool.Exec(ctx, schema.SQL); err != nil {
-		pool.Close()
-		return nil, "", nil, fmt.Errorf("testdb: apply turni schema: %w", err)
+	if err := migrate(db); err != nil {
+		return nil, "", nil, fmt.Errorf("testdb: migrate: %w", err)
 	}
 
 	var volontarioID string
-	err = pool.QueryRow(ctx, `INSERT INTO anagrafica.users DEFAULT VALUES RETURNING id`).Scan(&volontarioID)
+	err = db.Raw(`INSERT INTO anagrafica.users DEFAULT VALUES RETURNING id`).Scan(&volontarioID).Error
 	if err != nil {
-		pool.Close()
 		return nil, "", nil, fmt.Errorf("testdb: seed test volontario: %w", err)
 	}
 
 	cleanup := func() {
-		pool.Close()
+		if sqlDB, err := db.DB(); err == nil {
+			sqlDB.Close()
+		}
 		_ = container.Terminate(context.Background())
 	}
-	return pool, volontarioID, cleanup, nil
+	return db, volontarioID, cleanup, nil
 }

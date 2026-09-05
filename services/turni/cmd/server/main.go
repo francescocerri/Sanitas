@@ -9,12 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/francescocerri/sanitas/services/turni/internal/authclient"
 	"github.com/francescocerri/sanitas/services/turni/internal/config"
 	"github.com/francescocerri/sanitas/services/turni/internal/httpapi"
-	"github.com/francescocerri/sanitas/services/turni/internal/schema"
 	"github.com/francescocerri/sanitas/services/turni/internal/turno"
 )
 
@@ -71,14 +72,25 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	// TranslateError/Silent logger: same reasoning as anagrafica's own GORM
+	// setup (docs/adr/0019) — kept for consistency even though turni's
+	// repository doesn't currently need to check for a translated error.
+	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
+		TranslateError: true,
+		Logger:         gormlogger.Default.LogMode(gormlogger.Silent),
+	})
 	if err != nil {
 		logger.Error("database connection failed", "error", err)
 		os.Exit(1)
 	}
-	defer pool.Close()
+	sqlDB, err := db.DB()
+	if err != nil {
+		logger.Error("database connection failed", "error", err)
+		os.Exit(1)
+	}
+	defer sqlDB.Close()
 
-	if err := createSchemaWithRetry(ctx, pool, logger); err != nil {
+	if err := createSchemaWithRetry(ctx, db, logger); err != nil {
 		logger.Error("create schema failed", "error", err)
 		os.Exit(1)
 	}
@@ -89,7 +101,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	repo := turno.NewRepository(pool)
+	repo := turno.NewRepository(db)
 	server := httpapi.NewServer(repo, authClient, cfg.CORSAllowedOrigin, logger)
 
 	httpServer := &http.Server{
@@ -124,13 +136,13 @@ func main() {
 	}
 }
 
-// createSchemaWithRetry applies schema.SQL, retrying on failure — turni's
+// createSchemaWithRetry calls turno.Migrate, retrying on failure — turni's
 // FK into anagrafica.users may briefly not resolve if anagrafica's own
 // AutoMigrate hasn't run yet, same reasoning as fetchJWKSWithRetry below.
-func createSchemaWithRetry(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error {
+func createSchemaWithRetry(ctx context.Context, db *gorm.DB, logger *slog.Logger) error {
 	var err error
 	for attempt := 1; attempt <= schemaCreateAttempts; attempt++ {
-		if _, err = pool.Exec(ctx, schema.SQL); err == nil {
+		if err = turno.Migrate(db); err == nil {
 			return nil
 		}
 		logger.Info("create schema: attempt failed, retrying", "attempt", attempt, "error", err)

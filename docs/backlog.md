@@ -27,8 +27,7 @@ Quando un'attività è "una feature non banale" (per la convenzione in `CLAUDE.m
 ## Database / ORM
 
 - [x] **Fase 1**: consolidamento su un unico Postgres condiviso tra `turni` e `anagrafica`, uno schema per servizio, FK reale `turni.turni.volontario_id → anagrafica.users.id` (vedi [ADR-0014](adr/0014-database-condiviso-schema-separati.md)). `pgx` invariato in entrambi i servizi.
-- [x] **Fase 2 (parziale)**: `anagrafica` su **GORM** (query builder) + **AutoMigrate** al posto degli script SQL. Ha richiesto risolvere anche l'ordine di creazione schema con `turni` (la sua FK verso `anagrafica.users`): `turni` crea ora il proprio schema al proprio avvio con retry, invece che da `docker-entrypoint-initdb.d`. Vedi [ADR-0019](adr/0019-gorm-e-automigrate.md) (supera parte di [ADR-0005](adr/0005-database-postgres-self-hosted.md)).
-- [ ] **Fase 2 (completamento)**: adozione di GORM anche in `turni` per le proprie query (oggi resta su `pgx`, solo la creazione dello schema è cambiata).
+- [x] **Fase 2 completa**: entrambi i servizi su **GORM** (query builder) + **AutoMigrate** al posto degli script SQL. `anagrafica` per prima (con la risoluzione dell'ordine di creazione schema con `turni`, la cui FK dipende da `anagrafica.users`), poi `turni` (stesso pattern, dominio più piccolo). Vedi [ADR-0019](adr/0019-gorm-e-automigrate.md) e [ADR-0020](adr/0020-turni-gorm.md) (superano parte di [ADR-0005](adr/0005-database-postgres-self-hosted.md)).
 
 ## Altri microservizi (non ancora iniziati)
 
