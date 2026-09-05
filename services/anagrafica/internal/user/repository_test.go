@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 func newTestRepository(t *testing.T) *Repository {
 	t.Helper()
 	t.Cleanup(func() {
-		if _, err := testPool.Exec(context.Background(), "TRUNCATE users, roles, user_roles, invite_tokens CASCADE"); err != nil {
+		if _, err := testPool.Exec(context.Background(), "TRUNCATE users, roles, user_roles, tokens CASCADE"); err != nil {
 			t.Fatalf("truncate: %v", err)
 		}
 	})
@@ -120,21 +120,21 @@ func TestInviteToken_ActivateAndConsumeOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreatePendingUser: %v", err)
 	}
-	raw, err := repo.CreateInviteToken(ctx, u.ID, "invite", time.Hour)
+	raw, err := repo.CreateToken(ctx, u.ID, "invite", time.Hour)
 	if err != nil {
-		t.Fatalf("CreateInviteToken: %v", err)
+		t.Fatalf("CreateToken: %v", err)
 	}
 
-	gotUserID, err := repo.ConsumeInviteToken(ctx, raw, "invite")
+	gotUserID, err := repo.ConsumeToken(ctx, raw, "invite")
 	if err != nil {
-		t.Fatalf("ConsumeInviteToken: %v", err)
+		t.Fatalf("ConsumeToken: %v", err)
 	}
 	if gotUserID != u.ID {
 		t.Fatalf("expected user id %s, got %s", u.ID, gotUserID)
 	}
 
 	// A token can only ever be redeemed once.
-	if _, err := repo.ConsumeInviteToken(ctx, raw, "invite"); !errors.Is(err, ErrInvalidToken) {
+	if _, err := repo.ConsumeToken(ctx, raw, "invite"); !errors.Is(err, ErrInvalidToken) {
 		t.Fatalf("expected ErrInvalidToken on reuse, got %v", err)
 	}
 }

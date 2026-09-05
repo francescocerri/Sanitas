@@ -33,6 +33,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /.well-known/jwks.json", s.handleJWKS)
 	mux.HandleFunc("POST "+v1+"/login", s.handleLogin)
+	mux.HandleFunc("POST "+v1+"/refresh", s.handleRefresh)
+	mux.HandleFunc("POST "+v1+"/logout", s.handleLogout)
 	mux.HandleFunc("GET "+v1+"/me", s.requireAuth(s.handleMe))
 	mux.HandleFunc("POST "+v1+"/users", s.requireAdmin(s.handleCreateUser))
 	mux.HandleFunc("POST "+v1+"/users/activate", s.handleActivateUser)
@@ -80,7 +82,8 @@ var piiJSONFields = map[string]bool{
 	"new_password": true,
 	// Not personal data, but a bearer credential: whoever reads the logs
 	// could activate the account before the real invitee does.
-	"token": true,
+	"token":         true,
+	"refresh_token": true,
 }
 
 // withLogging combines structured access logging and panic recovery, and

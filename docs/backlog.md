@@ -19,6 +19,9 @@ Quando un'attività è "una feature non banale" (per la convenzione in `CLAUDE.m
 - [ ] **Fase B**: invio email reale (inviti + forgot-password) via Gmail SMTP — oggi l'URL di invito è solo restituito nella risposta API, non spedito.
 - [ ] **Permessi granulari per ruolo** (visibilità diversa per ruolo, lato BE e FE) — oggi solo `is_admin` grezzo; da progettare quando esisteranno schermate/endpoint su cui applicarli (vedi ADR-0013).
 - [x] Integrazione `turni` ↔ `anagrafica`: `volontario_id` è ora una FK reale verso `anagrafica.users(id)`, database condiviso con schema separati per servizio (vedi [ADR-0014](adr/0014-database-condiviso-schema-separati.md)).
+- [x] **Refresh token**: `POST /v1/login` ora restituisce anche un refresh token (30gg, rotante), più `POST /v1/refresh` e `POST /v1/logout` — riusa la tabella `tokens` (rinominata da `invite_tokens`, ora generica) esistente. Vedi [ADR-0016](adr/0016-refresh-token.md). Nessun rilevamento di riuso/furto (token family) né revoca dell'access token già emesso — limiti noti, non affrontati.
+- [ ] **Pulizia dei token scaduti/usati**: righe di `tokens` (invite, refresh, in futuro password-reset) restano nel DB a tempo indeterminato dopo `used_at`/`expires_at` — introdurre un job periodico (o una query di cleanup all'avvio) che le cancella. Non compromette la correttezza oggi, solo la crescita nel tempo della tabella.
+- [ ] **`turni` non verifica alcun JWT**: nessun endpoint del servizio richiede autenticazione, a differenza di `anagrafica` — il commento in `anagrafica/internal/httpapi/auth.go` (`requireAuth`) anticipa già che un servizio consumer validerebbe il token con la chiave pubblica esposta su `GET /.well-known/jwks.json`, ma non è mai stato implementato in `turni`. Da progettare a parte (impatta anche la scelta se proteggere singoli endpoint o l'intero servizio).
 
 ## Database / ORM
 

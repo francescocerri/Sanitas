@@ -8,7 +8,7 @@ import (
 )
 
 // GenerateToken returns a random URL-safe token and its hash. Only the hash
-// is ever persisted (invite_tokens.token_hash) — the raw token exists only
+// is ever persisted (tokens.token_hash) — the raw token exists only
 // in the invite URL handed back to the caller, so a DB read alone can never
 // reveal a valid token.
 func GenerateToken() (raw string, hash string, err error) {

@@ -22,6 +22,11 @@ import (
 // @description	token, login, password change. Sending real email (invites/forgot-password)
 // @description	is a later phase — see docs/adr/0013.
 //
+// @securityDefinitions.apikey	BearerAuth
+// @in							header
+// @name						Authorization
+// @description				Type "Bearer" followed by a space and the access token from POST /v1/login (e.g. "Bearer eyJhbGci...").
+//
 // No @BasePath: Swagger 2.0 has no per-path basePath override, and this API
 // mixes versioned (/v1/...) and unversioned (/healthz, /.well-known/...)
 // routes — a global BasePath would make Swagger UI's "Try it out" call the

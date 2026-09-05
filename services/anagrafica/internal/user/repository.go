@@ -66,8 +66,8 @@ func (r *Repository) CreateActiveUser(ctx context.Context, email, username, pass
 }
 
 // CreatePendingUser creates a user with no password yet: it's set when the
-// invite token generated alongside it is redeemed (see CreateInviteToken,
-// ConsumeInviteToken).
+// invite token generated alongside it is redeemed (see CreateToken,
+// ConsumeToken).
 func (r *Repository) CreatePendingUser(ctx context.Context, email, username string) (User, error) {
 	var u User
 	err := r.pool.QueryRow(ctx, `
@@ -225,28 +225,31 @@ func (r *Repository) GetRolesForUser(ctx context.Context, userID string) ([]stri
 	return slugs, rows.Err()
 }
 
-func (r *Repository) CreateInviteToken(ctx context.Context, userID, purpose string, ttl time.Duration) (string, error) {
+// CreateToken creates a single-use token for the given purpose ("invite",
+// "refresh", ... — see the tokens table, docs/adr/0016) and returns the raw
+// value; only its hash is persisted.
+func (r *Repository) CreateToken(ctx context.Context, userID, purpose string, ttl time.Duration) (string, error) {
 	raw, hash, err := GenerateToken()
 	if err != nil {
 		return "", err
 	}
 	_, err = r.pool.Exec(ctx, `
-		INSERT INTO invite_tokens (user_id, purpose, token_hash, expires_at)
+		INSERT INTO tokens (user_id, purpose, token_hash, expires_at)
 		VALUES ($1, $2, $3, $4)`,
 		userID, purpose, hash, time.Now().Add(ttl))
 	if err != nil {
-		return "", fmt.Errorf("user: create invite token: %w", err)
+		return "", fmt.Errorf("user: create token: %w", err)
 	}
 	return raw, nil
 }
 
-// ConsumeInviteToken validates raw against a stored, unused, unexpired
-// token and marks it used in the same statement — a token can only ever be
-// redeemed once, even under concurrent requests.
-func (r *Repository) ConsumeInviteToken(ctx context.Context, raw, purpose string) (string, error) {
+// ConsumeToken validates raw against a stored, unused, unexpired token for
+// the given purpose and marks it used in the same statement — a token can
+// only ever be redeemed once, even under concurrent requests.
+func (r *Repository) ConsumeToken(ctx context.Context, raw, purpose string) (string, error) {
 	var userID string
 	err := r.pool.QueryRow(ctx, `
-		UPDATE invite_tokens SET used_at = now()
+		UPDATE tokens SET used_at = now()
 		WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > now()
 		RETURNING user_id::text`,
 		HashToken(raw), purpose,
@@ -255,7 +258,7 @@ func (r *Repository) ConsumeInviteToken(ctx context.Context, raw, purpose string
 		return "", ErrInvalidToken
 	}
 	if err != nil {
-		return "", fmt.Errorf("user: consume invite token: %w", err)
+		return "", fmt.Errorf("user: consume token: %w", err)
 	}
 	return userID, nil
 }

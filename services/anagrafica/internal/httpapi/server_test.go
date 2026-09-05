@@ -67,7 +67,7 @@ func newTestKeyPair(t *testing.T) *user.KeyPair {
 func newTestServer(t *testing.T) (*Server, *user.Repository) {
 	t.Helper()
 	t.Cleanup(func() {
-		if _, err := testPool.Exec(context.Background(), "TRUNCATE users, roles, user_roles, invite_tokens CASCADE"); err != nil {
+		if _, err := testPool.Exec(context.Background(), "TRUNCATE users, roles, user_roles, tokens CASCADE"); err != nil {
 			t.Fatalf("truncate: %v", err)
 		}
 	})
@@ -133,17 +133,145 @@ func TestLogin_CorrectAndWrongCredentials(t *testing.T) {
 	if ok.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", ok.Code, ok.Body.String())
 	}
-	var resp map[string]string
+	var resp authTokens
 	if err := json.Unmarshal(ok.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode login response: %v", err)
 	}
-	if resp["token"] == "" {
+	if resp.Token == "" {
 		t.Fatal("expected a non-empty token")
+	}
+	if resp.RefreshToken == "" {
+		t.Fatal("expected a non-empty refresh_token")
 	}
 
 	wrong := doJSON(t, server, http.MethodPost, "/v1/login", loginRequest{Identifier: "admin", Password: "sbagliata"}, "")
 	if wrong.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for wrong password, got %d", wrong.Code)
+	}
+}
+
+// requireAuth requires the standard "Bearer <token>" header — a bare token
+// (no prefix) must be rejected, even though it's what Swagger UI's Authorize
+// dialog would send if you paste the token without typing "Bearer " first.
+func TestRequireAuth_RequiresBearerPrefix(t *testing.T) {
+	server, repo := newTestServer(t)
+	ctx := context.Background()
+	if err := user.Bootstrap(ctx, repo, "admin@example.org", "admin", "supersegreta"); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	token := login(t, server, "admin", "supersegreta")
+
+	withPrefix := doJSON(t, server, http.MethodGet, "/v1/me", nil, token)
+	if withPrefix.Code != http.StatusOK {
+		t.Fatalf("expected 200 with the standard 'Bearer <token>' header, got %d: %s", withPrefix.Code, withPrefix.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	req.Header.Set("Authorization", token)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for a bare token without the 'Bearer ' prefix, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// loginTokens is like login but returns both tokens, for tests exercising
+// refresh/logout — most tests only need the access token (see login below).
+func loginTokens(t *testing.T, server *Server, identifier, password string) authTokens {
+	t.Helper()
+	rec := doJSON(t, server, http.MethodPost, "/v1/login", loginRequest{Identifier: identifier, Password: password}, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login failed: %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp authTokens
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode login response: %v", err)
+	}
+	return resp
+}
+
+func TestRefresh_RotatesTokenAndRejectsReuse(t *testing.T) {
+	server, repo := newTestServer(t)
+	ctx := context.Background()
+	if err := user.Bootstrap(ctx, repo, "admin@example.org", "admin", "supersegreta"); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	first := loginTokens(t, server, "admin", "supersegreta")
+
+	refreshed := doJSON(t, server, http.MethodPost, "/v1/refresh", refreshRequest{RefreshToken: first.RefreshToken}, "")
+	if refreshed.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", refreshed.Code, refreshed.Body.String())
+	}
+	var second authTokens
+	if err := json.Unmarshal(refreshed.Body.Bytes(), &second); err != nil {
+		t.Fatalf("decode refresh response: %v", err)
+	}
+	if second.Token == "" || second.RefreshToken == "" {
+		t.Fatal("expected both a new access token and a new refresh token")
+	}
+	if second.RefreshToken == first.RefreshToken {
+		t.Fatal("expected refresh to rotate the refresh token, got the same one back")
+	}
+
+	// The first refresh token was single use — reusing it must fail.
+	reuse := doJSON(t, server, http.MethodPost, "/v1/refresh", refreshRequest{RefreshToken: first.RefreshToken}, "")
+	if reuse.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on refresh token reuse, got %d", reuse.Code)
+	}
+}
+
+func TestRefresh_UnknownToken(t *testing.T) {
+	server, _ := newTestServer(t)
+	rec := doJSON(t, server, http.MethodPost, "/v1/refresh", refreshRequest{RefreshToken: "not-a-real-token"}, "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestLogout_InvalidatesRefreshToken(t *testing.T) {
+	server, repo := newTestServer(t)
+	ctx := context.Background()
+	if err := user.Bootstrap(ctx, repo, "admin@example.org", "admin", "supersegreta"); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	tokens := loginTokens(t, server, "admin", "supersegreta")
+
+	logout := doJSON(t, server, http.MethodPost, "/v1/logout", refreshRequest{RefreshToken: tokens.RefreshToken}, "")
+	if logout.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", logout.Code, logout.Body.String())
+	}
+
+	afterLogout := doJSON(t, server, http.MethodPost, "/v1/refresh", refreshRequest{RefreshToken: tokens.RefreshToken}, "")
+	if afterLogout.Code != http.StatusUnauthorized {
+		t.Fatalf("expected refresh to fail after logout, got %d", afterLogout.Code)
+	}
+}
+
+// Caught by the same reasoning as TestActivateUserLogsTokenRedacted: a
+// refresh token is a bearer credential, not personal data, but must still
+// never appear in the clear in the access log.
+func TestRefreshLogsTokenRedacted(t *testing.T) {
+	server, repo := newTestServer(t)
+	ctx := context.Background()
+	if err := user.Bootstrap(ctx, repo, "admin@example.org", "admin", "supersegreta"); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	tokens := loginTokens(t, server, "admin", "supersegreta")
+
+	var logBuf bytes.Buffer
+	server.logger = slog.New(slog.NewJSONHandler(&logBuf, nil))
+
+	rec := doJSON(t, server, http.MethodPost, "/v1/refresh", refreshRequest{RefreshToken: tokens.RefreshToken}, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	logged := logBuf.String()
+	if strings.Contains(logged, tokens.RefreshToken) {
+		t.Fatalf("refresh token leaked into the log: %s", logged)
+	}
+	if !strings.Contains(logged, "[redacted]") {
+		t.Fatalf("expected the request-handled log line to contain the redacted body, got: %s", logged)
 	}
 }
 

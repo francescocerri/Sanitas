@@ -78,7 +78,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	created.Roles = req.Roles
 
-	token, err := s.repo.CreateInviteToken(r.Context(), created.ID, "invite", inviteTokenTTL)
+	token, err := s.repo.CreateToken(r.Context(), created.ID, "invite", inviteTokenTTL)
 	if err != nil {
 		s.logger.Error("create invite token", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -112,7 +112,7 @@ func (s *Server) handleActivateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := s.repo.ConsumeInviteToken(r.Context(), req.Token, "invite")
+	userID, err := s.repo.ConsumeToken(r.Context(), req.Token, "invite")
 	if err != nil {
 		if errors.Is(err, user.ErrInvalidToken) {
 			writeError(w, http.StatusUnauthorized, "invalid, expired, or already used token")
