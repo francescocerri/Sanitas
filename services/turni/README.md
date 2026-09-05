@@ -39,9 +39,11 @@ docker run -d --name turni-postgres-dev -p 5432:5432 \
   -v "$(pwd)/migrations:/docker-entrypoint-initdb.d:ro" \
   postgres:16-alpine
 
-export DATABASE_URL="postgres://sanitas:devlocalpassword@localhost:5432/sanitas?sslmode=disable"
-go run ./cmd/server   # se anche la 8080 sull'host è occupata: PORT=8081 go run ./cmd/server
+cp .env.example .env   # valori già coerenti col container Postgres sopra; PORT=8081 se anche la 8080 sull'host è occupata
+go run ./cmd/server
 ```
+
+Il binario carica `.env` da solo se presente nella directory da cui viene lanciato (comodo per `go run`, ignorato in Docker/produzione dove le variabili vere sono già impostate) — non serve fare `source` a mano.
 
 Per fermare/rimuovere il container di prova: `docker rm -f turni-postgres-dev`.
 

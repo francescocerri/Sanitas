@@ -69,6 +69,7 @@ Aggiornamento dipendenze: **Renovate** (`renovate.json`, preset `config:recommen
 - **Attività pianificate**: vivono in [`docs/backlog.md`](docs/backlog.md), non nel codice o solo in conversazione — prima di scrivere codice per una feature non banale, l'attività deve essere in backlog (o aggiunta lì contestualmente). Niente "vibe coding": si definiscono le attività, poi si passa al codice.
 - **Decisioni architetturali**: ogni decisione rilevante (nuova o che ne cambia una precedente) va registrata come ADR in [`docs/adr/`](docs/adr/) — un file per decisione, con contesto e conseguenze. Le decisioni passate non si riscrivono: se cambiano, si aggiunge un nuovo ADR che supera il precedente.
 - **Codice commentato**: i commenti spiegano il *perché* di scelte non ovvie (vincoli, workaround, trade-off), non ripetono cosa fa già dire il codice stesso.
+- **Lingua**: codice, commenti (incluse le annotazioni Swagger) e log strutturati (`log/slog` o equivalente) in inglese — convenzione standard per codice destinato a essere letto/consultato anche da chi non parla italiano. Solo i messaggi nel body delle risposte HTTP (rivolti a chi consuma l'API) restano in italiano, coerentemente con la documentazione di progetto (`CLAUDE.md`, ADR, backlog) e il vocabolario di dominio (`turno`, `volontario`, ecc.), che restano invariati.
 - **API documentate con Swagger generato dal codice**: annotazioni `swaggo/swag` sopra ogni handler, mai una spec scritta e mantenuta a mano — vedi [ADR-0009](docs/adr/0009-swagger-generato-dal-codice.md). Un check in CI garantisce che la spec generata combaci con quella committata.
 
 ## Convenzioni di lavoro con Claude Code
@@ -78,7 +79,8 @@ Aggiornamento dipendenze: **Renovate** (`renovate.json`, preset `config:recommen
 - Aggiornare questo file ogni volta che cambia una decisione architetturale rilevante (in aggiunta all'ADR dedicato, se la decisione è abbastanza importante da meritarne uno).
 - Commit: Conventional Commits. Branching: feature branch + PR.
 - Test: unit test per servizio Go; test di integrazione via docker-compose quando più servizi comunicheranno tra loro.
-- Seguire le linee guida standard per servizi Go a microservizi (struttura a layer, logging strutturato, error handling consistente, ecc.) — le specifiche concrete si definiscono e si tracciano in `docs/backlog.md`/ADR mano a mano che si applicano, per evitare di riscrivere codice esistente "a sensazione".
+- Seguire le linee guida standard per servizi Go a microservizi: logging strutturato (`log/slog`), error handling con wrapping ed errori di dominio, timeout su `http.Server` — vedi [ADR-0010](docs/adr/0010-convenzioni-cross-cutting-servizi-go.md). Struttura a layer non introdotta finché il dominio reale non è progettato (stessa ADR). Da replicare identico in ogni nuovo servizio.
+- **Prima di ogni `git push`/apertura o aggiornamento di una PR**: rieseguire in locale l'intera suite di verifica (`go build`, `go vet`, `go test`, `gofmt -l`, `govulncheck`, rigenerazione Swagger con `swag init` e controllo che non ci sia drift) — non fidarsi solo della CI remota, verificarlo anche in locale prima del push.
 
 ## Nota per chi fa il fork
 

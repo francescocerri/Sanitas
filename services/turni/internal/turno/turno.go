@@ -1,8 +1,12 @@
 package turno
 
-// Turno è volutamente scheletrico: serve a validare la pipeline
-// DB -> API -> CI -> deploy, non è la progettazione definitiva del
-// dominio (assegnazione, conflitti, disponibilità volontari).
+// Turno is intentionally skeletal: it validates the DB -> API -> CI -> deploy
+// pipeline, it is not the final domain design (assignment, conflicts,
+// volunteer availability).
+//
+// Data/OraInizio/OraFine are plain strings, not time.Time/a date type: the
+// DB columns are TEXT (see migrations/0001_init.sql) precisely to sidestep
+// pgx's date/time type-mapping for what is still a placeholder schema.
 type Turno struct {
 	ID           string `json:"id,omitempty"`
 	VolontarioID string `json:"volontario_id"`

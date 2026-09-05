@@ -18,15 +18,15 @@ const docTemplate = `{
         "/healthz": {
             "get": {
                 "tags": [
-                    "sistema"
+                    "system"
                 ],
                 "summary": "Liveness check",
                 "responses": {
                     "200": {
-                        "description": "Servizio operativo"
+                        "description": "Service healthy"
                     },
                     "503": {
-                        "description": "Database non raggiungibile"
+                        "description": "Database unreachable"
                     }
                 }
             }
@@ -39,7 +39,7 @@ const docTemplate = `{
                 "tags": [
                     "turni"
                 ],
-                "summary": "Elenca i turni",
+                "summary": "List turni",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -62,10 +62,10 @@ const docTemplate = `{
                 "tags": [
                     "turni"
                 ],
-                "summary": "Crea un nuovo turno",
+                "summary": "Create a new turno",
                 "parameters": [
                     {
-                        "description": "Nuovo turno (id e stato in input vengono ignorati)",
+                        "description": "New turno (id and stato in the input are ignored)",
                         "name": "turno",
                         "in": "body",
                         "required": true,
@@ -82,7 +82,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Payload non valido"
+                        "description": "Invalid payload"
                     }
                 }
             }
@@ -95,11 +95,11 @@ const docTemplate = `{
                 "tags": [
                     "turni"
                 ],
-                "summary": "Recupera un turno per id",
+                "summary": "Get a turno by id",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "ID del turno (UUID)",
+                        "description": "Turno id (UUID)",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -113,7 +113,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Turno non trovato"
+                        "description": "Turno not found"
                     }
                 }
             }
@@ -153,7 +153,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "",
 	Schemes:          []string{},
 	Title:            "Sanitas — Turni API",
-	Description:      "Gestione turni. Modello dati volutamente scheletrico (vedi docs/adr/0005 nel repository):\nvalida la pipeline end-to-end, non è la progettazione definitiva del dominio.",
+	Description:      "Turno (shift) management. The data model is intentionally skeletal (see docs/adr/0005\nin the repository): it validates the end-to-end pipeline, not the final domain design.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
