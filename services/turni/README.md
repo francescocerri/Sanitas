@@ -4,19 +4,23 @@ Microservizio Go per la gestione turni. Modello dati volutamente scheletrico (ve
 
 ## Eseguire in locale (con Postgres via Docker Compose)
 
-Il modo più semplice: usa lo stesso `docker-compose.yml` pensato per il deploy, che builda l'immagine e avvia anche Postgres.
+Il modo più semplice: usa lo stesso `docker-compose.yml` pensato per il deploy, che builda l'immagine e avvia anche Postgres. `turni` verifica i token emessi da `anagrafica` (vedi [ADR-0017](../../docs/adr/0017-turni-verifica-jwt.md)) e recupera la chiave pubblica al proprio avvio: serve avviare anche `anagrafica`, non solo Postgres.
 
 ```bash
 cd ../../deploy
-cp .env.example .env   # imposta almeno POSTGRES_PASSWORD
-docker compose up -d --build postgres turni
+cp .env.example .env   # imposta almeno POSTGRES_PASSWORD (vedi anche services/anagrafica/README.md per la chiave JWT)
+docker compose up -d --build postgres anagrafica turni
 ```
 
 Il servizio è raggiungibile su `http://localhost:8080` (o sulla porta impostata in `TURNI_HOST_PORT` in `.env`, se la 8080 è già occupata — se cambi anche `VITE_TURNI_API_URL` in `web/.env` di conseguenza):
 
 ```bash
 curl http://localhost:8080/healthz
-curl http://localhost:8080/turni
+
+# /v1/shifts richiede un token valido emesso da anagrafica (vedi
+# docs/adr/0017) — ottienilo con POST /v1/login su anagrafica (porta 8090
+# di default), poi:
+curl http://localhost:8080/v1/shifts -H "Authorization: Bearer <token>"
 ```
 
 Postgres è raggiungibile da `localhost` (utile per ispezionarlo con un client come DBeaver) su `POSTGRES_HOST_PORT` (default `5432`, cambialo in `.env` se hai già un Postgres locale su quella porta): host `localhost`, database/utente/password come impostati in `.env`.
@@ -45,6 +49,8 @@ go run ./cmd/server
 ```
 
 Il binario carica `.env` da solo se presente nella directory da cui viene lanciato (comodo per `go run`, ignorato in Docker/produzione dove le variabili vere sono già impostate) — non serve fare `source` a mano.
+
+Serve anche `anagrafica` in esecuzione (locale o via Docker Compose) perché `AUTH_JWKS_URL` in `.env.example` punti a qualcosa di reale — senza, `turni` fallisce l'avvio dopo aver esaurito i tentativi di recupero della chiave (vedi [ADR-0017](../../docs/adr/0017-turni-verifica-jwt.md)).
 
 Per fermare/rimuovere il container di prova: `docker rm -f turni-postgres-dev`.
 
@@ -76,3 +82,4 @@ Se dimentichi questo passo, la CI fallisce (rigenera e confronta con quanto comm
 | `PORT`                | `8080`                    | Porta HTTP del servizio                                          |
 | `DATABASE_URL`        | *(obbligatoria)*          | DSN Postgres, es. `postgres://user:pass@host:5432/db?sslmode=disable` |
 | `CORS_ALLOWED_ORIGIN` | `http://localhost:5173`  | Origine consentita per le richieste del frontend                 |
+| `AUTH_JWKS_URL`       | *(obbligatoria)*          | URL del JWKS di `anagrafica` per verificare i token (vedi [ADR-0017](../../docs/adr/0017-turni-verifica-jwt.md)) |

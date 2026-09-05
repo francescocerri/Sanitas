@@ -33,6 +33,11 @@ const docTemplate = `{
         },
         "/v1/shifts": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -49,10 +54,18 @@ const docTemplate = `{
                                 "$ref": "#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno"
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Authentication required"
                     }
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "consumes": [
                     "application/json"
                 ],
@@ -83,12 +96,20 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Invalid payload"
+                    },
+                    "401": {
+                        "description": "Authentication required"
                     }
                 }
             }
         },
         "/v1/shifts/{id}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -111,6 +132,9 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno"
                         }
+                    },
+                    "401": {
+                        "description": "Authentication required"
                     },
                     "404": {
                         "description": "Turno not found"
@@ -142,6 +166,14 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "turni issues no tokens itself — type \"Bearer\" followed by a space and\nthe access token obtained from anagrafica's POST /v1/login (e.g. \"Bearer eyJhbGci...\").",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }`

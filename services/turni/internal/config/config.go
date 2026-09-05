@@ -11,6 +11,7 @@ type Config struct {
 	Port              string
 	DatabaseURL       string
 	CORSAllowedOrigin string
+	AuthJWKSURL       string
 }
 
 func Load() (Config, error) {
@@ -20,9 +21,13 @@ func Load() (Config, error) {
 		Port:              getEnv("PORT", "8080"),
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		CORSAllowedOrigin: getEnv("CORS_ALLOWED_ORIGIN", "http://localhost:5173"),
+		AuthJWKSURL:       os.Getenv("AUTH_JWKS_URL"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL not set")
+	}
+	if cfg.AuthJWKSURL == "" {
+		return Config{}, fmt.Errorf("AUTH_JWKS_URL not set")
 	}
 	return cfg, nil
 }
