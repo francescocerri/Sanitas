@@ -15,6 +15,10 @@ import (
 	"github.com/francescocerri/sanitas/services/turni/internal/turno"
 )
 
+// @title			Sanitas — Turni API
+// @version		0.1.0
+// @description	Gestione turni. Modello dati volutamente scheletrico (vedi docs/adr/0005 nel repository):
+// @description	valida la pipeline end-to-end, non è la progettazione definitiva del dominio.
 func main() {
 	cfg, err := config.Load()
 	if err != nil {

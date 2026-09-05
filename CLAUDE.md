@@ -32,7 +32,7 @@ Prima di scrivere codice per una nuova feature, chiediti: "questo assumerebbe qu
 ```
 services/<nome-servizio>/   # es. turni (implementato), anagrafica, mezzi-magazzino, servizi-emergenze
                              # ciascuno Go module a sé stante, con cmd/server, internal/, api/, migrations/, Dockerfile
-                             # api/openapi.yaml = contratto REST del servizio, servito su /openapi.yaml e /docs (Swagger UI)
+                             # api/ = spec Swagger generata dalle annotazioni sopra gli handler (swaggo/swag), servita su /docs/
 web/                         # app React (Vite + TS)
 config/<committee-slug>/    # override per-comitato (branding, dati, endpoint) — non ancora creata
 docs/
@@ -69,7 +69,7 @@ Aggiornamento dipendenze: **Renovate** (`renovate.json`, preset `config:recommen
 - **Attività pianificate**: vivono in [`docs/backlog.md`](docs/backlog.md), non nel codice o solo in conversazione — prima di scrivere codice per una feature non banale, l'attività deve essere in backlog (o aggiunta lì contestualmente). Niente "vibe coding": si definiscono le attività, poi si passa al codice.
 - **Decisioni architetturali**: ogni decisione rilevante (nuova o che ne cambia una precedente) va registrata come ADR in [`docs/adr/`](docs/adr/) — un file per decisione, con contesto e conseguenze. Le decisioni passate non si riscrivono: se cambiano, si aggiunge un nuovo ADR che supera il precedente.
 - **Codice commentato**: i commenti spiegano il *perché* di scelte non ovvie (vincoli, workaround, trade-off), non ripetono cosa fa già dire il codice stesso.
-- **API documentate con OpenAPI/Swagger**: ogni servizio che espone una API REST deve avere una spec OpenAPI aggiornata (e una UI Swagger per esplorarla), non solo il codice degli handler.
+- **API documentate con Swagger generato dal codice**: annotazioni `swaggo/swag` sopra ogni handler, mai una spec scritta e mantenuta a mano — vedi [ADR-0009](docs/adr/0009-swagger-generato-dal-codice.md). Un check in CI garantisce che la spec generata combaci con quella committata.
 
 ## Convenzioni di lavoro con Claude Code
 

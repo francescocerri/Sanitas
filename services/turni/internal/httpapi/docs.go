@@ -1,27 +1,19 @@
 package httpapi
 
 import (
-	_ "embed"
 	"net/http"
 
-	"github.com/francescocerri/sanitas/services/turni/api"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
+
+	// Effetto collaterale: registra la spec generata da swag (api/docs.go,
+	// derivata dalle annotazioni sopra gli handler) nel registro letto da
+	// http-swagger. Rigenerare con `swag init` dopo ogni modifica alle
+	// annotazioni — c'è un controllo in CI che verifica che non ci si dimentichi.
+	_ "github.com/francescocerri/sanitas/services/turni/api"
 )
 
-// La pagina Swagger UI carica lo script/CSS da CDN (jsdelivr) invece di
-// vendorizzare swagger-ui-dist nel repo: evita di aggiungere una
-// dipendenza Go e qualche MB di asset statici solo per la UI di
-// documentazione, a costo di richiedere accesso a internet quando si
-// consulta /docs (l'API stessa resta pienamente self-hosted).
-//
-//go:embed swagger-ui.html
-var swaggerUIPage []byte
-
-func (s *Server) handleOpenAPISpec(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/yaml")
-	_, _ = w.Write(api.OpenAPISpec)
-}
-
-func (s *Server) handleDocs(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(swaggerUIPage)
+// docsHandler serve la Swagger UI (asset incorporati nella libreria,
+// nessuna dipendenza da CDN esterno) su /docs/, con la spec generata.
+func docsHandler() http.Handler {
+	return httpSwagger.Handler(httpSwagger.URL("/docs/doc.json"))
 }

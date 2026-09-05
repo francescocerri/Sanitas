@@ -7,7 +7,7 @@ Quando un'attività è "una feature non banale" (per la convenzione in `CLAUDE.m
 ## Servizio `turni`
 
 - [ ] **Commentare il codice esistente** (`services/turni`): spiegare il *perché* delle scelte non ovvie (es. cast `id::text` nelle query, CORS configurabile via env), non ripetere l'ovvio.
-- [x] **Documentazione API via OpenAPI/Swagger**: spec in `services/turni/api/openapi.yaml`, servita su `/openapi.yaml` e consultabile su `/docs` (Swagger UI). Vedi [ADR-0008](adr/0008-documentazione-api-openapi.md). Da tenere aggiornata ad ogni cambio di endpoint (nessuna generazione automatica).
+- [x] **Documentazione API via Swagger**: generata dalle annotazioni sopra gli handler (`swaggo/swag`), consultabile su `/docs/` — un check in CI fallisce se qualcuno dimentica di rigenerarla dopo un cambio di endpoint. Vedi [ADR-0009](adr/0009-swagger-generato-dal-codice.md) (supera [ADR-0008](adr/0008-documentazione-api-openapi.md)).
 - [ ] **Allineamento alle linee guida standard per microservizi Go**: da definire insieme quali esattamente (candidati da discutere prima di implementare: logging strutturato con `log/slog`, error handling con errori tipizzati/wrapping consistente, struttura a layer espliciti, timeout/context propagation su tutte le chiamate esterne — quanto di questo è già presente va verificato, non riscritto a caso).
 - [ ] **Test automatici**: unit test per la logica applicativa, integration test contro un Postgres reale (es. via `testcontainers-go` o docker-compose in CI).
 - [ ] **Progettazione del dominio reale** (assegnazione turni, conflitti, disponibilità volontari) — il modello attuale è volutamente scheletrico (vedi [ADR-0005](adr/0005-database-postgres-self-hosted.md)). Richiede una sessione di Plan Mode dedicata.
