@@ -1,0 +1,29 @@
+# Go
+/services/**/bin/
+/services/**/*.exe
+*.test
+*.out
+vendor/
+
+# Node / React
+node_modules/
+web/dist/
+web/build/
+.vite/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Config per-comitato (contiene dati reali del deployment, non va committato)
+config/*/secrets/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
