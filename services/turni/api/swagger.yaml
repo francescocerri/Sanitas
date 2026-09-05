@@ -1,0 +1,91 @@
+definitions:
+  github_com_francescocerri_sanitas_services_turni_internal_turno.Turno:
+    properties:
+      data:
+        type: string
+      id:
+        type: string
+      ora_fine:
+        type: string
+      ora_inizio:
+        type: string
+      stato:
+        type: string
+      volontario_id:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: |-
+    Gestione turni. Modello dati volutamente scheletrico (vedi docs/adr/0005 nel repository):
+    valida la pipeline end-to-end, non è la progettazione definitiva del dominio.
+  title: Sanitas — Turni API
+  version: 0.1.0
+paths:
+  /healthz:
+    get:
+      responses:
+        "200":
+          description: Servizio operativo
+        "503":
+          description: Database non raggiungibile
+      summary: Liveness check
+      tags:
+      - sistema
+  /turni:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno'
+            type: array
+      summary: Elenca i turni
+      tags:
+      - turni
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Nuovo turno (id e stato in input vengono ignorati)
+        in: body
+        name: turno
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno'
+        "400":
+          description: Payload non valido
+      summary: Crea un nuovo turno
+      tags:
+      - turni
+  /turni/{id}:
+    get:
+      parameters:
+      - description: ID del turno (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno'
+        "404":
+          description: Turno non trovato
+      summary: Recupera un turno per id
+      tags:
+      - turni
+swagger: "2.0"
