@@ -35,13 +35,11 @@ docker compose down
 
 ## Eseguire il binario Go direttamente (senza Docker per il servizio)
 
-Utile per iterare rapidamente sul codice senza ricostruire l'immagine ad ogni modifica. Serve comunque un Postgres raggiungibile da `localhost`: avvialo come container standalone (non tramite `deploy/docker-compose.yml`, che espone Postgres solo sulla rete interna dei container) e applica lo schema. `turni.turni.volontario_id` è una FK verso `anagrafica.users` (vedi [ADR-0014](../../docs/adr/0014-database-condiviso-schema-separati.md)), quindi anche la migrazione di `anagrafica` va applicata, **prima** di quella di `turni`:
+Utile per iterare rapidamente sul codice senza ricostruire l'immagine ad ogni modifica. Serve comunque un Postgres raggiungibile da `localhost`: avvialo come container standalone (non tramite `deploy/docker-compose.yml`, che espone Postgres solo sulla rete interna dei container). Nessuno script da montare: ogni servizio crea da sé il proprio schema al primo avvio ([ADR-0019](../../docs/adr/0019-gorm-e-automigrate.md)) — `turni.turni.volontario_id` è però una FK verso `anagrafica.users` ([ADR-0014](../../docs/adr/0014-database-condiviso-schema-separati.md)), quindi **avvia prima `anagrafica`** (sullo stesso Postgres, vedi il suo README) e solo dopo `turni`; se parte prima, `turni` ritenta per qualche secondo prima di arrendersi.
 
 ```bash
-docker run -d --name turni-postgres-dev -p 5432:5432 \
+docker run -d --name shared-postgres-dev -p 5432:5432 \
   -e POSTGRES_USER=sanitas -e POSTGRES_PASSWORD=devlocalpassword -e POSTGRES_DB=sanitas \
-  -v "$(pwd)/../anagrafica/migrations/0001_init.sql:/docker-entrypoint-initdb.d/01-anagrafica-init.sql:ro" \
-  -v "$(pwd)/migrations/0001_init.sql:/docker-entrypoint-initdb.d/02-turni-init.sql:ro" \
   postgres:16-alpine
 
 cp .env.example .env   # valori già coerenti col container Postgres sopra (search_path=turni); PORT=8081 se anche la 8080 sull'host è occupata
@@ -52,7 +50,7 @@ Il binario carica `.env` da solo se presente nella directory da cui viene lancia
 
 Serve anche `anagrafica` in esecuzione (locale o via Docker Compose) perché `AUTH_JWKS_URL` in `.env.example` punti a qualcosa di reale — senza, `turni` fallisce l'avvio dopo aver esaurito i tentativi di recupero della chiave (vedi [ADR-0017](../../docs/adr/0017-turni-verifica-jwt.md)).
 
-Per fermare/rimuovere il container di prova: `docker rm -f turni-postgres-dev`.
+Per fermare/rimuovere il container di prova: `docker rm -f shared-postgres-dev`.
 
 ## Comandi di verifica (usati anche in CI)
 

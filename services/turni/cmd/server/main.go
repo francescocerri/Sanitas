@@ -9,7 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/francescocerri/sanitas/services/turni/internal/authclient"
 	"github.com/francescocerri/sanitas/services/turni/internal/config"
@@ -22,9 +24,19 @@ import (
 // no container healthcheck to depend_on), so the first fetch attempt(s)
 // failing is the normal case, not an error — this bounds the wait instead
 // of retrying forever.
+//
+// schemaCreateAttempts/schemaCreateInterval: same reasoning, for turni's
+// own schema — anagrafica moved schema creation from docker-entrypoint-initdb.d
+// (which ran before either binary started, in a guaranteed order) to its own
+// startup (AutoMigrate, see docs/adr/0019), so turni's FK into
+// anagrafica.users can no longer assume that table already exists when
+// turni's own schema is created — it might not have run yet.
 const (
 	jwksFetchAttempts = 5
 	jwksFetchInterval = 2 * time.Second
+
+	schemaCreateAttempts = 5
+	schemaCreateInterval = 2 * time.Second
 )
 
 // @title			Sanitas — Turni API
@@ -60,12 +72,28 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	// TranslateError/Silent logger: same reasoning as anagrafica's own GORM
+	// setup (docs/adr/0019) — kept for consistency even though turni's
+	// repository doesn't currently need to check for a translated error.
+	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
+		TranslateError: true,
+		Logger:         gormlogger.Default.LogMode(gormlogger.Silent),
+	})
 	if err != nil {
 		logger.Error("database connection failed", "error", err)
 		os.Exit(1)
 	}
-	defer pool.Close()
+	sqlDB, err := db.DB()
+	if err != nil {
+		logger.Error("database connection failed", "error", err)
+		os.Exit(1)
+	}
+	defer sqlDB.Close()
+
+	if err := createSchemaWithRetry(ctx, db, logger); err != nil {
+		logger.Error("create schema failed", "error", err)
+		os.Exit(1)
+	}
 
 	authClient := authclient.New(cfg.AuthJWKSURL)
 	if err := fetchJWKSWithRetry(ctx, authClient, logger); err != nil {
@@ -73,7 +101,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	repo := turno.NewRepository(pool)
+	repo := turno.NewRepository(db)
 	server := httpapi.NewServer(repo, authClient, cfg.CORSAllowedOrigin, logger)
 
 	httpServer := &http.Server{
@@ -106,6 +134,25 @@ func main() {
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown error", "error", err)
 	}
+}
+
+// createSchemaWithRetry calls turno.Migrate, retrying on failure — turni's
+// FK into anagrafica.users may briefly not resolve if anagrafica's own
+// AutoMigrate hasn't run yet, same reasoning as fetchJWKSWithRetry below.
+func createSchemaWithRetry(ctx context.Context, db *gorm.DB, logger *slog.Logger) error {
+	var err error
+	for attempt := 1; attempt <= schemaCreateAttempts; attempt++ {
+		if err = turno.Migrate(db); err == nil {
+			return nil
+		}
+		logger.Info("create schema: attempt failed, retrying", "attempt", attempt, "error", err)
+		select {
+		case <-time.After(schemaCreateInterval):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return err
 }
 
 // fetchJWKSWithRetry keeps trying (a few times, a short pause apart) instead

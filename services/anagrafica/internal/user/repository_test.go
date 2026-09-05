@@ -8,21 +8,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 
 	"github.com/francescocerri/sanitas/services/anagrafica/internal/testdb"
 )
 
-var testPool *pgxpool.Pool
+var testDB *gorm.DB
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
-	pool, cleanup, err := testdb.StartPostgres(ctx)
+	db, cleanup, err := testdb.StartPostgres(ctx, Migrate)
 	if err != nil {
 		panic(err)
 	}
 	defer cleanup()
-	testPool = pool
+	testDB = db
 
 	os.Exit(m.Run())
 }
@@ -30,11 +30,11 @@ func TestMain(m *testing.M) {
 func newTestRepository(t *testing.T) *Repository {
 	t.Helper()
 	t.Cleanup(func() {
-		if _, err := testPool.Exec(context.Background(), "TRUNCATE users, roles, user_roles, tokens CASCADE"); err != nil {
+		if err := testDB.Exec("TRUNCATE users, roles, user_roles, tokens CASCADE").Error; err != nil {
 			t.Fatalf("truncate: %v", err)
 		}
 	})
-	return NewRepository(testPool)
+	return NewRepository(testDB)
 }
 
 func TestBootstrap_CreatesFirstAdminOnEmptyDB(t *testing.T) {

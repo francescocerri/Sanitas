@@ -16,14 +16,14 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 
 	"github.com/francescocerri/sanitas/services/turni/internal/authclient"
 	"github.com/francescocerri/sanitas/services/turni/internal/testdb"
 	"github.com/francescocerri/sanitas/services/turni/internal/turno"
 )
 
-var testPool *pgxpool.Pool
+var testDB *gorm.DB
 
 // testVolontarioID is a real anagrafica.users row seeded by testdb.StartPostgres
 // — turni.turni.volontario_id is now an FK, so tests need an existing user
@@ -32,12 +32,12 @@ var testVolontarioID string
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
-	pool, volontarioID, cleanup, err := testdb.StartPostgres(ctx)
+	db, volontarioID, cleanup, err := testdb.StartPostgres(ctx, turno.Migrate)
 	if err != nil {
 		panic(err)
 	}
 	defer cleanup()
-	testPool = pool
+	testDB = db
 	testVolontarioID = volontarioID
 
 	os.Exit(m.Run())
@@ -124,11 +124,11 @@ func (iss *testIssuer) token(t *testing.T, permissions []string) string {
 func newTestServerWithIssuer(t *testing.T) (*Server, *testIssuer) {
 	t.Helper()
 	t.Cleanup(func() {
-		if _, err := testPool.Exec(context.Background(), "TRUNCATE turni"); err != nil {
+		if err := testDB.Exec("TRUNCATE turni").Error; err != nil {
 			t.Fatalf("truncate turni: %v", err)
 		}
 	})
-	repo := turno.NewRepository(testPool)
+	repo := turno.NewRepository(testDB)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	issuer := newTestIssuer(t)

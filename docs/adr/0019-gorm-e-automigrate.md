@@ -1,0 +1,25 @@
+# 0019. Adozione di GORM in `anagrafica`, schema creato dal codice invece che da script SQL
+
+Status: Accettata
+
+## Contesto
+
+`docs/backlog.md` prevedeva la Fase 2 dell'adozione di un ORM ("GORM per `anagrafica` e poi `turni`, con gestione dello schema via AutoMigrate al posto degli script SQL"). Passare `anagrafica` ad AutoMigrate rompe però un ordine su cui `turni` faceva affidamento: `turni.turni.volontario_id` è una FK verso `anagrafica.users.id` ([ADR-0014](0014-database-condiviso-schema-separati.md)), e finora funzionava perché gli script SQL dei due servizi giravano nello stesso momento — l'inizializzazione del container Postgres (`docker-entrypoint-initdb.d`), in un ordine imposto dal nome del file montato. Se lo schema di `anagrafica` viene creato dal proprio binario invece che a init-container, quell'ordine garantito sparisce.
+
+## Decisione
+
+**`anagrafica` su GORM come query builder + AutoMigrate; `turni` resta su `pgx`, ma sposta anch'esso la creazione del proprio schema dall'init-container al proprio avvio.**
+
+- **GORM in `anagrafica`**: nuove dipendenze `gorm.io/gorm`, `gorm.io/driver/postgres` (usa `pgx` via `database/sql`, stesso driver già scelto in ADR-0006/0013 — nessun nuovo driver). Sostituisce `pgxpool.Pool` come motore di connessione. **Non** adottate le associazioni `many2many`/preload automatico: ogni metodo del repository mantiene la stessa firma e lo stesso comportamento di prima, solo riscritto con il query builder di GORM (o `db.Raw(...)` per le query più complesse, come l'unnest dei permessi o l'upsert dei ruoli) — un primo passo di adozione, non una riscrittura del modello a oggetti. `gorm.Config{TranslateError: true}` mappa le violazioni di vincolo Postgres nell'errore portabile `gorm.ErrDuplicatedKey`, eliminando la necessità di ispezionare `*pgconn.PgError` direttamente. Logger di GORM silenziato (`gormlogger.Silent`): il formato testuale di default non è coerente con i log JSON strutturati già in uso (ADR-0010), e ogni errore reale viene comunque loggato via `*slog.Logger` nel punto in cui viene gestito.
+- **Colonna array** (`roles.permissions TEXT[]`): nessun tipo nativo per array Postgres attraverso `database/sql`. Un piccolo tipo `user.StringArray` (`internal/user/pgarray.go`) implementa `sql.Scanner`/`driver.Valuer` — nessuna nuova dipendenza esterna (evita `lib/pq`, già scartato altrove nel progetto perché in sola manutenzione).
+- **Schema di `anagrafica` creato dal codice**: `user.Migrate(db)` (in `internal/user/migrate.go`, condiviso tra `cmd/server/main.go` e il test harness) esegue `CREATE SCHEMA IF NOT EXISTS anagrafica`, poi `AutoMigrate` sui modelli, poi aggiunge le FK che AutoMigrate non deriva da solo (nessuna associazione GORM dichiarata — vedi sopra) con SQL grezzo idempotente. Lo script `migrations/0001_init.sql` è **rimosso**.
+- **Schema di `turni` spostato al proprio avvio, con retry**: `services/turni/migrations/0001_init.sql` diventa `internal/schema/schema.sql`, incorporato nel binario con `//go:embed` (deve stare nell'albero del pacchetto che lo incorpora — da cui lo spostamento fuori da `migrations/`, che non è più raggiungibile da un `//go:embed` in `cmd/server`). Eseguito da `cmd/server/main.go` dopo la connessione a Postgres, con lo stesso pattern di retry già usato per il recupero della JWKS ([ADR-0017](0017-turni-verifica-jwt.md)): se `anagrafica.users` non esiste ancora, ritenta poche volte prima di arrendersi. `turni` **non** adotta GORM in questa attività — resta `pgx`, cambia solo *quando* la sua tabella viene creata.
+- **`docker-compose.yml`**: il servizio `postgres` non monta più nulla in `docker-entrypoint-initdb.d` — nessuno dei due servizi usa più quel meccanismo.
+
+## Conseguenze
+
+- **Test**: `anagrafica/internal/testdb` applica `user.Migrate` (stessa funzione di produzione) invece di uno script SQL, e ritorna un `*gorm.DB`. `testdb.StartPostgres` accetta la funzione di migrazione come parametro invece di importare `internal/user` direttamente: `internal/user` importa già `internal/testdb` nei propri test, quindi l'importazione inversa avrebbe creato un ciclo.
+- **`turni/internal/testdb` non applica più lo schema reale di `anagrafica`** (leggendolo da un path relativo nell'altro modulo, come faceva finora): applica invece una **fixture minima** (`CREATE SCHEMA anagrafica; CREATE TABLE anagrafica.users (id UUID PRIMARY KEY)`), sufficiente solo perché la FK di `turni` possa agganciarsi. È un accoppiamento diverso da prima (path relativo nell'altro modulo → fixture mantenuta a mano in `turni`), conseguenza diretta di aver risolto l'ordinamento subito invece di rimandarlo a quando anche `turni` adotterà GORM.
+- `turni` ha ora una dipendenza di avvio in più (creazione schema con retry) accanto a quella già esistente per la JWKS — stesso principio, stesso servizio a monte (`anagrafica`).
+- Nessun cambio al contratto pubblico dei repository di `anagrafica` né alle API esposte — stesso comportamento, motore diverso.
+- `turni` non adotta GORM per le proprie query in questa attività — resta backlog, come già descritto ("anagrafica e poi turni").
