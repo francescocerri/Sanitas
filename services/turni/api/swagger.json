@@ -1,0 +1,139 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Gestione turni. Modello dati volutamente scheletrico (vedi docs/adr/0005 nel repository):\nvalida la pipeline end-to-end, non è la progettazione definitiva del dominio.",
+        "title": "Sanitas — Turni API",
+        "contact": {},
+        "version": "0.1.0"
+    },
+    "paths": {
+        "/healthz": {
+            "get": {
+                "tags": [
+                    "sistema"
+                ],
+                "summary": "Liveness check",
+                "responses": {
+                    "200": {
+                        "description": "Servizio operativo"
+                    },
+                    "503": {
+                        "description": "Database non raggiungibile"
+                    }
+                }
+            }
+        },
+        "/turni": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "turni"
+                ],
+                "summary": "Elenca i turni",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "turni"
+                ],
+                "summary": "Crea un nuovo turno",
+                "parameters": [
+                    {
+                        "description": "Nuovo turno (id e stato in input vengono ignorati)",
+                        "name": "turno",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno"
+                        }
+                    },
+                    "400": {
+                        "description": "Payload non valido"
+                    }
+                }
+            }
+        },
+        "/turni/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "turni"
+                ],
+                "summary": "Recupera un turno per id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID del turno (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_turni_internal_turno.Turno"
+                        }
+                    },
+                    "404": {
+                        "description": "Turno non trovato"
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "github_com_francescocerri_sanitas_services_turni_internal_turno.Turno": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "ora_fine": {
+                    "type": "string"
+                },
+                "ora_inizio": {
+                    "type": "string"
+                },
+                "stato": {
+                    "type": "string"
+                },
+                "volontario_id": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

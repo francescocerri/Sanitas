@@ -9,6 +9,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../services/turni/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Solo su localhost (non su tutta la LAN): comodo per ispezionare il DB
+      # con un client come DBeaver, in produzione riduce la superficie esposta
+      # sul Raspberry Pi rispetto a un bind su tutte le interfacce.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sanitas}"]
       interval: 5s
@@ -27,7 +32,10 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      # Porta lato host configurabile: la 8080 è comunemente occupata da
+      # altri servizi in sviluppo. Il servizio dentro il container resta
+      # sempre su 8080 (PORT sopra) — cambia solo il mapping esterno.
+      - "${TURNI_HOST_PORT:-8080}:8080"
 
   # Espone i servizi via Cloudflare Tunnel: nessuna porta aperta sul router,
   # TLS gestito da Cloudflare. Attivo solo in produzione (Raspberry Pi):
