@@ -7,53 +7,42 @@ package testdb
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"runtime"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/francescocerri/sanitas/services/turni/internal/schema"
 )
 
-// migrationPath resolves relative to this source file, not to the caller's
-// working directory — `go test` runs with the package under test as cwd,
-// which differs between internal/turno and internal/httpapi.
-func migrationPath() string {
-	_, thisFile, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(thisFile), "..", "..", "migrations", "0001_init.sql")
-}
+// anagraficaFixtureSQL stands in for anagrafica's real schema — a separate
+// Go module, migrated by its own GORM AutoMigrate at its own startup, not
+// something this test setup can call into (see docs/adr/0019). Just enough
+// for turni's FK (turni.turni.volontario_id -> anagrafica.users.id) to
+// attach to — not a copy of the real table's other columns.
+const anagraficaFixtureSQL = `
+CREATE SCHEMA IF NOT EXISTS anagrafica;
+CREATE TABLE IF NOT EXISTS anagrafica.users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+);
+`
 
-// anagraficaMigrationPath: turni.turni has a real FK into anagrafica.users
-// (see docs/adr/0014), so the test database needs anagrafica's schema
-// applied too, not just turni's own. This reaches into the sibling module's
-// directory on purpose — the two services share a database in production
-// (same ADR), so their tests share this one bit of coupling too.
-func anagraficaMigrationPath() string {
-	_, thisFile, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "anagrafica", "migrations", "0001_init.sql")
-}
-
-// StartPostgres starts a disposable Postgres container with both services'
-// real schemas already applied (anagrafica first, since turni's FK needs
-// it), and returns a pool connected with search_path=turni — so existing
-// unqualified queries (FROM turni, no schema prefix) keep working — plus the
-// id of a seeded anagrafica.users row (turni.turni.volontario_id needs a
-// real user to reference, since it's now a FK, not a free-text placeholder)
-// and a cleanup function. Meant to be called once from a package's TestMain.
+// StartPostgres starts a disposable Postgres container, applies the
+// anagrafica fixture and then turni's real schema (schema.SQL — the same
+// embedded text production runs, see cmd/server/main.go) in that order, and
+// seeds one anagrafica.users row so tests have a real id to satisfy the FK.
+// Returns a ready-to-use pool connected with search_path=turni, the seeded
+// row's id, and a cleanup function. Meant to be called once from a
+// package's TestMain.
 func StartPostgres(ctx context.Context) (*pgxpool.Pool, string, func(), error) {
 	container, err := postgres.Run(ctx, "postgres:16-alpine",
 		postgres.WithDatabase("sanitas"),
 		postgres.WithUsername("sanitas"),
 		postgres.WithPassword("test"),
-		// WithOrderedInitScripts (not WithInitScripts): both services name
-		// their migration file "0001_init.sql", so using just the basename
-		// would collide — this prefixes each with an index and preserves
-		// the anagrafica-before-turni order the FK requires.
-		postgres.WithOrderedInitScripts(anagraficaMigrationPath(), migrationPath()),
-		// Init scripts make Postgres restart once after running them, so
-		// "ready to accept connections" appears twice in the logs — waiting
-		// for only the first occurrence would race with that restart.
+		// Postgres always starts in two phases — a temporary server for
+		// initdb-time setup, then the real one — so this log line appears
+		// twice regardless of init scripts (there are none here anymore).
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
 		),
@@ -72,12 +61,17 @@ func StartPostgres(ctx context.Context) (*pgxpool.Pool, string, func(), error) {
 		return nil, "", nil, fmt.Errorf("testdb: connect: %w", err)
 	}
 
-	// Schema-qualified: search_path is set to turni, not anagrafica.
+	if _, err := pool.Exec(ctx, anagraficaFixtureSQL); err != nil {
+		pool.Close()
+		return nil, "", nil, fmt.Errorf("testdb: apply anagrafica fixture: %w", err)
+	}
+	if _, err := pool.Exec(ctx, schema.SQL); err != nil {
+		pool.Close()
+		return nil, "", nil, fmt.Errorf("testdb: apply turni schema: %w", err)
+	}
+
 	var volontarioID string
-	err = pool.QueryRow(ctx,
-		`INSERT INTO anagrafica.users (email, username) VALUES ($1, $2) RETURNING id`,
-		"test-volontario@example.com", "test-volontario",
-	).Scan(&volontarioID)
+	err = pool.QueryRow(ctx, `INSERT INTO anagrafica.users DEFAULT VALUES RETURNING id`).Scan(&volontarioID)
 	if err != nil {
 		pool.Close()
 		return nil, "", nil, fmt.Errorf("testdb: seed test volontario: %w", err)

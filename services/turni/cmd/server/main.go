@@ -14,6 +14,7 @@ import (
 	"github.com/francescocerri/sanitas/services/turni/internal/authclient"
 	"github.com/francescocerri/sanitas/services/turni/internal/config"
 	"github.com/francescocerri/sanitas/services/turni/internal/httpapi"
+	"github.com/francescocerri/sanitas/services/turni/internal/schema"
 	"github.com/francescocerri/sanitas/services/turni/internal/turno"
 )
 
@@ -22,9 +23,19 @@ import (
 // no container healthcheck to depend_on), so the first fetch attempt(s)
 // failing is the normal case, not an error — this bounds the wait instead
 // of retrying forever.
+//
+// schemaCreateAttempts/schemaCreateInterval: same reasoning, for turni's
+// own schema — anagrafica moved schema creation from docker-entrypoint-initdb.d
+// (which ran before either binary started, in a guaranteed order) to its own
+// startup (AutoMigrate, see docs/adr/0019), so turni's FK into
+// anagrafica.users can no longer assume that table already exists when
+// turni's own schema is created — it might not have run yet.
 const (
 	jwksFetchAttempts = 5
 	jwksFetchInterval = 2 * time.Second
+
+	schemaCreateAttempts = 5
+	schemaCreateInterval = 2 * time.Second
 )
 
 // @title			Sanitas — Turni API
@@ -67,6 +78,11 @@ func main() {
 	}
 	defer pool.Close()
 
+	if err := createSchemaWithRetry(ctx, pool, logger); err != nil {
+		logger.Error("create schema failed", "error", err)
+		os.Exit(1)
+	}
+
 	authClient := authclient.New(cfg.AuthJWKSURL)
 	if err := fetchJWKSWithRetry(ctx, authClient, logger); err != nil {
 		logger.Error("fetch JWKS from anagrafica failed", "error", err)
@@ -106,6 +122,25 @@ func main() {
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown error", "error", err)
 	}
+}
+
+// createSchemaWithRetry applies schema.SQL, retrying on failure — turni's
+// FK into anagrafica.users may briefly not resolve if anagrafica's own
+// AutoMigrate hasn't run yet, same reasoning as fetchJWKSWithRetry below.
+func createSchemaWithRetry(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error {
+	var err error
+	for attempt := 1; attempt <= schemaCreateAttempts; attempt++ {
+		if _, err = pool.Exec(ctx, schema.SQL); err == nil {
+			return nil
+		}
+		logger.Info("create schema: attempt failed, retrying", "attempt", attempt, "error", err)
+		select {
+		case <-time.After(schemaCreateInterval):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return err
 }
 
 // fetchJWKSWithRetry keeps trying (a few times, a short pause apart) instead

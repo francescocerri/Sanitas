@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 var (
@@ -18,31 +16,35 @@ var (
 )
 
 type Repository struct {
-	pool *pgxpool.Pool
+	db *gorm.DB
 }
 
-func NewRepository(pool *pgxpool.Pool) *Repository {
-	return &Repository{pool: pool}
+func NewRepository(db *gorm.DB) *Repository {
+	return &Repository{db: db}
 }
 
 func (r *Repository) Ping(ctx context.Context) error {
-	return r.pool.Ping(ctx)
+	sqlDB, err := r.db.DB()
+	if err != nil {
+		return fmt.Errorf("user: ping: %w", err)
+	}
+	return sqlDB.PingContext(ctx)
 }
 
 func (r *Repository) CountUsers(ctx context.Context) (int, error) {
-	var n int
-	if err := r.pool.QueryRow(ctx, "SELECT count(*) FROM users").Scan(&n); err != nil {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&User{}).Count(&n).Error; err != nil {
 		return 0, fmt.Errorf("user: count: %w", err)
 	}
-	return n, nil
+	return int(n), nil
 }
 
-// isUniqueViolation reports whether err is a Postgres unique-constraint
-// violation (email/username already taken) — translated to ErrDuplicateUser
-// so callers don't need to know about pgx/Postgres error codes.
+// isUniqueViolation reports whether err is a unique-constraint violation
+// (email/username already taken). Relies on gorm.Config.TranslateError
+// (set in cmd/server/main.go) mapping the underlying Postgres error to
+// GORM's own portable error — no driver-specific type here.
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+	return errors.Is(err, gorm.ErrDuplicatedKey)
 }
 
 // CreateActiveUser creates a user with a password already set (used only
@@ -51,17 +53,11 @@ func isUniqueViolation(err error) bool {
 // manage accounts comes entirely from the technical role Bootstrap assigns
 // it afterwards, same mechanism as any other user — see docs/adr/0018.
 func (r *Repository) CreateActiveUser(ctx context.Context, email, username, passwordHash string) (User, error) {
-	var u User
-	err := r.pool.QueryRow(ctx, `
-		INSERT INTO users (email, username, password_hash)
-		VALUES ($1, $2, $3)
-		RETURNING id::text, email, username, created_at`,
-		email, username, passwordHash,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.CreatedAt)
-	if isUniqueViolation(err) {
-		return User{}, ErrDuplicateUser
-	}
-	if err != nil {
+	u := User{Email: email, Username: username, PasswordHash: &passwordHash}
+	if err := r.db.WithContext(ctx).Create(&u).Error; err != nil {
+		if isUniqueViolation(err) {
+			return User{}, ErrDuplicateUser
+		}
 		return User{}, fmt.Errorf("user: create active: %w", err)
 	}
 	return u, nil
@@ -71,17 +67,11 @@ func (r *Repository) CreateActiveUser(ctx context.Context, email, username, pass
 // invite token generated alongside it is redeemed (see CreateToken,
 // ConsumeToken).
 func (r *Repository) CreatePendingUser(ctx context.Context, email, username string) (User, error) {
-	var u User
-	err := r.pool.QueryRow(ctx, `
-		INSERT INTO users (email, username)
-		VALUES ($1, $2)
-		RETURNING id::text, email, username, created_at`,
-		email, username,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.CreatedAt)
-	if isUniqueViolation(err) {
-		return User{}, ErrDuplicateUser
-	}
-	if err != nil {
+	u := User{Email: email, Username: username}
+	if err := r.db.WithContext(ctx).Create(&u).Error; err != nil {
+		if isUniqueViolation(err) {
+			return User{}, ErrDuplicateUser
+		}
 		return User{}, fmt.Errorf("user: create pending: %w", err)
 	}
 	return u, nil
@@ -93,34 +83,29 @@ func (r *Repository) CreatePendingUser(ctx context.Context, email, username stri
 // JSON response.
 func (r *Repository) GetByLogin(ctx context.Context, identifier string) (User, string, error) {
 	var u User
-	var passwordHash *string
-	err := r.pool.QueryRow(ctx, `
-		SELECT id::text, email, username, created_at, password_hash
-		FROM users WHERE email = $1 OR username = $1`, identifier,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.CreatedAt, &passwordHash)
-	if errors.Is(err, pgx.ErrNoRows) {
+	err := r.db.WithContext(ctx).
+		Where("email = ? OR username = ?", identifier, identifier).
+		First(&u).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return User{}, "", ErrNotFound
 	}
 	if err != nil {
 		return User{}, "", fmt.Errorf("user: get by login: %w", err)
 	}
-	if passwordHash == nil {
+	if u.PasswordHash == nil {
 		// Account created but the invite was never redeemed yet.
 		return User{}, "", ErrNotFound
 	}
 	if err := r.populateRolesAndPermissions(ctx, &u); err != nil {
 		return User{}, "", err
 	}
-	return u, *passwordHash, nil
+	return u, *u.PasswordHash, nil
 }
 
 func (r *Repository) GetByID(ctx context.Context, id string) (User, error) {
 	var u User
-	err := r.pool.QueryRow(ctx, `
-		SELECT id::text, email, username, created_at
-		FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&u).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return User{}, ErrNotFound
 	}
 	if err != nil {
@@ -147,23 +132,23 @@ func (r *Repository) populateRolesAndPermissions(ctx context.Context, u *User) e
 }
 
 func (r *Repository) GetPasswordHash(ctx context.Context, userID string) (string, error) {
-	var hash *string
-	err := r.pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, userID).Scan(&hash)
-	if errors.Is(err, pgx.ErrNoRows) || hash == nil {
+	var u User
+	err := r.db.WithContext(ctx).Select("password_hash").Where("id = ?", userID).First(&u).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) || u.PasswordHash == nil {
 		return "", ErrNotFound
 	}
 	if err != nil {
 		return "", fmt.Errorf("user: get password hash: %w", err)
 	}
-	return *hash, nil
+	return *u.PasswordHash, nil
 }
 
 func (r *Repository) SetPassword(ctx context.Context, userID, passwordHash string) error {
-	tag, err := r.pool.Exec(ctx, `UPDATE users SET password_hash = $1 WHERE id = $2`, passwordHash, userID)
-	if err != nil {
-		return fmt.Errorf("user: set password: %w", err)
+	result := r.db.WithContext(ctx).Model(&User{}).Where("id = ?", userID).Update("password_hash", passwordHash)
+	if result.Error != nil {
+		return fmt.Errorf("user: set password: %w", result.Error)
 	}
-	if tag.RowsAffected() == 0 {
+	if result.RowsAffected == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -173,20 +158,22 @@ func (r *Repository) SetPassword(ctx context.Context, userID, passwordHash strin
 // docs/adr/0012) — idempotent, so restarting the service after a fork edits
 // its roles config applies the change without a full schema reset. Returns
 // the role's id: Bootstrap needs it to assign the technical admin role
-// (see docs/adr/0018), nobody else currently does.
+// (see docs/adr/0018), nobody else currently does. Raw SQL (not GORM's
+// OnConflict clause builder): an explicit, easy to audit atomic upsert
+// mirroring exactly what ran under pgx before — see docs/adr/0019.
 func (r *Repository) UpsertRole(ctx context.Context, slug, displayName string, permissions []string) (string, error) {
 	if permissions == nil {
-		// pgx sends a nil Go slice as SQL NULL, not an empty array — the
-		// column is NOT NULL (a role with no "permissions" in its seed
-		// entry means "grants nothing", not "unset").
+		// A nil Go slice would otherwise become SQL NULL — the column is
+		// NOT NULL (no "permissions" in a seed entry means "grants
+		// nothing", not "unset").
 		permissions = []string{}
 	}
 	var id string
-	err := r.pool.QueryRow(ctx, `
-		INSERT INTO roles (slug, display_name, permissions) VALUES ($1, $2, $3)
+	err := r.db.WithContext(ctx).Raw(`
+		INSERT INTO roles (slug, display_name, permissions) VALUES (?, ?, ?)
 		ON CONFLICT (slug) DO UPDATE SET display_name = EXCLUDED.display_name, permissions = EXCLUDED.permissions
-		RETURNING id::text`,
-		slug, displayName, permissions).Scan(&id)
+		RETURNING id`,
+		slug, displayName, StringArray(permissions)).Scan(&id).Error
 	if err != nil {
 		return "", fmt.Errorf("user: upsert role: %w", err)
 	}
@@ -196,28 +183,22 @@ func (r *Repository) UpsertRole(ctx context.Context, slug, displayName string, p
 // RoleIDsBySlug resolves role slugs to ids, so the caller can catch an
 // unknown slug (e.g. a typo in an admin's request) before assigning it.
 func (r *Repository) RoleIDsBySlug(ctx context.Context, slugs []string) (map[string]string, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id::text, slug FROM roles WHERE slug = ANY($1)`, slugs)
-	if err != nil {
+	var roles []Role
+	if err := r.db.WithContext(ctx).Select("id", "slug").Where("slug IN ?", slugs).Find(&roles).Error; err != nil {
 		return nil, fmt.Errorf("user: role ids by slug: %w", err)
 	}
-	defer rows.Close()
-
-	result := map[string]string{}
-	for rows.Next() {
-		var id, slug string
-		if err := rows.Scan(&id, &slug); err != nil {
-			return nil, fmt.Errorf("user: role ids by slug: scan: %w", err)
-		}
-		result[slug] = id
+	result := make(map[string]string, len(roles))
+	for _, role := range roles {
+		result[role.Slug] = role.ID
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 func (r *Repository) AssignRoles(ctx context.Context, userID string, roleIDs []string) error {
 	for _, roleID := range roleIDs {
-		_, err := r.pool.Exec(ctx, `
-			INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)
-			ON CONFLICT DO NOTHING`, userID, roleID)
+		err := r.db.WithContext(ctx).Exec(`
+			INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)
+			ON CONFLICT DO NOTHING`, userID, roleID).Error
 		if err != nil {
 			return fmt.Errorf("user: assign role: %w", err)
 		}
@@ -226,52 +207,35 @@ func (r *Repository) AssignRoles(ctx context.Context, userID string, roleIDs []s
 }
 
 func (r *Repository) GetRolesForUser(ctx context.Context, userID string) ([]string, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT roles.slug FROM roles
-		JOIN user_roles ON user_roles.role_id = roles.id
-		WHERE user_roles.user_id = $1
-		ORDER BY roles.slug`, userID)
+	slugs := []string{}
+	err := r.db.WithContext(ctx).
+		Table("roles").
+		Joins("JOIN user_roles ON user_roles.role_id = roles.id").
+		Where("user_roles.user_id = ?", userID).
+		Order("roles.slug").
+		Pluck("roles.slug", &slugs).Error
 	if err != nil {
 		return nil, fmt.Errorf("user: roles for user: %w", err)
 	}
-	defer rows.Close()
-
-	slugs := []string{}
-	for rows.Next() {
-		var slug string
-		if err := rows.Scan(&slug); err != nil {
-			return nil, fmt.Errorf("user: roles for user: scan: %w", err)
-		}
-		slugs = append(slugs, slug)
-	}
-	return slugs, rows.Err()
+	return slugs, nil
 }
 
 // GetPermissionsForUser unions the permissions of every role assigned to
 // the user, deduplicated — a permission granted by more than one of a
 // user's roles still shows up once. See docs/adr/0018.
 func (r *Repository) GetPermissionsForUser(ctx context.Context, userID string) ([]string, error) {
-	rows, err := r.pool.Query(ctx, `
+	permissions := []string{}
+	err := r.db.WithContext(ctx).Raw(`
 		SELECT DISTINCT permission
 		FROM user_roles
 		JOIN roles ON roles.id = user_roles.role_id
 		CROSS JOIN LATERAL unnest(roles.permissions) AS permission
-		WHERE user_roles.user_id = $1
-		ORDER BY permission`, userID)
+		WHERE user_roles.user_id = ?
+		ORDER BY permission`, userID).Scan(&permissions).Error
 	if err != nil {
 		return nil, fmt.Errorf("user: permissions for user: %w", err)
 	}
-	defer rows.Close()
-
-	permissions := []string{}
-	for rows.Next() {
-		var permission string
-		if err := rows.Scan(&permission); err != nil {
-			return nil, fmt.Errorf("user: permissions for user: scan: %w", err)
-		}
-		permissions = append(permissions, permission)
-	}
-	return permissions, rows.Err()
+	return permissions, nil
 }
 
 // CreateToken creates a single-use token for the given purpose ("invite",
@@ -282,11 +246,8 @@ func (r *Repository) CreateToken(ctx context.Context, userID, purpose string, tt
 	if err != nil {
 		return "", err
 	}
-	_, err = r.pool.Exec(ctx, `
-		INSERT INTO tokens (user_id, purpose, token_hash, expires_at)
-		VALUES ($1, $2, $3, $4)`,
-		userID, purpose, hash, time.Now().Add(ttl))
-	if err != nil {
+	token := Token{UserID: userID, Purpose: purpose, TokenHash: hash, ExpiresAt: time.Now().Add(ttl)}
+	if err := r.db.WithContext(ctx).Create(&token).Error; err != nil {
 		return "", fmt.Errorf("user: create token: %w", err)
 	}
 	return raw, nil
@@ -294,20 +255,21 @@ func (r *Repository) CreateToken(ctx context.Context, userID, purpose string, tt
 
 // ConsumeToken validates raw against a stored, unused, unexpired token for
 // the given purpose and marks it used in the same statement — a token can
-// only ever be redeemed once, even under concurrent requests.
+// only ever be redeemed once, even under concurrent requests. Raw SQL: this
+// atomicity (check + mark-used in one round trip) is exactly what a plain
+// UPDATE...RETURNING already gives for free.
 func (r *Repository) ConsumeToken(ctx context.Context, raw, purpose string) (string, error) {
 	var userID string
-	err := r.pool.QueryRow(ctx, `
+	result := r.db.WithContext(ctx).Raw(`
 		UPDATE tokens SET used_at = now()
-		WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > now()
-		RETURNING user_id::text`,
-		HashToken(raw), purpose,
-	).Scan(&userID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrInvalidToken
+		WHERE token_hash = ? AND purpose = ? AND used_at IS NULL AND expires_at > now()
+		RETURNING user_id`,
+		HashToken(raw), purpose).Scan(&userID)
+	if result.Error != nil {
+		return "", fmt.Errorf("user: consume token: %w", result.Error)
 	}
-	if err != nil {
-		return "", fmt.Errorf("user: consume token: %w", err)
+	if result.RowsAffected == 0 {
+		return "", ErrInvalidToken
 	}
 	return userID, nil
 }

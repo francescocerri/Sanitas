@@ -1,11 +1,10 @@
 services:
   # Un solo Postgres condiviso da turni e anagrafica, con uno schema
   # Postgres per servizio (namespace nativo, non un database separato) —
-  # vedi ADR-0014. turni.turni referenzia anagrafica.users con una FK
-  # reale, quindi lo schema anagrafica deve esistere prima di quello turni:
-  # gli script vengono rinominati nel path di destinazione per imporre
-  # l'ordine (Postgres esegue /docker-entrypoint-initdb.d/ in ordine
-  # lessicografico sul nome nel container, non sul path sorgente).
+  # vedi ADR-0014. Nessuno script di init: anagrafica crea il proprio schema
+  # da codice all'avvio (GORM AutoMigrate), turni fa lo stesso con il proprio
+  # (con retry, perché la sua FK verso anagrafica.users richiede che lo
+  # schema di anagrafica esista già — vedi docs/adr/0019).
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -15,8 +14,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-sanitas}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../services/anagrafica/migrations/0001_init.sql:/docker-entrypoint-initdb.d/01-anagrafica-init.sql:ro
-      - ../services/turni/migrations/0001_init.sql:/docker-entrypoint-initdb.d/02-turni-init.sql:ro
     ports:
       # Solo su localhost (non su tutta la LAN): comodo per ispezionare il DB
       # con un client come DBeaver, in produzione riduce la superficie esposta

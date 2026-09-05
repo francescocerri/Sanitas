@@ -9,7 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/francescocerri/sanitas/services/anagrafica/internal/config"
 	"github.com/francescocerri/sanitas/services/anagrafica/internal/httpapi"
@@ -46,12 +48,38 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	// TranslateError: lets repository code check gorm.ErrDuplicatedKey
+	// instead of reaching into a Postgres-specific error type — see
+	// user.isUniqueViolation, docs/adr/0019. Silent logger: GORM's default
+	// writes plain text to stdout, inconsistent with the JSON structured
+	// logging used everywhere else (ADR-0010) — every error already gets
+	// wrapped and logged through *slog.Logger at the call site, so this
+	// isn't losing any real diagnostic signal.
+	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
+		TranslateError: true,
+		Logger:         gormlogger.Default.LogMode(gormlogger.Silent),
+	})
 	if err != nil {
 		logger.Error("database connection failed", "error", err)
 		os.Exit(1)
 	}
-	defer pool.Close()
+	sqlDB, err := db.DB()
+	if err != nil {
+		logger.Error("database connection failed", "error", err)
+		os.Exit(1)
+	}
+	defer sqlDB.Close()
+
+	// Replaces the SQL init script this service used to rely on
+	// (docker-entrypoint-initdb.d only ever ran once, at first container
+	// creation — see docs/adr/0019, superseding part of docs/adr/0005).
+	// turni still creates its own schema/table at its own startup, with
+	// retry, since it can no longer count on this script having already
+	// run at Postgres container init time either.
+	if err := user.Migrate(db); err != nil {
+		logger.Error("migrate failed", "error", err)
+		os.Exit(1)
+	}
 
 	keys, err := user.LoadKeyPair(cfg.JWTPrivateKeyPath)
 	if err != nil {
@@ -59,7 +87,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	repo := user.NewRepository(pool)
+	repo := user.NewRepository(db)
 
 	if cfg.RolesSeedPath != "" {
 		if err := user.SeedRoles(ctx, repo, cfg.RolesSeedPath); err != nil {

@@ -2,8 +2,10 @@
 -- Non è la progettazione definitiva del dominio turni.
 --
 -- Own schema, not the shared database's public one — see docs/adr/0014.
--- Runs in its own psql session (docker-entrypoint-initdb.d invokes each
--- script separately), so this SET only affects this script.
+-- Embedded into the binary and run by this service's own startup (with
+-- retry, see cmd/server/main.go), not docker-entrypoint-initdb.d — see
+-- docs/adr/0019. The connection already sets search_path=turni, but this
+-- SET is kept so the script stays correct even run over a plain connection.
 CREATE SCHEMA IF NOT EXISTS turni;
 SET search_path TO turni;
 

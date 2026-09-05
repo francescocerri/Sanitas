@@ -32,13 +32,14 @@ Documentazione API interattiva (Swagger UI): `http://localhost:8090/docs/`.
 ```bash
 docker run -d --name anagrafica-postgres-dev -p 5433:5432 \
   -e POSTGRES_USER=anagrafica -e POSTGRES_PASSWORD=devlocalpassword -e POSTGRES_DB=anagrafica \
-  -v "$(pwd)/migrations:/docker-entrypoint-initdb.d:ro" \
   postgres:16-alpine
 
 openssl genrsa -out jwt_private_key.pem 2048
 export DATABASE_URL="postgres://anagrafica:devlocalpassword@localhost:5433/anagrafica?sslmode=disable&search_path=anagrafica"
 go run ./cmd/server
 ```
+
+Nessuno script da montare: il servizio crea da sé lo schema e le tabelle al primo avvio (GORM AutoMigrate — vedi [ADR-0019](../../docs/adr/0019-gorm-e-automigrate.md)).
 
 Il container Postgres qui sopra è solo per questo scenario (binario locale senza Docker Compose): un'istanza usa-e-getta a sé stante, non quella condivisa con `turni` di produzione (vedi ADR-0014) — `search_path=anagrafica` serve perché la migrazione crea le tabelle dentro quello schema, non in `public`.
 

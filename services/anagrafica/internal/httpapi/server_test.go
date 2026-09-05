@@ -18,22 +18,22 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 
 	"github.com/francescocerri/sanitas/services/anagrafica/internal/testdb"
 	"github.com/francescocerri/sanitas/services/anagrafica/internal/user"
 )
 
-var testPool *pgxpool.Pool
+var testDB *gorm.DB
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
-	pool, cleanup, err := testdb.StartPostgres(ctx)
+	db, cleanup, err := testdb.StartPostgres(ctx, user.Migrate)
 	if err != nil {
 		panic(err)
 	}
 	defer cleanup()
-	testPool = pool
+	testDB = db
 
 	os.Exit(m.Run())
 }
@@ -67,11 +67,11 @@ func newTestKeyPair(t *testing.T) *user.KeyPair {
 func newTestServer(t *testing.T) (*Server, *user.Repository) {
 	t.Helper()
 	t.Cleanup(func() {
-		if _, err := testPool.Exec(context.Background(), "TRUNCATE users, roles, user_roles, tokens CASCADE"); err != nil {
+		if err := testDB.Exec("TRUNCATE users, roles, user_roles, tokens CASCADE").Error; err != nil {
 			t.Fatalf("truncate: %v", err)
 		}
 	})
-	repo := user.NewRepository(testPool)
+	repo := user.NewRepository(testDB)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	server := NewServer(repo, newTestKeyPair(t), "http://localhost:5173", "http://localhost:5173/attiva", logger)
 	return server, repo
