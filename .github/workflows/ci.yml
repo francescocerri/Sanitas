@@ -6,16 +6,16 @@ on:
     branches: [main]
 
 jobs:
-  go-turni:
+  go-shifts:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: services/turni
+        working-directory: services/shifts
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version-file: services/turni/go.mod
+          go-version-file: services/shifts/go.mod
       - run: go build ./...
       - run: go vet ./...
       - run: go test ./...
@@ -25,16 +25,16 @@ jobs:
           go run github.com/swaggo/swag/cmd/swag@v1.16.4 init -g cmd/server/main.go -d . -o api --parseInternal --parseDependency
           git diff --exit-code -- api/
 
-  go-anagrafica:
+  go-registry:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: services/anagrafica
+        working-directory: services/registry
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version-file: services/anagrafica/go.mod
+          go-version-file: services/registry/go.mod
       - run: go build ./...
       - run: go vet ./...
       - run: go test ./...

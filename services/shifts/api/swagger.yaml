@@ -1,0 +1,117 @@
+definitions:
+  github_com_francescocerri_sanitas_services_shifts_internal_shift.Shift:
+    properties:
+      date:
+        type: string
+      end_time:
+        type: string
+      id:
+        type: string
+      start_time:
+        type: string
+      status:
+        type: string
+      volunteer_id:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: |-
+    Shift management. The data model is intentionally skeletal (see docs/adr/0005
+    in the repository): it validates the end-to-end pipeline, not the final domain design.
+  title: Sanitas — Shifts API
+  version: 0.1.0
+paths:
+  /healthz:
+    get:
+      responses:
+        "200":
+          description: Service healthy
+        "503":
+          description: Database unreachable
+      summary: Liveness check
+      tags:
+      - system
+  /v1/shifts:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Shift'
+            type: array
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:read'
+      security:
+      - BearerAuth: []
+      summary: List shifts (requires the shifts:read permission)
+      tags:
+      - shifts
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: New shift (id and status in the input are ignored)
+        in: body
+        name: shift
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Shift'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Shift'
+        "400":
+          description: Invalid payload
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:write'
+      security:
+      - BearerAuth: []
+      summary: Create a new shift (requires the shifts:write permission)
+      tags:
+      - shifts
+  /v1/shifts/{id}:
+    get:
+      parameters:
+      - description: Shift id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Shift'
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:read'
+        "404":
+          description: Shift not found
+      security:
+      - BearerAuth: []
+      summary: Get a shift by id (requires the shifts:read permission)
+      tags:
+      - shifts
+securityDefinitions:
+  BearerAuth:
+    description: |-
+      shifts issues no tokens itself — type "Bearer" followed by a space and
+      the access token obtained from registry's POST /v1/login (e.g. "Bearer eyJhbGci...").
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

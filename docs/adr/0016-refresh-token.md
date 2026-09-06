@@ -26,5 +26,5 @@ L'access token JWT emesso da `POST /v1/login` dura 24h senza alcun modo di rinno
 - TTL scelto per il refresh token: 30 giorni (costante `refreshTokenTTL`, facilmente cambiabile).
 - **Nessun rilevamento di riuso/furto** (pattern più avanzato "token family": se un token rubato viene usato prima del legittimo proprietario, non c'è modo di accorgersene né di revocare l'intera sessione) — limite noto, non affrontato in questa fase.
 - **Nessuna revoca dell'access token già emesso**: il logout invalida solo il refresh token; un access token rubato resta valido fino alla sua scadenza naturale (24h) — stesso limite già in ADR-0013, invariato.
-- `turni` non verifica ancora alcun JWT (voce di backlog separata) — il refresh token oggi ha effetto solo su `anagrafica`.
+- `shifts` non verifica ancora alcun JWT (voce di backlog separata) — il refresh token oggi ha effetto solo su `registry`.
 - **Nessuna pulizia dei token scaduti/usati**: righe di `tokens` restano nel DB a tempo indeterminato anche dopo `used_at`/`expires_at` — non c'è ancora un job che le cancella. Cresce nel tempo ma non compromette la correttezza (le query filtrano già su `used_at IS NULL AND expires_at > now()`); voce di backlog separata.

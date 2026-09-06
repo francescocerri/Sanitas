@@ -1,10 +1,10 @@
 services:
-  # Un solo Postgres condiviso da turni e anagrafica, con uno schema
+  # Un solo Postgres condiviso da shifts e registry, con uno schema
   # Postgres per servizio (namespace nativo, non un database separato) —
-  # vedi ADR-0014. Nessuno script di init: anagrafica crea il proprio schema
-  # da codice all'avvio (GORM AutoMigrate), turni fa lo stesso con il proprio
-  # (con retry, perché la sua FK verso anagrafica.users richiede che lo
-  # schema di anagrafica esista già — vedi docs/adr/0019).
+  # vedi ADR-0014. Nessuno script di init: registry crea il proprio schema
+  # da codice all'avvio (GORM AutoMigrate), shifts fa lo stesso con il proprio
+  # (con retry, perché la sua FK verso registry.users richiede che lo
+  # schema di registry esista già — vedi docs/adr/0019).
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -25,57 +25,57 @@ services:
       timeout: 5s
       retries: 10
 
-  turni:
+  shifts:
     build:
-      context: ../services/turni
+      context: ../services/shifts
     restart: unless-stopped
     environment:
       PORT: 8080
-      # search_path punta al proprio schema: le query esistenti (FROM turni,
+      # search_path punta al proprio schema: le query esistenti (FROM shifts,
       # senza prefisso) continuano a funzionare senza riscrivere nulla.
-      DATABASE_URL: postgres://${POSTGRES_USER:-sanitas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sanitas}?sslmode=disable&search_path=turni
+      DATABASE_URL: postgres://${POSTGRES_USER:-sanitas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sanitas}?sslmode=disable&search_path=shifts
       CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:5173}
-      # turni non emette token, verifica solo quelli emessi da anagrafica —
+      # shifts non emette token, verifica solo quelli emessi da registry —
       # rete interna del compose, sempre porta 8080 (vedi docs/adr/0017).
-      AUTH_JWKS_URL: http://anagrafica:8080/.well-known/jwks.json
+      AUTH_JWKS_URL: http://registry:8080/.well-known/jwks.json
     depends_on:
       postgres:
         condition: service_healthy
-      # Nessun healthcheck su anagrafica oggi: turni gestisce un primo
+      # Nessun healthcheck su registry oggi: shifts gestisce un primo
       # fallimento nel recupero della JWKS con retry al proprio avvio.
-      anagrafica:
+      registry:
         condition: service_started
     ports:
       # Porta lato host configurabile: la 8080 è comunemente occupata da
       # altri servizi in sviluppo. Il servizio dentro il container resta
       # sempre su 8080 (PORT sopra) — cambia solo il mapping esterno.
-      - "${TURNI_HOST_PORT:-8080}:8080"
+      - "${SHIFTS_HOST_PORT:-8080}:8080"
 
-  anagrafica:
+  registry:
     build:
-      context: ../services/anagrafica
+      context: ../services/registry
     restart: unless-stopped
     environment:
       PORT: 8080
-      DATABASE_URL: postgres://${POSTGRES_USER:-sanitas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sanitas}?sslmode=disable&search_path=anagrafica
+      DATABASE_URL: postgres://${POSTGRES_USER:-sanitas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sanitas}?sslmode=disable&search_path=registry
       CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:5173}
       JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private_key.pem
-      ROLES_SEED_PATH: /config/anagrafica/roles.json
+      ROLES_SEED_PATH: /config/registry/roles.json
       INVITE_URL_BASE: ${INVITE_URL_BASE:-http://localhost:5173/attiva}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
       INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
     volumes:
       # Chiave privata JWT e ruoli del comitato: mai committati, mai
-      # copiati nell'immagine — montati da fuori (vedi services/anagrafica/README.md
+      # copiati nell'immagine — montati da fuori (vedi services/registry/README.md
       # per generare la chiave; COMMITTEE_CONFIG_DIR punta a config/<slug>/).
-      - ${JWT_PRIVATE_KEY_HOST_PATH:-../services/anagrafica/jwt_private_key.pem}:/run/secrets/jwt_private_key.pem:ro
+      - ${JWT_PRIVATE_KEY_HOST_PATH:-../services/registry/jwt_private_key.pem}:/run/secrets/jwt_private_key.pem:ro
       - ${COMMITTEE_CONFIG_DIR:-../config/pavullo}:/config:ro
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "${ANAGRAFICA_HOST_PORT:-8090}:8080"
+      - "${REGISTRY_HOST_PORT:-8090}:8080"
 
   # Espone i servizi via Cloudflare Tunnel: nessuna porta aperta sul router,
   # TLS gestito da Cloudflare. Attivo solo in produzione (Raspberry Pi):
@@ -89,8 +89,8 @@ services:
     profiles:
       - prod
     depends_on:
-      - turni
-      - anagrafica
+      - shifts
+      - registry
 
 volumes:
   postgres_data:

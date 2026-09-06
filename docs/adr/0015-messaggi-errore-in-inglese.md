@@ -8,7 +8,7 @@ Status: Accettata
 
 ## Decisione
 
-Tutte le stringhe passate a `writeError(...)` (e i sentinel error di dominio il cui testo può comparire in log o risposte, es. `turno.ErrNotFound`, `user.ErrNotFound`, `user.ErrDuplicateUser`, `user.ErrInvalidToken`) sono ora in inglese, in entrambi i servizi (`turni`, `anagrafica`). Nessun cambio di status code o struttura JSON — solo il testo del messaggio.
+Tutte le stringhe passate a `writeError(...)` (e i sentinel error di dominio il cui testo può comparire in log o risposte, es. `shift.ErrNotFound`, `user.ErrNotFound`, `user.ErrDuplicateUser`, `user.ErrInvalidToken`) sono ora in inglese, in entrambi i servizi (`shifts`, `registry`). Nessun cambio di status code o struttura JSON — solo il testo del messaggio.
 
 **Restano invariati**, perché non sono "messaggi" rivolti all'utente ma dati/contratto dell'API:
 - I nomi dei campi JSON nel body di richieste/risposte (`volontario_id`, `email`, `username`, ecc.) — inconsistenza già nota e aperta in ADR-0010.

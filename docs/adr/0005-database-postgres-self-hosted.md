@@ -4,7 +4,7 @@ Status: Accettata
 
 ## Contesto
 
-Serve un database relazionale per servizi come `turni`, adatto a un dominio con relazioni tra entità che cresceranno con `anagrafica` e `mezzi-magazzino`.
+Serve un database relazionale per servizi come `shifts`, adatto a un dominio con relazioni tra entità che cresceranno con `registry` e `mezzi-magazzino`.
 
 ## Decisione
 

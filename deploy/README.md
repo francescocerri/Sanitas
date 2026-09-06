@@ -5,7 +5,7 @@ Target di produzione a costo ricorrente ~zero: Docker Compose sul Raspberry Pi, 
 ## Setup una tantum sul Raspberry Pi
 
 1. **Docker**: installare Docker Engine + plugin Compose (`curl -fsSL https://get.docker.com | sh`, poi aggiungere l'utente al gruppo `docker`).
-2. **Cloudflare Tunnel**: nel dashboard Cloudflare Zero Trust → Networks → Tunnels, creare un tunnel, mappare il hostname pubblico (es. `turni.<tuo-dominio>`) al servizio locale `http://turni:8080`, copiare il token generato.
+2. **Cloudflare Tunnel**: nel dashboard Cloudflare Zero Trust → Networks → Tunnels, creare un tunnel, mappare il hostname pubblico (es. `shifts.<tuo-dominio>`) al servizio locale `http://shifts:8080`, copiare il token generato.
 3. **File `.env`**: copiare `deploy/.env.example` in `deploy/.env` sul Pi e compilarlo (password Postgres, token del tunnel). **Non committare mai `.env`** (è già in `.gitignore`).
 4. **GitHub Actions self-hosted runner**: da Settings → Actions → Runners del repo GitHub, seguire le istruzioni per registrare un runner Linux/ARM64 sul Raspberry Pi, installarlo come servizio (`./svc.sh install && ./svc.sh start`) così riparte da solo al riavvio.
 

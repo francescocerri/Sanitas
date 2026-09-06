@@ -1,0 +1,299 @@
+definitions:
+  github_com_francescocerri_sanitas_services_registry_internal_user.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      permissions:
+        items:
+          type: string
+        type: array
+      roles:
+        items:
+          type: string
+        type: array
+      username:
+        type: string
+    type: object
+  internal_httpapi.activateUserRequest:
+    properties:
+      password:
+        type: string
+      token:
+        type: string
+    type: object
+  internal_httpapi.authTokens:
+    properties:
+      refresh_token:
+        type: string
+      token:
+        type: string
+    type: object
+  internal_httpapi.changePasswordRequest:
+    properties:
+      new_password:
+        type: string
+      old_password:
+        type: string
+    type: object
+  internal_httpapi.createUserRequest:
+    properties:
+      email:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      username:
+        type: string
+    type: object
+  internal_httpapi.createUserResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      invite_url:
+        description: |-
+          InviteURL is handed back directly in this response instead of being
+          emailed: sending it for real (Gmail SMTP) is a separate follow-up
+          activity, this phase only lays the token groundwork. The admin
+          forwards it to the volunteer by whatever channel they already use.
+        type: string
+      permissions:
+        items:
+          type: string
+        type: array
+      roles:
+        items:
+          type: string
+        type: array
+      username:
+        type: string
+    type: object
+  internal_httpapi.loginRequest:
+    properties:
+      identifier:
+        type: string
+      password:
+        type: string
+    type: object
+  internal_httpapi.refreshRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: |-
+    Users, roles, authentication. Phase A: admin-created users, activation via
+    token, login, password change. Sending real email (invites/forgot-password)
+    is a later phase — see docs/adr/0013.
+  title: Sanitas — Registry API
+  version: 0.1.0
+paths:
+  /.well-known/jwks.json:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Public key to verify JWTs (JWKS format)
+      tags:
+      - system
+  /healthz:
+    get:
+      responses:
+        "200":
+          description: Service healthy
+        "503":
+          description: Database unreachable
+      summary: Liveness check
+      tags:
+      - system
+  /v1/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Email or username + password
+        in: body
+        name: credenziali
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_httpapi.authTokens'
+        "400":
+          description: Invalid payload
+        "401":
+          description: Invalid credentials
+      summary: Login
+      tags:
+      - auth
+  /v1/logout:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Invalidates the given refresh token. An access token already issued stays
+        valid until its own expiry (24h) — no revocation mechanism for those yet,
+        see docs/adr/0013.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: refresh
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.refreshRequest'
+      responses:
+        "204":
+          description: Logged out
+        "400":
+          description: Invalid payload
+        "401":
+          description: Invalid, expired, or already used token
+      summary: Logout
+      tags:
+      - auth
+  /v1/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.User'
+        "401":
+          description: Authentication required
+      security:
+      - BearerAuth: []
+      summary: Get the authenticated user's profile
+      tags:
+      - auth
+  /v1/password/change:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Old and new password
+        in: body
+        name: password
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.changePasswordRequest'
+      responses:
+        "204":
+          description: Password changed
+        "400":
+          description: Invalid payload
+        "401":
+          description: Old password incorrect
+      security:
+      - BearerAuth: []
+      summary: Change the authenticated user's password
+      tags:
+      - auth
+  /v1/refresh:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Consumes the given refresh token (single use — see docs/adr/0016) and
+        returns a new access token plus a new refresh token.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: refresh
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.refreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_httpapi.authTokens'
+        "400":
+          description: Invalid payload
+        "401":
+          description: Invalid, expired, or already used token
+      summary: Refresh the access token
+      tags:
+      - auth
+  /v1/users:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Email, username, roles (slug)
+        in: body
+        name: utente
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.createUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_httpapi.createUserResponse'
+        "400":
+          description: Invalid payload or unknown role
+        "403":
+          description: 'Missing required permission: users:manage'
+        "409":
+          description: Email or username already in use
+      security:
+      - BearerAuth: []
+      summary: Create a new user (requires the users:manage permission)
+      tags:
+      - users
+  /v1/users/activate:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Invite token and new password
+        in: body
+        name: attivazione
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.activateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Account activated
+        "400":
+          description: Invalid payload
+        "401":
+          description: Invalid, expired, or already used token
+      summary: Activate an account via the invite token, setting the password
+      tags:
+      - users
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and the access token from POST
+      /v1/login (e.g. "Bearer eyJhbGci...").
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
