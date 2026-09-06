@@ -1,6 +1,6 @@
 # app — Sanitas (Flutter)
 
-Frontend Flutter/Dart di Sanitas: un solo codebase per web, iOS e Android (vedi [ADR-0022](../docs/adr/0022-frontend-flutter.md)). Perimetro attuale: login, profilo self-service, cambio password, attivazione account da link di invito.
+Frontend Flutter/Dart di Sanitas: un solo codebase per web, iOS e Android (vedi [ADR-0022](../docs/adr/0022-frontend-flutter.md)). Perimetro attuale: login, profilo self-service, cambio password, attivazione account da link di invito e creazione utenti per chi dispone di `users:manage`.
 
 ## Setup una tantum
 
@@ -84,3 +84,7 @@ L'icona Sanitas (S intrecciata con dettaglio del battito) deriva da `../design/s
 - **Colori**: personalizzabili per comitato (vedi sopra), applicati anche a tipografia (`google_fonts`, "Plus Jakarta Sans") e forma di campi/bottoni in `committee_theme.dart` — non solo la palette di Material di default. Chiaro/scuro è invece una preferenza personale dell'utente, persistita separatamente (vedi `theme_mode_controller.dart`).
 - **Identità visiva**: nessun comitato è tenuto a fornire un logo — `BrandMark` (`core/widgets/brand_mark.dart`) mostra l'iniziale del nome del comitato in un cerchio colorato, sostituibile in futuro con un'immagine vera.
 - **Animazioni**: transizioni fra schermate e ingresso dei form con `flutter_animate`, sobrie e coerenti invece che assenti o eccessive.
+
+## Creazione utenti
+
+Dal profilo, il pulsante «Crea utente» è visibile solo con `users:manage`; anche la route `/users/new` è protetta. Il form carica i ruoli con `GET /v1/roles` e invia email, username e slug dei ruoli a `POST /v1/users`. Dopo la creazione mostra il link restituito dal backend, selezionabile e copiabile. L’invio automatico dell’email è pianificato in `docs/backlog.md`.

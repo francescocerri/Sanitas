@@ -2,6 +2,9 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../create_user/create_user_screen.dart';
 
 import '../../core/api_client.dart';
 import '../../core/api_exception.dart';
@@ -45,6 +48,12 @@ class ProfileScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text('profile.title'.tr()),
         actions: [
+          if (ref.watch(canManageUsersProvider))
+            IconButton(
+              tooltip: 'create_user.title'.tr(),
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              onPressed: () => context.go('/users/new'),
+            ),
           const ThemeToggleButton(),
           IconButton(
             icon: const Icon(Icons.logout_rounded),

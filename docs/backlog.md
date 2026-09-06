@@ -16,7 +16,8 @@ Quando un'attività è "una feature non banale" (per la convenzione in `CLAUDE.m
 ## Servizio `registry`
 
 - [x] **Fase A**: scaffold del servizio, schema (utenti, ruoli, ruoli-utente, token di invito), login, creazione utenti da admin + attivazione via token, cambio password. Ruoli come dati seed per-comitato (vedi [ADR-0012](adr/0012-ruoli-come-dati-seed.md)), autenticazione bcrypt + JWT RS256 con JWKS (vedi [ADR-0013](adr/0013-autenticazione-bcrypt-jwt.md)). Stesse convenzioni cross-cutting/test di `shifts` (ADR-0009/0010/0011).
-- [ ] **Fase B**: invio email reale (inviti + forgot-password) via Gmail SMTP — oggi l'URL di invito è solo restituito nella risposta API, non spedito.
+- [ ] **Invio automatico email di invito alla creazione utente**: inviare via Gmail SMTP il link di attivazione all’email del nuovo utente, con mittente e branding configurabili per comitato; gestire esito ed errori di invio nell’app. Nella prima versione Flutter il link resta da copiare e inoltrare manualmente.
+- [ ] **Email di recupero password**: completare il flusso forgot-password e il relativo invio via Gmail SMTP.
 - [x] **Permessi granulari per ruolo**: `is_admin` rimosso, sostituito da permessi (`users:manage`, `shifts:read`, `shifts:write`) assegnati per ruolo via `config/<slug>/registry/roles.json`, applicati sia in `registry` che in `shifts`. Vedi [ADR-0018](adr/0018-permessi-granulari-per-ruolo.md).
 - [ ] **Filtrare i dati per ruolo** (es. un volontario vede solo i propri turni) — fuori scope di ADR-0018: richiede prima progettare come `shifts` rappresenta un "proprietario" della vista (vedi anche "Progettazione del dominio reale" più sopra). Lato FE, applicare la stessa granularità dei permessi già emessi nel token.
 - [x] Integrazione `shifts` ↔ `registry`: `volunteer_id` è ora una FK reale verso `registry.users(id)`, database condiviso con schema separati per servizio (vedi [ADR-0014](adr/0014-database-condiviso-schema-separati.md)).
@@ -32,7 +33,8 @@ Quando un'attività è "una feature non banale" (per la convenzione in `CLAUDE.m
 - [ ] **Profilo self-service**: `GET /v1/me`, cambio password (`POST /v1/password/change`), logout (`POST /v1/logout`).
 - [ ] **Refresh automatico**: interceptor `dio` su 401 + refresh proattivo allo startup dell'app.
 - [ ] **Test**: unit test su decode JWT e sul controller di sessione, widget test minimi sulle 3 schermate.
-- [ ] **Pannello admin utenti/ruoli** (creazione utenti, assegnazione ruoli, lista utenti) — fuori perimetro della prima iterazione, UI di creazione in approvazione; `GET /v1/roles` ora disponibile per popolare il selettore ruoli. Lista utenti ancora da pianificare.
+- [x] **Creazione utenti Flutter**: UI approvata, accesso con `users:manage`, catalogo ruoli da `GET /v1/roles`, creazione via `POST /v1/users`, copia link di attivazione e gestione errori.
+- [ ] **Lista utenti e modifica dei ruoli di utenti esistenti**: da pianificare.
 - [ ] **Strategia di hosting/distribuzione**: come si serve la build web in produzione (oggi `deploy/docker-compose.yml` non ha alcun servizio frontend) e come si arriva a una pubblicazione reale su App Store/Google Play (account sviluppatore, firma, CI di release) — non affrontato nella prima iterazione.
 
 ## Database / ORM
