@@ -1,27 +1,27 @@
 import { useEffect, useState } from 'react'
 
-type Turno = {
+type Shift = {
   id: string
-  volontario_id: string
-  data: string
-  ora_inizio: string
-  ora_fine: string
-  stato: string
+  volunteer_id: string
+  date: string
+  start_time: string
+  end_time: string
+  status: string
 }
 
-const API_BASE_URL = import.meta.env.VITE_TURNI_API_URL ?? 'http://localhost:8080'
+const API_BASE_URL = import.meta.env.VITE_SHIFTS_API_URL ?? 'http://localhost:8080'
 
 function App() {
-  const [turni, setTurni] = useState<Turno[]>([])
+  const [shifts, setShifts] = useState<Shift[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/v1/shifts`)
       .then((res) => {
         if (!res.ok) throw new Error(`API turni: ${res.status}`)
-        return res.json() as Promise<Turno[]>
+        return res.json() as Promise<Shift[]>
       })
-      .then(setTurni)
+      .then(setShifts)
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
   }, [])
 
@@ -29,8 +29,8 @@ function App() {
     <main>
       <h1>Turni</h1>
       {error && <p role="alert">Errore: {error}</p>}
-      {!error && turni.length === 0 && <p>Nessun turno pianificato.</p>}
-      {turni.length > 0 && (
+      {!error && shifts.length === 0 && <p>Nessun turno pianificato.</p>}
+      {shifts.length > 0 && (
         <table>
           <thead>
             <tr>
@@ -41,14 +41,14 @@ function App() {
             </tr>
           </thead>
           <tbody>
-            {turni.map((t) => (
-              <tr key={t.id}>
-                <td>{t.data}</td>
+            {shifts.map((s) => (
+              <tr key={s.id}>
+                <td>{s.date}</td>
                 <td>
-                  {t.ora_inizio}–{t.ora_fine}
+                  {s.start_time}–{s.end_time}
                 </td>
-                <td>{t.volontario_id}</td>
-                <td>{t.stato}</td>
+                <td>{s.volunteer_id}</td>
+                <td>{s.status}</td>
               </tr>
             ))}
           </tbody>

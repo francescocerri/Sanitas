@@ -8,7 +8,7 @@ Requisito esplicito: ogni servizio deve usare librerie mantenute attivamente e p
 
 ## Decisione
 
-- **Preferire sempre la standard library** quando è sufficiente. Il servizio `turni` usa `net/http` per il routing, nessun router esterno.
+- **Preferire sempre la standard library** quando è sufficiente. Il servizio `shifts` usa `net/http` per il routing, nessun router esterno.
 - Per ogni dipendenza esterna necessaria, valutare esplicitamente prima di aggiungerla: manutenzione attiva (commit recenti, non archiviata), adozione/popolarità, storico CVE.
 - Dipendenze esterne scelte finora e perché:
   - `github.com/jackc/pgx/v5` — driver Postgres per Go, standard de facto, attivamente mantenuto (preferito a `lib/pq`, in sola manutenzione).

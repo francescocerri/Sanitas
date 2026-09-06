@@ -5,7 +5,7 @@ Tutto quello che serve per far partire il progetto da zero, in ordine — sia pe
 ## 1. Fork e personalizzazione
 
 1. Fork del repository.
-2. Creare `config/<nuovo-comitato>/` copiando la struttura di `config/pavullo/` e sostituendo i dati (es. `anagrafica/roles.json` con i ruoli reali della propria associazione — vedi [ADR-0012](../adr/0012-ruoli-come-dati-seed.md)).
+2. Creare `config/<nuovo-comitato>/` copiando la struttura di `config/pavullo/` e sostituendo i dati (es. `registry/roles.json` con i ruoli reali della propria associazione — vedi [ADR-0012](../adr/0012-ruoli-come-dati-seed.md)).
 3. Scegliere la licenza se diversa da MIT (vedi `LICENSE`).
 
 ## 2. Segreti da generare (mai committati)
@@ -13,13 +13,13 @@ Tutto quello che serve per far partire il progetto da zero, in ordine — sia pe
 Per ogni servizio: copiare il relativo `.env.example` in `.env` e compilarlo. In particolare:
 
 - Password dei database (`deploy/.env`, vedi `deploy/README.md`).
-- Chiave privata JWT per `anagrafica` (RS256) — vedi `services/anagrafica/README.md` per il comando di generazione.
+- Chiave privata JWT per `registry` (RS256) — vedi `services/registry/README.md` per il comando di generazione.
 - Credenziali del primo amministratore (`INITIAL_ADMIN_*` in `deploy/.env`) — usate solo al primo avvio.
 - Token del tunnel Cloudflare (solo in produzione) — vedi `deploy/README.md`.
 
 ## 3. Avvio in locale (per sviluppo/verifica)
 
-Vedi `deploy/README.md` per il comando `docker compose up` completo, e i `README.md` di ogni servizio (`services/turni`, `services/anagrafica`) per le variabili d'ambiente specifiche.
+Vedi `deploy/README.md` per il comando `docker compose up` completo, e i `README.md` di ogni servizio (`services/shifts`, `services/registry`) per le variabili d'ambiente specifiche.
 
 ## 4. Deploy in produzione (Raspberry Pi)
 
@@ -28,7 +28,7 @@ Setup completo (Docker, Cloudflare Tunnel, GitHub Actions self-hosted runner) de
 ## 5. Verifica che tutto funzioni
 
 - `curl` sugli endpoint `/healthz` di ogni servizio.
-- Login con l'amministratore bootstrap (`anagrafica`), creazione di un utente di prova.
+- Login con l'amministratore bootstrap (`registry`), creazione di un utente di prova.
 - Frontend (`web/`) raggiungibile e che mostra dati reali.
 
 ## Note per chi forka

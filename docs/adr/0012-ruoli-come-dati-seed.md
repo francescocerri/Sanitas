@@ -4,11 +4,11 @@ Status: Accettata
 
 ## Contesto
 
-Il servizio `anagrafica` deve gestire ruoli organizzativi (responsabile turni, presidente, trainer TSSA, ecc.). Questi nomi sono specifici del Comitato di Pavullo/CRI — "trainer TSSA" non ha senso per una Croce Verde — e vanno trattati secondo il contratto di forkabilità già in `CLAUDE.md`.
+Il servizio `registry` deve gestire ruoli organizzativi (responsabile turni, presidente, trainer TSSA, ecc.). Questi nomi sono specifici del Comitato di Pavullo/CRI — "trainer TSSA" non ha senso per una Croce Verde — e vanno trattati secondo il contratto di forkabilità già in `CLAUDE.md`.
 
 ## Decisione
 
-I ruoli sono **dati seed**, non un enum Go: vivono in `config/<committee-slug>/anagrafica/roles.json` (slug inglese, nome visualizzato in italiano), applicati (upsert idempotente) da `anagrafica` ad ogni avvio, path indicato da `ROLES_SEED_PATH`. Questa è la prima occasione concreta in cui `config/<committee-slug>/` (finora solo descritta in `CLAUDE.md`) viene effettivamente creata e usata: `config/pavullo/anagrafica/roles.json`.
+I ruoli sono **dati seed**, non un enum Go: vivono in `config/<committee-slug>/registry/roles.json` (slug inglese, nome visualizzato in italiano), applicati (upsert idempotente) da `registry` ad ogni avvio, path indicato da `ROLES_SEED_PATH`. Questa è la prima occasione concreta in cui `config/<committee-slug>/` (finora solo descritta in `CLAUDE.md`) viene effettivamente creata e usata: `config/pavullo/registry/roles.json`.
 
 ## Conseguenze
 
