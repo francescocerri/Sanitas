@@ -9,7 +9,11 @@ import (
 	"github.com/francescocerri/sanitas/services/registry/internal/user"
 )
 
-func TestListUsers_RequiresPermission(t *testing.T) {
+// La lista utenti è una "rubrica" di sola lettura: qualunque utente
+// autenticato può consultarla, indipendentemente dai permessi — solo
+// creare un utente e modificarne i ruoli restano dietro users:manage
+// (vedi TestUpdateUserRoles_RequiresPermission).
+func TestListUsers_RequiresAuthentication(t *testing.T) {
 	server, repo := newTestServer(t)
 	ctx := context.Background()
 	if err := user.Bootstrap(ctx, repo, "admin@example.org", "admin", "supersegreta"); err != nil {
@@ -33,9 +37,9 @@ func TestListUsers_RequiresPermission(t *testing.T) {
 	}
 	lucaToken := activateAndLogin(t, server, createResp.InviteURL, "luca", "nuovapassword")
 
-	denied := doJSON(t, server, http.MethodGet, "/v1/users", nil, lucaToken)
-	if denied.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for a role without users:manage, got %d: %s", denied.Code, denied.Body.String())
+	withoutPermission := doJSON(t, server, http.MethodGet, "/v1/users", nil, lucaToken)
+	if withoutPermission.Code != http.StatusOK {
+		t.Fatalf("expected 200 for an authenticated user without users:manage, got %d: %s", withoutPermission.Code, withoutPermission.Body.String())
 	}
 
 	granted := doJSON(t, server, http.MethodGet, "/v1/users", nil, adminToken)

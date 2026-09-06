@@ -305,7 +305,7 @@ const docTemplate = `{
                 "tags": [
                     "roles"
                 ],
-                "summary": "List available roles (requires the users:manage permission)",
+                "summary": "List available roles (any authenticated user)",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -318,9 +318,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Authentication required"
-                    },
-                    "403": {
-                        "description": "Missing required permission: users:manage"
                     },
                     "500": {
                         "description": "Internal error"
@@ -341,7 +338,7 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "List all users (requires the users:manage permission)",
+                "summary": "List all users (any authenticated user)",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -352,8 +349,8 @@ const docTemplate = `{
                             }
                         }
                     },
-                    "403": {
-                        "description": "Missing required permission: users:manage"
+                    "401": {
+                        "description": "Authentication required"
                     }
                 }
             },

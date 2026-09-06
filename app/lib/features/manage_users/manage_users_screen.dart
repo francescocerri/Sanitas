@@ -39,15 +39,14 @@ ApiException _manageUsersError(DioException error) =>
     );
 
 /// Elenco di tutti gli utenti, con i loro ruoli già popolati dal backend
-/// (vedi `internal/user.Repository.ListUsers` in `services/registry`).
-/// Stesso schema di `availableRolesProvider`: richiede `users:manage`,
-/// si invalida da sé quando cambia l'utente loggato.
+/// (vedi `internal/user.Repository.ListUsers` in `services/registry`). Una
+/// "rubrica" di sola lettura: `GET /v1/users` non richiede `users:manage`,
+/// solo essere autenticati — quel permesso resta necessario solo per
+/// creare un utente o modificarne i ruoli (vedi `canManageUsersProvider`
+/// nella UI sotto).
 final usersProvider = FutureProvider.autoDispose<List<ManagedUser>>((
   ref,
 ) async {
-  if (!ref.watch(canManageUsersProvider)) {
-    throw const ApiException('create_user.forbidden');
-  }
   try {
     final response = await ref
         .watch(apiDioProvider)
@@ -67,10 +66,11 @@ final usersProvider = FutureProvider.autoDispose<List<ManagedUser>>((
   }
 });
 
-/// Lista utenti + modifica ruoli, riservata a chi ha `users:manage`. Niente
+/// Lista utenti, aperta a chiunque sia autenticato; modifica dei ruoli
+/// riservata a chi ha `users:manage` (vedi `canEdit` in `_UserRow`). Niente
 /// schermata/rotta separata per la modifica: si tocca una riga per
-/// espanderla sul posto (mostra i chip dei ruoli disponibili) invece di
-/// aprire un secondo schermo — più semplice da mantenere, un solo file.
+/// espanderla sul posto in sola lettura, e solo la matitina (se visibile)
+/// entra in modifica — più semplice da mantenere, un solo file.
 class ManageUsersScreen extends ConsumerStatefulWidget {
   const ManageUsersScreen({super.key});
 
@@ -166,7 +166,9 @@ class _ManageUsersScreenState extends ConsumerState<ManageUsersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allowed = ref.watch(canManageUsersProvider);
+    // Chiunque sia autenticato può vedere l'elenco: solo la matitina
+    // (modifica ruoli) resta dietro `users:manage`, vista per riga in
+    // `_UserRow` (vedi `canEdit` passato lì sotto).
     final users = ref.watch(usersProvider);
 
     return Scaffold(
@@ -179,108 +181,100 @@ class _ManageUsersScreenState extends ConsumerState<ManageUsersScreen> {
         title: Text('manage_users.title'.tr()),
         actions: const [ThemeToggleButton(), SizedBox(width: 8)],
       ),
-      body: !allowed
-          ? Center(child: Text('create_user.forbidden'.tr()))
-          : SafeArea(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                        child: TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            hintText: 'manage_users.search_hint'.tr(),
-                            prefixIcon: const Icon(Icons.search_rounded),
-                          ),
-                          onChanged: (value) => setState(
-                            () => _search = value.trim().toLowerCase(),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: users.when(
-                          loading: () =>
-                              const Center(child: CircularProgressIndicator()),
-                          error: (error, _) => Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ErrorBanner(
-                                    message:
-                                        (error is ApiException
-                                                ? error.translationKey
-                                                : 'errors.unknown')
-                                            .tr(),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  TextButton(
-                                    onPressed: () =>
-                                        ref.invalidate(usersProvider),
-                                    child: Text('common.retry'.tr()),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          data: (items) {
-                            final filtered = _search.isEmpty
-                                ? items
-                                : items
-                                      .where(
-                                        (u) =>
-                                            u.username.toLowerCase().contains(
-                                              _search,
-                                            ) ||
-                                            u.email.toLowerCase().contains(
-                                              _search,
-                                            ),
-                                      )
-                                      .toList();
-                            if (filtered.isEmpty) {
-                              return Center(
-                                child: Text('manage_users.empty'.tr()),
-                              );
-                            }
-                            // Un utente con più ruoli compare in più
-                            // sezioni: qui la vista è organizzata "per
-                            // ruolo, chi ce l'ha", non una partizione degli
-                            // utenti — un utente può comparire zero, una o
-                            // più volte a seconda di quanti ruoli ha.
-                            return ref
-                                .watch(availableRolesProvider)
-                                .when(
-                                  loading: () => const Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                  error: (error, _) => Center(
-                                    child: ErrorBanner(
-                                      message:
-                                          (error is ApiException
-                                                  ? error.translationKey
-                                                  : 'errors.unknown')
-                                              .tr(),
-                                    ),
-                                  ),
-                                  data: (availableRoles) => _buildSections(
-                                    context,
-                                    availableRoles,
-                                    filtered,
-                                  ),
-                                );
-                          },
-                        ),
-                      ),
-                    ],
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'manage_users.search_hint'.tr(),
+                      prefixIcon: const Icon(Icons.search_rounded),
+                    ),
+                    onChanged: (value) =>
+                        setState(() => _search = value.trim().toLowerCase()),
                   ),
                 ),
-              ),
+                Expanded(
+                  child: users.when(
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (error, _) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ErrorBanner(
+                              message:
+                                  (error is ApiException
+                                          ? error.translationKey
+                                          : 'errors.unknown')
+                                      .tr(),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: () => ref.invalidate(usersProvider),
+                              child: Text('common.retry'.tr()),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    data: (items) {
+                      final filtered = _search.isEmpty
+                          ? items
+                          : items
+                                .where(
+                                  (u) =>
+                                      u.username.toLowerCase().contains(
+                                        _search,
+                                      ) ||
+                                      u.email.toLowerCase().contains(_search),
+                                )
+                                .toList();
+                      if (filtered.isEmpty) {
+                        return Center(child: Text('manage_users.empty'.tr()));
+                      }
+                      // Un utente con più ruoli compare in più
+                      // sezioni: qui la vista è organizzata "per
+                      // ruolo, chi ce l'ha", non una partizione degli
+                      // utenti — un utente può comparire zero, una o
+                      // più volte a seconda di quanti ruoli ha.
+                      return ref
+                          .watch(availableRolesProvider)
+                          .when(
+                            loading: () => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                            error: (error, _) => Center(
+                              child: ErrorBanner(
+                                message:
+                                    (error is ApiException
+                                            ? error.translationKey
+                                            : 'errors.unknown')
+                                        .tr(),
+                              ),
+                            ),
+                            data: (availableRoles) => _buildSections(
+                              context,
+                              availableRoles,
+                              filtered,
+                            ),
+                          );
+                    },
+                  ),
+                ),
+              ],
             ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -330,6 +324,7 @@ class _ManageUsersScreenState extends ConsumerState<ManageUsersScreen> {
               user: user,
               expanded: _expandedUserId == user.id,
               editing: _editingUserId == user.id,
+              canEdit: ref.watch(canManageUsersProvider),
               pendingRoles: _pendingRoles,
               saving: _saving && _editingUserId == user.id,
               errorTranslationKey: _editingUserId == user.id
@@ -359,6 +354,7 @@ class _UserRow extends ConsumerWidget {
     required this.user,
     required this.expanded,
     required this.editing,
+    required this.canEdit,
     required this.pendingRoles,
     required this.saving,
     required this.errorTranslationKey,
@@ -371,6 +367,10 @@ class _UserRow extends ConsumerWidget {
   final ManagedUser user;
   final bool expanded;
   final bool editing;
+  // Solo chi ha `users:manage` vede la matitina — chiunque altro può
+  // comunque espandere la riga per consultare i ruoli attuali in sola
+  // lettura (vedi `usersProvider`, la lista è aperta a tutti).
+  final bool canEdit;
   final Set<String> pendingRoles;
   final bool saving;
   final String? errorTranslationKey;
@@ -425,16 +425,17 @@ class _UserRow extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'manage_users.edit_roles'.tr(),
-                    icon: Icon(
-                      editing ? Icons.edit_rounded : Icons.edit_outlined,
-                      color: editing
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant,
+                  if (canEdit)
+                    IconButton(
+                      tooltip: 'manage_users.edit_roles'.tr(),
+                      icon: Icon(
+                        editing ? Icons.edit_rounded : Icons.edit_outlined,
+                        color: editing
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                      onPressed: onEditToggle,
                     ),
-                    onPressed: onEditToggle,
-                  ),
                   Icon(
                     expanded
                         ? Icons.keyboard_arrow_up_rounded

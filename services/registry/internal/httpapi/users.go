@@ -124,12 +124,12 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 
 type listUsersResponse []user.User
 
-// @Summary	List all users (requires the users:manage permission)
+// @Summary	List all users (any authenticated user)
 // @Tags		users
 // @Produce	json
 // @Security	BearerAuth
 // @Success	200	{object}	listUsersResponse
-// @Failure	403	"Missing required permission: users:manage"
+// @Failure	401	"Authentication required"
 // @Router		/v1/users [get]
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := s.repo.ListUsers(r.Context())

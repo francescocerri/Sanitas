@@ -54,14 +54,15 @@ class HomeScreen extends ConsumerWidget {
           badge: 'home.admin_badge'.tr(),
           onTap: () => context.go('/users/new'),
         ),
-      if (canManageUsers)
-        _HomeCard(
-          icon: Icons.manage_accounts_outlined,
-          title: 'home.manage_users_title'.tr(),
-          subtitle: 'home.manage_users_subtitle'.tr(),
-          badge: 'home.admin_badge'.tr(),
-          onTap: () => context.go('/users'),
-        ),
+      // Aperta a chiunque: l'elenco utenti è una rubrica di sola lettura
+      // per chi non ha `users:manage` (che invece vede anche la matitina
+      // per modificare i ruoli) — vedi manage_users_screen.dart.
+      _HomeCard(
+        icon: Icons.manage_accounts_outlined,
+        title: 'home.manage_users_title'.tr(),
+        subtitle: 'home.manage_users_subtitle'.tr(),
+        onTap: () => context.go('/users'),
+      ),
     ];
 
     final comingSoonCards = [

@@ -28,7 +28,7 @@ Quando un'attività è "una feature non banale" (per la convenzione in `CLAUDE.m
 ## Frontend (`app/`, Flutter)
 - [ ] **Test**: unit test su decode JWT e sul controller di sessione, widget test minimi sulle 3 schermate.
 - [x] **Creazione utenti Flutter**: UI approvata, accesso con `users:manage`, catalogo ruoli da `GET /v1/roles`, creazione via `POST /v1/users`, copia link di attivazione e gestione errori.
-- [ ] **Lista utenti e modifica dei ruoli di utenti esistenti**: da pianificare.
+- [x] **Lista utenti e modifica dei ruoli di utenti esistenti**: `GET /v1/users` è una "rubrica" di sola lettura aperta a chiunque sia autenticato (nessun permesso richiesto); `PATCH /v1/users/{id}/roles` (sostituisce l'intero insieme di ruoli) resta dietro `users:manage`, come la creazione. Nell'app, schermata «Gestisci utenti» raggiungibile da tutti dalla home, righe raggruppate per ruolo con ricerca; il tocco su una riga mostra i ruoli in sola lettura, solo chi ha `users:manage` vede anche la matitina che apre la modifica (chip selezionabili + Salva).
 - [ ] **Strategia di hosting/distribuzione**: come si serve la build web in produzione (oggi `deploy/docker-compose.yml` non ha alcun servizio frontend) e come si arriva a una pubblicazione reale su App Store/Google Play (account sviluppatore, firma, CI di release) — non affrontato nella prima iterazione.
 
 ## Database / ORM

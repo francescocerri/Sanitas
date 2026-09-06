@@ -7,13 +7,12 @@ import (
 
 type listRolesResponse []user.Role
 
-// @Summary List available roles (requires the users:manage permission)
+// @Summary List available roles (any authenticated user)
 // @Tags roles
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} listRolesResponse
 // @Failure 401 "Authentication required"
-// @Failure 403 "Missing required permission: users:manage"
 // @Failure 500 "Internal error"
 // @Router /v1/roles [get]
 func (s *Server) handleListRoles(w http.ResponseWriter, r *http.Request) {

@@ -324,13 +324,11 @@ paths:
             type: array
         "401":
           description: Authentication required
-        "403":
-          description: 'Missing required permission: users:manage'
         "500":
           description: Internal error
       security:
       - BearerAuth: []
-      summary: List available roles (requires the users:manage permission)
+      summary: List available roles (any authenticated user)
       tags:
       - roles
   /v1/users:
@@ -344,11 +342,11 @@ paths:
             items:
               $ref: '#/definitions/user.User'
             type: array
-        "403":
-          description: 'Missing required permission: users:manage'
+        "401":
+          description: Authentication required
       security:
       - BearerAuth: []
-      summary: List all users (requires the users:manage permission)
+      summary: List all users (any authenticated user)
       tags:
       - users
     post:

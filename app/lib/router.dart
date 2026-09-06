@@ -73,7 +73,11 @@ final routerProvider = Provider<GoRouter>((ref) {
               ? null
               : '/login';
         case AuthStatus.authenticated:
-          if (location.startsWith('/users') &&
+          // Solo la creazione utenti richiede il permesso a livello di
+          // rotta: l'elenco ("/users") è una rubrica aperta a chiunque sia
+          // autenticato, la modifica dei ruoli lì dentro si nasconde da
+          // sola per chi non ha il permesso (vedi manage_users_screen.dart).
+          if (location == '/users/new' &&
               !(authState.claims?.hasPermission('users:manage') ?? false)) {
             return '/home';
           }

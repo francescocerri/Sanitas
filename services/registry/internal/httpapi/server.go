@@ -59,8 +59,12 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST "+v1+"/refresh", s.handleRefresh)
 	mux.HandleFunc("POST "+v1+"/logout", s.handleLogout)
 	mux.HandleFunc("GET "+v1+"/me", s.requireAuth(s.handleMe))
-	mux.HandleFunc("GET "+v1+"/roles", s.requirePermission(user.PermUsersManage, s.handleListRoles))
-	mux.HandleFunc("GET "+v1+"/users", s.requirePermission(user.PermUsersManage, s.handleListUsers))
+	// Il catalogo ruoli e l'elenco utenti sono di sola lettura per chiunque
+	// sia autenticato (una "rubrica" del comitato, non un dato sensibile):
+	// solo creare un utente e modificarne i ruoli restano dietro
+	// users:manage — vedi handleCreateUser/handleUpdateUserRoles.
+	mux.HandleFunc("GET "+v1+"/roles", s.requireAuth(s.handleListRoles))
+	mux.HandleFunc("GET "+v1+"/users", s.requireAuth(s.handleListUsers))
 	mux.HandleFunc("POST "+v1+"/users", s.requirePermission(user.PermUsersManage, s.handleCreateUser))
 	mux.HandleFunc("PATCH "+v1+"/users/{id}/roles", s.requirePermission(user.PermUsersManage, s.handleUpdateUserRoles))
 	mux.HandleFunc("POST "+v1+"/users/activate", s.handleActivateUser)

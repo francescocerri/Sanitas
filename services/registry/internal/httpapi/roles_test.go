@@ -27,7 +27,9 @@ func TestListRoles(t *testing.T) {
 	}{
 		{"anonymous", "", http.StatusUnauthorized},
 		{"invalid token", "invalid", http.StatusUnauthorized},
-		{"without permission", readerToken, http.StatusForbidden},
+		// Il catalogo ruoli è di sola lettura per chiunque sia autenticato,
+		// indipendentemente dai permessi — vedi server.go.
+		{"without permission", readerToken, http.StatusOK},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			response := doJSON(t, server, http.MethodGet, "/v1/roles", nil, tc.token)

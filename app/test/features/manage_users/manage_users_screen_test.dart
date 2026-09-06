@@ -270,25 +270,54 @@ void main() {
     expect(find.text('giulia'), findsOneWidget);
   });
 
-  testWidgets('denies users without permission without fetching anything', (
-    tester,
-  ) async {
-    var requested = false;
-    final dio = Dio();
-    dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          requested = true;
-          handler.resolve(Response(requestOptions: options, data: []));
-        },
-      ),
-    );
+  testWidgets(
+    'users without users:manage can see the list but not the edit pencil',
+    (tester) async {
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (options.path == '/v1/roles') {
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: [
+                    {'slug': 'president', 'display_name': 'Presidente'},
+                  ],
+                ),
+              );
+              return;
+            }
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: [
+                  {
+                    'id': 'u1',
+                    'username': 'mario',
+                    'email': 'mario@example.org',
+                    'roles': ['president'],
+                  },
+                ],
+              ),
+            );
+          },
+        ),
+      );
 
-    await mount(tester, dio, allowed: false);
-    expect(
-      find.text('Non hai il permesso di gestire gli utenti.'),
-      findsOneWidget,
-    );
-    expect(requested, isFalse);
-  });
+      await mount(tester, dio, allowed: false);
+
+      // La lista è comunque visibile: solo la matitina è nascosta.
+      expect(find.text('mario'), findsOneWidget);
+      expect(find.byIcon(Icons.edit_outlined), findsNothing);
+
+      // Il tocco sulla riga resta utile: mostra i ruoli in sola lettura.
+      await tester.tap(find.text('mario'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(Chip, 'Presidente'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Salva'), findsNothing);
+    },
+  );
 }
