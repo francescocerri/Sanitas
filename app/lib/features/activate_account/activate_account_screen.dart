@@ -8,6 +8,7 @@ import '../../core/api_exception.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/widgets/auth_shell.dart';
 import '../../core/widgets/error_banner.dart';
+import '../../core/widgets/password_visibility_toggle.dart';
 
 /// Apre il link di attivazione che un amministratore inoltra a mano al
 /// volontario dopo avergli creato l'account (oggi non c'è ancora invio
@@ -154,12 +155,8 @@ class _ActivateAccountScreenState extends ConsumerState<ActivateAccountScreen> {
                 decoration: InputDecoration(
                   labelText: 'activate_account.password_label'.tr(),
                   prefixIcon: const Icon(Icons.lock_outline_rounded),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                    ),
+                  suffixIcon: PasswordVisibilityToggle(
+                    obscured: _obscurePassword,
                     onPressed: () =>
                         setState(() => _obscurePassword = !_obscurePassword),
                   ),

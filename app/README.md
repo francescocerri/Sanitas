@@ -27,10 +27,12 @@ cp env.example.json env.json
 Con `services/registry` già in esecuzione (vedi il suo README, o `docker compose up registry` dalla cartella `deploy/`):
 
 ```bash
-flutter run -d chrome --dart-define-from-file=env.json
+flutter run -d chrome --web-port=5173 --web-hostname=localhost --dart-define-from-file=env.json
 ```
 
-Per iOS/Android, sostituire `-d chrome` con il device/simulatore desiderato (`flutter devices` per l'elenco).
+`--web-port`/`--web-hostname` fissano l'indirizzo su cui gira il web server di sviluppo (`http://localhost:5173`): senza, Flutter ne sceglie uno casuale ad ogni avvio, costringendo ad aggiornare `CORS_ALLOWED_ORIGIN` lato `registry` (e qualunque bookmark) ogni volta. `5173` è lo stesso valore già usato come default in `services/registry/.env.example` — nessuna configurazione aggiuntiva necessaria in locale.
+
+Per iOS/Android, sostituire `-d chrome --web-port=5173 --web-hostname=localhost` con il device/simulatore desiderato (`flutter devices` per l'elenco) — quei due flag sono specifici del target web.
 
 ## Test
 

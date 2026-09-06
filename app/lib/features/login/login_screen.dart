@@ -7,6 +7,7 @@ import '../../core/api_exception.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/widgets/auth_shell.dart';
 import '../../core/widgets/error_banner.dart';
+import '../../core/widgets/password_visibility_toggle.dart';
 
 /// `ConsumerStatefulWidget` = uno `StatefulWidget` normale di Flutter (serve
 /// perché questo widget ha uno stato tutto suo: il testo nei campi, se sta
@@ -121,12 +122,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       decoration: InputDecoration(
                         labelText: 'login.password_label'.tr(),
                         prefixIcon: const Icon(Icons.lock_outline_rounded),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                          ),
+                        suffixIcon: PasswordVisibilityToggle(
+                          obscured: _obscurePassword,
                           onPressed: () => setState(
                             () => _obscurePassword = !_obscurePassword,
                           ),

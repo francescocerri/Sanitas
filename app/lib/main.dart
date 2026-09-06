@@ -25,9 +25,7 @@ Future<void> main() async {
     // caricato — l'unico modo pulito di far arrivare un dato caricato in
     // modo asincrono PRIMA di `runApp` dentro il sistema di provider.
     ProviderScope(
-      overrides: [
-        committeeThemeProvider.overrideWithValue(committeeTheme),
-      ],
+      overrides: [committeeThemeProvider.overrideWithValue(committeeTheme)],
       child: EasyLocalization(
         supportedLocales: const [Locale('it'), Locale('en')],
         path: 'assets/translations',
