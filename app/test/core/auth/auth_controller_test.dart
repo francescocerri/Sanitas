@@ -50,12 +50,20 @@ String _fakeJwt({List<String> permissions = const []}) {
     'username': 'mario.rossi',
     'roles': const ['shift_manager'],
     'permissions': permissions,
-    'exp': DateTime.now().toUtc().add(const Duration(hours: 24)).millisecondsSinceEpoch ~/ 1000,
+    'exp':
+        DateTime.now()
+            .toUtc()
+            .add(const Duration(hours: 24))
+            .millisecondsSinceEpoch ~/
+        1000,
   });
   return '$header.$body.fake-signature';
 }
 
-Response<Map<String, dynamic>> _authTokensResponse(RequestOptions options, {String? accessToken}) {
+Response<Map<String, dynamic>> _authTokensResponse(
+  RequestOptions options, {
+  String? accessToken,
+}) {
   return Response(
     requestOptions: options,
     statusCode: 200,
@@ -108,7 +116,10 @@ void main() {
     test('nessun refresh token salvato -> stato non autenticato', () async {
       await settleBootstrap();
 
-      expect(container.read(authControllerProvider).status, AuthStatus.unauthenticated);
+      expect(
+        container.read(authControllerProvider).status,
+        AuthStatus.unauthenticated,
+      );
     });
   });
 
@@ -116,18 +127,22 @@ void main() {
     test('successo -> stato autenticato con i claim decodificati', () async {
       await settleBootstrap();
 
-      when(() => mockDio.post<Map<String, dynamic>>(
-            '/v1/login',
-            data: any(named: 'data'),
-          )).thenAnswer((invocation) async {
+      when(
+        () => mockDio.post<Map<String, dynamic>>(
+          '/v1/login',
+          data: any(named: 'data'),
+        ),
+      ).thenAnswer((invocation) async {
         final options = RequestOptions(path: '/v1/login');
-        return _authTokensResponse(options, accessToken: _fakeJwt(permissions: ['shifts:read']));
+        return _authTokensResponse(
+          options,
+          accessToken: _fakeJwt(permissions: ['shifts:read']),
+        );
       });
 
-      await container.read(authControllerProvider.notifier).login(
-            identifier: 'mario.rossi',
-            password: 'correct-password',
-          );
+      await container
+          .read(authControllerProvider.notifier)
+          .login(identifier: 'mario.rossi', password: 'correct-password');
 
       final session = container.read(authControllerProvider);
       expect(session.status, AuthStatus.authenticated);
@@ -136,45 +151,63 @@ void main() {
       expect(await tokenStore.readRefreshToken(), 'refresh-token-value');
     });
 
-    test('401 dal backend -> ApiException con la chiave "credenziali sbagliate"', () async {
-      await settleBootstrap();
+    test(
+      '401 dal backend -> ApiException con la chiave "credenziali sbagliate"',
+      () async {
+        await settleBootstrap();
 
-      when(() => mockDio.post<Map<String, dynamic>>(
+        when(
+          () => mockDio.post<Map<String, dynamic>>(
             '/v1/login',
             data: any(named: 'data'),
-          )).thenThrow(
-        DioException(
-          requestOptions: RequestOptions(path: '/v1/login'),
-          response: Response(
-            requestOptions: RequestOptions(path: '/v1/login'),
-            statusCode: 401,
-            data: {'error': 'invalid credentials'},
           ),
-        ),
-      );
-
-      expect(
-        () => container.read(authControllerProvider.notifier).login(
-              identifier: 'mario.rossi',
-              password: 'wrong-password',
+        ).thenThrow(
+          DioException(
+            requestOptions: RequestOptions(path: '/v1/login'),
+            response: Response(
+              requestOptions: RequestOptions(path: '/v1/login'),
+              statusCode: 401,
+              data: {'error': 'invalid credentials'},
             ),
-        throwsA(isA<ApiException>().having((e) => e.translationKey, 'translationKey', 'errors.invalid_credentials')),
-      );
-    });
+          ),
+        );
+
+        expect(
+          () => container
+              .read(authControllerProvider.notifier)
+              .login(identifier: 'mario.rossi', password: 'wrong-password'),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.translationKey,
+              'translationKey',
+              'errors.invalid_credentials',
+            ),
+          ),
+        );
+      },
+    );
   });
 
   group('logout', () {
-    test('pulisce sessione e refresh token anche se la chiamata di rete fallisce', () async {
-      await settleBootstrap();
-      await tokenStore.saveRefreshToken('some-refresh-token');
+    test(
+      'pulisce sessione e refresh token anche se la chiamata di rete fallisce',
+      () async {
+        await settleBootstrap();
+        await tokenStore.saveRefreshToken('some-refresh-token');
 
-      when(() => mockDio.post<void>('/v1/logout', data: any(named: 'data')))
-          .thenThrow(DioException(requestOptions: RequestOptions(path: '/v1/logout')));
+        when(() => mockDio.post<void>('/v1/logout', data: any(named: 'data')))
+            .thenThrow(
+              DioException(requestOptions: RequestOptions(path: '/v1/logout')),
+            );
 
-      await container.read(authControllerProvider.notifier).logout();
+        await container.read(authControllerProvider.notifier).logout();
 
-      expect(container.read(authControllerProvider).status, AuthStatus.unauthenticated);
-      expect(await tokenStore.readRefreshToken(), isNull);
-    });
+        expect(
+          container.read(authControllerProvider).status,
+          AuthStatus.unauthenticated,
+        );
+        expect(await tokenStore.readRefreshToken(), isNull);
+      },
+    );
   });
 }

@@ -1,5 +1,7 @@
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+
+import '../../core/widgets/brand_mark.dart';
 
 /// Mostrata solo per l'istante in cui l'app non sa ancora se c'è una
 /// sessione da riprendere (`AuthStatus.unknown` — vedi `router.dart` e
@@ -13,14 +15,18 @@ class SplashScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text('app.title'.tr(), style: Theme.of(context).textTheme.titleMedium),
-          ],
-        ),
+        // Un leggero effetto "respiro" (scala su e giù, in loop) al posto
+        // di un semplice spinner: comunica "sto caricando" senza sembrare
+        // statico. `onPlay: (c) => c.repeat(...)` dice all'animazione di
+        // ricominciare da capo ogni volta che finisce, all'infinito.
+        child: const BrandMark(size: 88)
+            .animate(onPlay: (controller) => controller.repeat(reverse: true))
+            .scale(
+              begin: const Offset(0.92, 0.92),
+              end: const Offset(1.0, 1.0),
+              duration: 900.ms,
+              curve: Curves.easeInOut,
+            ),
       ),
     );
   }

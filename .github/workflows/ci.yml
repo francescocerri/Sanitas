@@ -58,6 +58,7 @@ jobs:
       - name: Sincronizza il tema del comitato (config/pavullo/app/theme.json)
         run: ./scripts/sync_committee_config.sh
       - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed .
       - run: flutter analyze
       - run: flutter test
       - run: flutter build web --dart-define-from-file=env.example.json

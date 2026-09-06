@@ -56,7 +56,9 @@ class MalformedJwtException implements Exception {
 JwtClaims decodeJwtClaims(String token) {
   final parts = token.split('.');
   if (parts.length != 3) {
-    throw const MalformedJwtException('il token non ha 3 parti separate da "."');
+    throw const MalformedJwtException(
+      'il token non ha 3 parti separate da "."',
+    );
   }
 
   final payloadJson = _decodeBase64UrlSegment(parts[1]);
@@ -76,8 +78,12 @@ JwtClaims decodeJwtClaims(String token) {
     subject: payload['sub'] as String? ?? '',
     username: payload['username'] as String? ?? '',
     roles: (payload['roles'] as List<dynamic>? ?? const []).cast<String>(),
-    permissions: (payload['permissions'] as List<dynamic>? ?? const []).cast<String>(),
-    expiresAt: DateTime.fromMillisecondsSinceEpoch(expSeconds * 1000, isUtc: true),
+    permissions: (payload['permissions'] as List<dynamic>? ?? const [])
+        .cast<String>(),
+    expiresAt: DateTime.fromMillisecondsSinceEpoch(
+      expSeconds * 1000,
+      isUtc: true,
+    ),
   );
 }
 

@@ -17,14 +17,11 @@ enum AuthStatus { unknown, authenticated, unauthenticated }
 /// Notifier, rende molto più facile capire "quando" e "perché" la UI si
 /// aggiorna (si aggiorna sempre e solo quando arriva una nuova istanza).
 class AuthSession {
-  const AuthSession({
-    required this.status,
-    this.accessToken,
-    this.claims,
-  });
+  const AuthSession({required this.status, this.accessToken, this.claims});
 
   const AuthSession.unknown() : this(status: AuthStatus.unknown);
-  const AuthSession.unauthenticated() : this(status: AuthStatus.unauthenticated);
+  const AuthSession.unauthenticated()
+    : this(status: AuthStatus.unauthenticated);
 
   final AuthStatus status;
 

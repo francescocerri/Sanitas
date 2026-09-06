@@ -21,6 +21,10 @@ Package scelti (tutti attivamente mantenuti e ampiamente adottati):
 - `flutter_secure_storage` — persistenza del solo refresh token (Keychain/Keystore nativi; su web storage cifrato via WebCrypto).
 - `easy_localization` — i18n basato su file JSON per lingua, italiano default.
 - Nessuna libreria per il JWT: il decode dei claim (non serve verificarne la firma lato client) è scritto a mano con `dart:convert`, coerente con la filosofia di minimizzare le dipendenze già seguita nel backend.
+- `google_fonts` — tipografia curata ("Plus Jakarta Sans" invece del font di sistema) senza dover gestire manualmente file di font.
+- `flutter_animate` — animazioni componibili (transizioni fra schermate, ingresso dei form) senza scrivere `AnimationController` a mano per ogni caso.
+
+**Identità visiva**: dopo una prima iterazione con i soli widget Material di default (giudicata troppo anonima rispetto al requisito "punto di forza del progetto"), il tema (`committee_theme.dart`) personalizza anche tipografia, forma dei campi di testo (riempiti, arrotondati) e dei bottoni — non solo la palette colori. Le schermate di autenticazione condividono un involucro (`core/widgets/auth_shell.dart`) che su schermi larghi mostra un pannello brandizzato col gradiente del comitato accanto al form (pattern comune nelle app gestionali/SaaS moderne), e su mobile un monogramma (`brand_mark.dart`, l'iniziale del nome del comitato — nessun comitato è tenuto a fornire un logo) sopra il form.
 
 **Sessione**: l'access token vive solo in memoria (mai persistito), il refresh token in `flutter_secure_storage`. Al bootstrap dell'app si tenta un refresh silenzioso; se fallisce, l'utente va al login. Un interceptor `dio` ripete automaticamente una richiesta fallita per 401 dopo un refresh riuscito.
 

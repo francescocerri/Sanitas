@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// I dati di personalizzazione del comitato che ha fatto il fork di questo
 /// progetto: nome, lingua di default, colori del brand. Arrivano da
@@ -38,6 +39,15 @@ class CommitteeTheme {
   final Color secondary;
   final Color surface;
 
+  /// La prima lettera (maiuscola) del nome del comitato, es. "C" per "CRI
+  /// Pavullo": usata come "monogramma" al posto di un vero logo — nessun
+  /// comitato è tenuto a fornirci un file immagine, un'iniziale colorata è
+  /// un placeholder di marca pulito e comunissimo (Slack, Notion, Google
+  /// fanno lo stesso per gli avatar). Vedi `lib/core/widgets/brand_mark.dart`.
+  String get monogram => committeeName.trim().isEmpty
+      ? '?'
+      : committeeName.trim()[0].toUpperCase();
+
   /// Costruisce il `ThemeData` di Material 3 a partire da un solo colore
   /// "seme" (il primary del comitato): `ColorScheme.fromSeed` genera da solo
   /// tutte le sfumature necessarie (colori per bottoni, sfondi, testo su
@@ -45,13 +55,94 @@ class CommitteeTheme {
   /// Design — non dobbiamo scegliere a mano decine di colori per ogni tema.
   /// [brightness] separa questo asse (chiaro/scuro) dal colore del brand:
   /// stesso primary, ma una palette diversa in dark mode.
+  ///
+  /// Oltre ai colori, qui si personalizzano anche tipografia, forma dei
+  /// campi di testo e dei bottoni: è la differenza fra un'app che "sembra
+  /// Material di default" e una con un'identità propria, pur restando
+  /// dentro le regole di Material 3 (niente reinventato da zero).
   ThemeData toThemeData(Brightness brightness) {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: primary,
       brightness: brightness,
       surface: brightness == Brightness.light ? surface : null,
     );
-    return ThemeData(useMaterial3: true, colorScheme: colorScheme);
+
+    // "Plus Jakarta Sans" al posto del font di sistema: da solo cambia
+    // moltissimo la percezione di cura visiva, per zero lavoro di design.
+    // `GoogleFonts.xTextTheme` prende il text theme di Material di default
+    // e ne sostituisce solo il font, mantenendo tutte le dimensioni/pesi
+    // già bilanciati da Material Design.
+    final textTheme = GoogleFonts.plusJakartaSansTextTheme(
+      brightness == Brightness.light
+          ? ThemeData.light().textTheme
+          : ThemeData.dark().textTheme,
+    );
+
+    const fieldRadius = 16.0;
+    const buttonRadius = 16.0;
+
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: colorScheme,
+      textTheme: textTheme,
+      scaffoldBackgroundColor: colorScheme.surface,
+      appBarTheme: AppBarTheme(
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      // Campi di testo "riempiti" e arrotondati invece del sottile
+      // sottolineato di default: più moderni, più facili da toccare su
+      // mobile, e il colore di riempimento crea contrasto col resto della
+      // pagina senza bisogno di un bordo marcato.
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 18,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(fieldRadius),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(fieldRadius),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(fieldRadius),
+          borderSide: BorderSide(color: colorScheme.primary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(fieldRadius),
+          borderSide: BorderSide(color: colorScheme.error, width: 1.5),
+        ),
+        labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size.fromHeight(56),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(buttonRadius),
+          ),
+          textStyle: textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(buttonRadius),
+          ),
+        ),
+      ),
+    );
   }
 }
 

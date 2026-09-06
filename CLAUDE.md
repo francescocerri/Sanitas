@@ -63,7 +63,7 @@ Dipendenze esterne già scelte e perché:
 
 CI (obbligatoria prima del merge):
 - Go: `go build`, `go vet`, `go test`, `govulncheck` (tool ufficiale del team Go) — nessuna vulnerabilità nota deve passare.
-- Frontend: `flutter analyze`, `flutter test`, `flutter build web`.
+- Frontend: `dart format --set-exit-if-changed`, `flutter analyze`, `flutter test`, `flutter build web`.
 
 Aggiornamento dipendenze: **Renovate** (`renovate.json`, preset `config:recommended`) apre PR automatiche per Go modules, pacchetti pub (Dart/Flutter), immagini Docker base e versioni delle GitHub Actions. Le PR di sicurezza vanno prioritizzate rispetto alle altre.
 

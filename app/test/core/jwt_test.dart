@@ -44,7 +44,12 @@ void main() {
         'username': 'u',
         'roles': [],
         'permissions': ['users:manage'],
-        'exp': DateTime.now().toUtc().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000,
+        'exp':
+            DateTime.now()
+                .toUtc()
+                .add(const Duration(hours: 1))
+                .millisecondsSinceEpoch ~/
+            1000,
       });
 
       final claims = decodeJwtClaims(token);
@@ -59,7 +64,12 @@ void main() {
         'username': 'u',
         'roles': [],
         'permissions': [],
-        'exp': DateTime.now().toUtc().subtract(const Duration(minutes: 5)).millisecondsSinceEpoch ~/ 1000,
+        'exp':
+            DateTime.now()
+                .toUtc()
+                .subtract(const Duration(minutes: 5))
+                .millisecondsSinceEpoch ~/
+            1000,
       });
 
       expect(decodeJwtClaims(token).isExpired(), isTrue);
@@ -71,19 +81,35 @@ void main() {
         'username': 'u',
         'roles': [],
         'permissions': [],
-        'exp': DateTime.now().toUtc().add(const Duration(hours: 24)).millisecondsSinceEpoch ~/ 1000,
+        'exp':
+            DateTime.now()
+                .toUtc()
+                .add(const Duration(hours: 24))
+                .millisecondsSinceEpoch ~/
+            1000,
       });
 
       expect(decodeJwtClaims(token).isExpired(), isFalse);
     });
 
     test('lancia MalformedJwtException se il token non ha 3 parti', () {
-      expect(() => decodeJwtClaims('non-e-un-jwt'), throwsA(isA<MalformedJwtException>()));
+      expect(
+        () => decodeJwtClaims('non-e-un-jwt'),
+        throwsA(isA<MalformedJwtException>()),
+      );
     });
 
     test('lancia MalformedJwtException se manca il claim "exp"', () {
-      final token = _fakeJwt({'sub': 'u', 'username': 'u', 'roles': [], 'permissions': []});
-      expect(() => decodeJwtClaims(token), throwsA(isA<MalformedJwtException>()));
+      final token = _fakeJwt({
+        'sub': 'u',
+        'username': 'u',
+        'roles': [],
+        'permissions': [],
+      });
+      expect(
+        () => decodeJwtClaims(token),
+        throwsA(isA<MalformedJwtException>()),
+      );
     });
   });
 }

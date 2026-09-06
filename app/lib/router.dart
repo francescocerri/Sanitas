@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,6 +8,21 @@ import 'features/activate_account/activate_account_screen.dart';
 import 'features/login/login_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/splash/splash_screen.dart';
+
+/// Sostituisce il taglio netto di default fra una schermata e l'altra con
+/// una dissolvenza incrociata: piccolo dettaglio, ma è uno di quei tocchi
+/// che fanno percepire un'app come curata invece che abbozzata. Usata da
+/// ogni `GoRoute` sotto tramite `pageBuilder` invece del più semplice
+/// `builder` (che userebbe la transizione di default della piattaforma).
+CustomTransitionPage<void> _fadeTransitionPage(Widget child) {
+  return CustomTransitionPage<void>(
+    child: child,
+    transitionDuration: const Duration(milliseconds: 220),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(opacity: animation, child: child);
+    },
+  );
+}
 
 /// `go_router` costruisce la mappa delle route dell'app: quale schermata
 /// mostrare per ogni indirizzo (es. "/login" -> `LoginScreen`), e con
@@ -49,15 +65,29 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
     },
     routes: [
-      GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
-      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/',
+        pageBuilder: (context, state) =>
+            _fadeTransitionPage(const SplashScreen()),
+      ),
+      GoRoute(
+        path: '/login',
+        pageBuilder: (context, state) =>
+            _fadeTransitionPage(const LoginScreen()),
+      ),
       GoRoute(
         path: '/attiva-account',
-        builder: (context, state) => ActivateAccountScreen(
-          inviteToken: state.uri.queryParameters['token'],
+        pageBuilder: (context, state) => _fadeTransitionPage(
+          ActivateAccountScreen(
+            inviteToken: state.uri.queryParameters['token'],
+          ),
         ),
       ),
-      GoRoute(path: '/profilo', builder: (context, state) => const ProfileScreen()),
+      GoRoute(
+        path: '/profilo',
+        pageBuilder: (context, state) =>
+            _fadeTransitionPage(const ProfileScreen()),
+      ),
     ],
   );
 });

@@ -62,7 +62,10 @@ class AuthController extends Notifier<AuthSession> {
   }
 
   /// Chiamato dalla schermata di login col form compilato dall'utente.
-  Future<void> login({required String identifier, required String password}) async {
+  Future<void> login({
+    required String identifier,
+    required String password,
+  }) async {
     try {
       final response = await _rawDio.post<Map<String, dynamic>>(
         '/v1/login',
@@ -70,10 +73,13 @@ class AuthController extends Notifier<AuthSession> {
       );
       await _applyAuthTokens(response.data!);
     } on DioException catch (e) {
-      throw ApiException.fromDioException(e, statusToKey: const {
-        400: 'errors.invalid_payload',
-        401: 'errors.invalid_credentials',
-      });
+      throw ApiException.fromDioException(
+        e,
+        statusToKey: const {
+          400: 'errors.invalid_payload',
+          401: 'errors.invalid_credentials',
+        },
+      );
     }
   }
 
@@ -105,10 +111,13 @@ class AuthController extends Notifier<AuthSession> {
       );
       await _applyAuthTokens(response.data!);
     } on DioException catch (e) {
-      throw ApiException.fromDioException(e, statusToKey: const {
-        400: 'errors.invalid_payload',
-        401: 'errors.invalid_or_expired_token',
-      });
+      throw ApiException.fromDioException(
+        e,
+        statusToKey: const {
+          400: 'errors.invalid_payload',
+          401: 'errors.invalid_or_expired_token',
+        },
+      );
     }
   }
 
@@ -138,7 +147,10 @@ class AuthController extends Notifier<AuthSession> {
     final savedRefreshToken = await _tokenStore.readRefreshToken();
     if (savedRefreshToken != null) {
       try {
-        await _rawDio.post<void>('/v1/logout', data: {'refresh_token': savedRefreshToken});
+        await _rawDio.post<void>(
+          '/v1/logout',
+          data: {'refresh_token': savedRefreshToken},
+        );
       } on DioException {
         // Ignorato volutamente: vedi commento sopra.
       }
@@ -152,17 +164,23 @@ class AuthController extends Notifier<AuthSession> {
   /// automatico — vedi `docs/funzionale/registry.md`). Non modifica lo
   /// stato di sessione: dopo l'attivazione l'utente fa comunque login
   /// normalmente con le credenziali appena impostate.
-  Future<void> activateAccount({required String token, required String password}) async {
+  Future<void> activateAccount({
+    required String token,
+    required String password,
+  }) async {
     try {
       await _rawDio.post<void>(
         '/v1/users/activate',
         data: {'token': token, 'password': password},
       );
     } on DioException catch (e) {
-      throw ApiException.fromDioException(e, statusToKey: const {
-        400: 'errors.invalid_payload',
-        401: 'errors.invalid_or_expired_token',
-      });
+      throw ApiException.fromDioException(
+        e,
+        statusToKey: const {
+          400: 'errors.invalid_payload',
+          401: 'errors.invalid_or_expired_token',
+        },
+      );
     }
   }
 }

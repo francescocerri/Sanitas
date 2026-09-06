@@ -35,6 +35,7 @@ Per iOS/Android, sostituire `-d chrome` con il device/simulatore desiderato (`fl
 ## Test
 
 ```bash
+dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test
 ```
@@ -55,7 +56,8 @@ lib/
   router.dart            # go_router: mappa delle route + redirect di autenticazione
   core/
     auth/                 # sessione (access token in memoria, refresh token sicuro)
-    theme/                # tema per-comitato + preferenza chiaro/scuro
+    theme/                # tema per-comitato (colori, font) + preferenza chiaro/scuro
+    widgets/               # componenti condivisi: monogramma, layout auth, banner, toggle tema
     api_client.dart        # client HTTP autenticato (Bearer + refresh automatico su 401)
     raw_api_client.dart     # client HTTP "nudo" per login/refresh/logout/attivazione
     jwt.dart               # decodifica claim JWT (nessuna libreria esterna)
@@ -73,4 +75,6 @@ scripts/
 ## Multilingua e tema
 
 - **Lingua**: `easy_localization`, italiano di default (sovrascrivibile per comitato via `default_locale` in `config/<slug>/app/theme.json`). Ogni stringa visibile all'utente passa da `assets/translations/*.json`, mai testo hardcoded in una lingua nel codice.
-- **Colori**: personalizzabili per comitato (vedi sopra). Chiaro/scuro è invece una preferenza personale dell'utente, persistita separatamente.
+- **Colori**: personalizzabili per comitato (vedi sopra), applicati anche a tipografia (`google_fonts`, "Plus Jakarta Sans") e forma di campi/bottoni in `committee_theme.dart` — non solo la palette di Material di default. Chiaro/scuro è invece una preferenza personale dell'utente, persistita separatamente (vedi `theme_mode_controller.dart`).
+- **Identità visiva**: nessun comitato è tenuto a fornire un logo — `BrandMark` (`core/widgets/brand_mark.dart`) mostra l'iniziale del nome del comitato in un cerchio colorato, sostituibile in futuro con un'immagine vera.
+- **Animazioni**: transizioni fra schermate e ingresso dei form con `flutter_animate`, sobrie e coerenti invece che assenti o eccessive.

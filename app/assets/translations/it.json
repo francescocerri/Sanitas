@@ -9,6 +9,8 @@
   },
   "login": {
     "title": "Accedi",
+    "subtitle": "Inserisci le tue credenziali per continuare",
+    "tagline": "Gestisci turni e anagrafica in un unico posto",
     "identifier_label": "Email o username",
     "password_label": "Password",
     "submit": "Accedi",
@@ -17,6 +19,8 @@
   },
   "activate_account": {
     "title": "Attiva il tuo account",
+    "subtitle": "Imposta una password per accedere per la prima volta",
+    "tagline": "Benvenuto: manca solo un ultimo passo",
     "password_label": "Nuova password",
     "confirm_password_label": "Conferma password",
     "submit": "Attiva account",
@@ -29,7 +33,7 @@
     "email_label": "Email",
     "username_label": "Username",
     "roles_label": "Ruoli",
-    "member_since": "Iscritto dal {date}",
+    "member_since_label": "Iscritto dal",
     "change_password_title": "Cambia password",
     "old_password_label": "Password attuale",
     "new_password_label": "Nuova password",

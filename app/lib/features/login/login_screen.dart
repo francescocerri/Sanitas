@@ -1,9 +1,12 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_exception.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/widgets/auth_shell.dart';
+import '../../core/widgets/error_banner.dart';
 
 /// `ConsumerStatefulWidget` = uno `StatefulWidget` normale di Flutter (serve
 /// perché questo widget ha uno stato tutto suo: il testo nei campi, se sta
@@ -26,6 +29,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
 
   bool _isSubmitting = false;
+  bool _obscurePassword = true;
   String? _errorTranslationKey;
 
   @override
@@ -50,7 +54,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      await ref.read(authControllerProvider.notifier).login(
+      await ref
+          .read(authControllerProvider.notifier)
+          .login(
             identifier: _identifierController.text.trim(),
             password: _passwordController.text,
           );
@@ -66,71 +72,95 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          // Limita la larghezza del form su schermi larghi (web/desktop):
-          // senza, un `TextField` si allargherebbe fino a riempire tutta la
-          // finestra, illeggibile su un monitor largo.
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'login.title'.tr(),
-                    style: Theme.of(context).textTheme.headlineMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  if (_errorTranslationKey != null) ...[
+    // `flutter_animate` applica animazioni componibili con una sintassi a
+    // catena (`.animate().fadeIn()...`): qui ogni gruppo di elementi parte
+    // leggermente in ritardo rispetto al precedente ("stagger"), un effetto
+    // a cascata molto comune nelle UI curate invece di far comparire tutto
+    // insieme di scatto.
+    return AuthShell(
+      subtitle: 'login.tagline'.tr(),
+      child:
+          Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     Text(
-                      _errorTranslationKey!.tr(),
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
-                      textAlign: TextAlign.center,
+                      'login.title'.tr(),
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'login.subtitle'.tr(),
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    if (_errorTranslationKey != null) ...[
+                      ErrorBanner(message: _errorTranslationKey!.tr()),
+                      const SizedBox(height: 16),
+                    ],
+                    TextFormField(
+                      controller: _identifierController,
+                      decoration: InputDecoration(
+                        labelText: 'login.identifier_label'.tr(),
+                        prefixIcon: const Icon(Icons.alternate_email_rounded),
+                      ),
+                      autofillHints: const [AutofillHints.username],
+                      validator: (value) =>
+                          (value == null || value.trim().isEmpty)
+                          ? 'login.identifier_required'.tr()
+                          : null,
                     ),
                     const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _passwordController,
+                      decoration: InputDecoration(
+                        labelText: 'login.password_label'.tr(),
+                        prefixIcon: const Icon(Icons.lock_outline_rounded),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                        ),
+                      ),
+                      obscureText: _obscurePassword,
+                      autofillHints: const [AutofillHints.password],
+                      // Il login va provato anche premendo Invio nell'ultimo
+                      // campo, non solo cliccando il bottone.
+                      onFieldSubmitted: (_) => _submit(),
+                      validator: (value) => (value == null || value.isEmpty)
+                          ? 'login.password_required'.tr()
+                          : null,
+                    ),
+                    const SizedBox(height: 28),
+                    FilledButton(
+                      onPressed: _isSubmitting ? null : _submit,
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text('login.submit'.tr()),
+                    ),
                   ],
-                  TextFormField(
-                    controller: _identifierController,
-                    decoration: InputDecoration(labelText: 'login.identifier_label'.tr()),
-                    autofillHints: const [AutofillHints.username],
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty) ? 'login.identifier_required'.tr() : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    decoration: InputDecoration(labelText: 'login.password_label'.tr()),
-                    obscureText: true,
-                    autofillHints: const [AutofillHints.password],
-                    // Il login va provato anche premendo Invio nell'ultimo
-                    // campo, non solo cliccando il bottone.
-                    onFieldSubmitted: (_) => _submit(),
-                    validator: (value) =>
-                        (value == null || value.isEmpty) ? 'login.password_required'.tr() : null,
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _isSubmitting ? null : _submit,
-                    child: _isSubmitting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text('login.submit'.tr()),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+                ),
+              )
+              .animate()
+              .fadeIn(delay: 100.ms, duration: 300.ms)
+              .slideY(begin: 0.03, end: 0),
     );
   }
 }

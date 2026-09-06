@@ -38,7 +38,8 @@ final apiDioProvider = Provider<Dio>((ref) {
         // `error.requestOptions.extra` è un posto libero per passare dati
         // fra le fasi dell'interceptor: lo usiamo come "guardia" per non
         // ritentare all'infinito se anche la richiesta RIPETUTA torna 401.
-        final alreadyRetried = error.requestOptions.extra['retriedAfterRefresh'] == true;
+        final alreadyRetried =
+            error.requestOptions.extra['retriedAfterRefresh'] == true;
 
         if (!isUnauthorized || alreadyRetried) {
           handler.next(error);

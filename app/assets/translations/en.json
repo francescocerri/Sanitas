@@ -9,6 +9,8 @@
   },
   "login": {
     "title": "Log in",
+    "subtitle": "Enter your credentials to continue",
+    "tagline": "Manage shifts and member records in one place",
     "identifier_label": "Email or username",
     "password_label": "Password",
     "submit": "Log in",
@@ -17,6 +19,8 @@
   },
   "activate_account": {
     "title": "Activate your account",
+    "subtitle": "Set a password to log in for the first time",
+    "tagline": "Welcome: just one more step",
     "password_label": "New password",
     "confirm_password_label": "Confirm password",
     "submit": "Activate account",
@@ -29,7 +33,7 @@
     "email_label": "Email",
     "username_label": "Username",
     "roles_label": "Roles",
-    "member_since": "Member since {date}",
+    "member_since_label": "Member since",
     "change_password_title": "Change password",
     "old_password_label": "Current password",
     "new_password_label": "New password",

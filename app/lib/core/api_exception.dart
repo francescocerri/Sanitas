@@ -48,7 +48,10 @@ class ApiException implements Exception {
       return ApiException(statusToKey[status]!, debugMessage: backendMessage);
     }
 
-    return ApiException('errors.unknown', debugMessage: backendMessage ?? e.message);
+    return ApiException(
+      'errors.unknown',
+      debugMessage: backendMessage ?? e.message,
+    );
   }
 
   static String? _extractBackendErrorMessage(DioException e) {
