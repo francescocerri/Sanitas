@@ -2,8 +2,8 @@
 
 ## Chi può fare cosa oggi
 
-- **Chiunque abbia un account attivo** può accedere (login) e cambiare la propria password.
-- **Un amministratore** (permesso di sistema, non un ruolo organizzativo) può creare un nuovo account per un volontario/socio, assegnandogli uno o più ruoli. L'account nasce "in attesa": il nuovo utente riceve un link di attivazione con cui imposta la propria password al primo accesso.
+- **Chiunque abbia un account attivo** può accedere (login), vedere il proprio profilo (email, username, ruoli) e cambiare la propria password — tramite l'app Sanitas (`app/`, vedi [ADR-0022](../adr/0022-frontend-flutter.md)), non solo da API.
+- **Un amministratore** (permesso di sistema, non un ruolo organizzativo) può creare un nuovo account per un volontario/socio, assegnandogli uno o più ruoli, e ricevere il link di attivazione da inoltrare a mano al nuovo utente. **Oggi questa operazione si fa solo da API** (`POST /v1/users`, es. via curl/Postman): non esiste ancora un pannello admin nell'app (voce di backlog separata). Chi riceve il link di attivazione lo apre invece direttamente nell'app, che gli mostra il form per impostare la propria password al primo accesso.
 - **Non esiste ancora l'auto-registrazione**: nessuno può crearsi da solo un account, deve farlo un amministratore.
 
 ## Cosa manca oggi (non ancora disponibile)

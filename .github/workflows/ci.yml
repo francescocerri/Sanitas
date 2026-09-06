@@ -44,19 +44,21 @@ jobs:
           go run github.com/swaggo/swag/cmd/swag@v1.16.4 init -g cmd/server/main.go -d . -o api --parseInternal --parseDependency
           git diff --exit-code -- api/
 
-  web:
+  app:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: web
+        working-directory: app
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: subosito/flutter-action@v2
         with:
-          node-version-file: web/.nvmrc
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - run: npm run build
-      - run: npm run lint
-      - run: npm audit --audit-level=high
+          flutter-version: '3.47.2'
+          channel: stable
+      - name: Sincronizza il tema del comitato (config/pavullo/app/theme.json)
+        run: ./scripts/sync_committee_config.sh
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed .
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build web --dart-define-from-file=env.example.json

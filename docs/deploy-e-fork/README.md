@@ -6,7 +6,8 @@ Tutto quello che serve per far partire il progetto da zero, in ordine — sia pe
 
 1. Fork del repository.
 2. Creare `config/<nuovo-comitato>/` copiando la struttura di `config/pavullo/` e sostituendo i dati (es. `registry/roles.json` con i ruoli reali della propria associazione — vedi [ADR-0012](../adr/0012-ruoli-come-dati-seed.md)).
-3. Scegliere la licenza se diversa da MIT (vedi `LICENSE`).
+3. Personalizzare i colori e il nome del comitato per l'app in `config/<nuovo-comitato>/app/theme.json` (stessa struttura di `config/pavullo/app/theme.json`) — vedi [ADR-0022](../adr/0022-frontend-flutter.md) e `app/README.md` per come viene sincronizzato prima della build.
+4. Scegliere la licenza se diversa da MIT (vedi `LICENSE`).
 
 ## 2. Segreti da generare (mai committati)
 
@@ -29,7 +30,7 @@ Setup completo (Docker, Cloudflare Tunnel, GitHub Actions self-hosted runner) de
 
 - `curl` sugli endpoint `/healthz` di ogni servizio.
 - Login con l'amministratore bootstrap (`registry`), creazione di un utente di prova.
-- Frontend (`web/`) raggiungibile e che mostra dati reali.
+- App (`app/`) raggiungibile, login funzionante, colori del proprio comitato visibili (non quelli di default).
 
 ## Note per chi forka
 

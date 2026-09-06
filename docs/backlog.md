@@ -24,6 +24,17 @@ Quando un'attività è "una feature non banale" (per la convenzione in `CLAUDE.m
 - [ ] **Pulizia dei token scaduti/usati**: righe di `tokens` (invite, refresh, in futuro password-reset) restano nel DB a tempo indeterminato dopo `used_at`/`expires_at` — introdurre un job periodico (o una query di cleanup all'avvio) che le cancella. Non compromette la correttezza oggi, solo la crescita nel tempo della tabella.
 - [x] **`shifts` verifica i JWT**: tutti gli endpoint `/v1/shifts*` richiedono un token valido, verificato localmente contro la JWKS di `registry` (nessuna chiamata sincrona per ogni richiesta). Vedi [ADR-0017](adr/0017-shifts-verifica-jwt.md). Solo autenticazione — l'autorizzazione granulare per ruolo resta la voce già separata qui sotto.
 
+## Frontend (`app/`, Flutter)
+
+- [ ] **Scaffold del progetto Flutter** (`app/`, sostituisce il precedente scaffold React in `web/`): routing (`go_router`), stato/sessione (`flutter_riverpod`), client HTTP con interceptor di refresh (`dio`), i18n italiano/inglese (`easy_localization`), tema per-comitato caricato da `config/<slug>/app/theme.json`. Vedi [ADR-0022](adr/0022-frontend-flutter.md).
+- [ ] **Login**: form identifier+password contro `POST /v1/login` di `registry`, gestione errori localizzata, sessione con access token in memoria + refresh token in `flutter_secure_storage`.
+- [ ] **Attivazione account** da link di invito (`POST /v1/users/activate`) — oggi il link lo inoltra a mano un admin (vedi `docs/funzionale/registry.md`), serve solo la schermata che lo consuma.
+- [ ] **Profilo self-service**: `GET /v1/me`, cambio password (`POST /v1/password/change`), logout (`POST /v1/logout`).
+- [ ] **Refresh automatico**: interceptor `dio` su 401 + refresh proattivo allo startup dell'app.
+- [ ] **Test**: unit test su decode JWT e sul controller di sessione, widget test minimi sulle 3 schermate.
+- [ ] **Pannello admin utenti/ruoli** (creazione utenti, assegnazione ruoli, lista utenti) — fuori perimetro della prima iterazione, richiede anche un nuovo endpoint backend (`GET /v1/roles`, oggi non esiste) per popolare un selettore ruoli. Da pianificare a parte.
+- [ ] **Strategia di hosting/distribuzione**: come si serve la build web in produzione (oggi `deploy/docker-compose.yml` non ha alcun servizio frontend) e come si arriva a una pubblicazione reale su App Store/Google Play (account sviluppatore, firma, CI di release) — non affrontato nella prima iterazione.
+
 ## Database / ORM
 
 - [x] **Fase 1**: consolidamento su un unico Postgres condiviso tra `shifts` e `registry`, uno schema per servizio, FK reale `shifts.shifts.volunteer_id → registry.users.id` (vedi [ADR-0014](adr/0014-database-condiviso-schema-separati.md)). `pgx` invariato in entrambi i servizi.

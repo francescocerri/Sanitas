@@ -25,7 +25,7 @@ Prima di scrivere codice per una nuova feature, chiediti: "questo assumerebbe qu
 ## Stack tecnico
 
 - **Backend**: Go. Ogni microservizio è un modulo Go indipendente (`module github.com/francescocerri/sanitas/services/<nome>`).
-- **Frontend**: React + TypeScript (Vite).
+- **Frontend**: Flutter (Dart) — un solo codebase per web, iOS e Android, vedi [ADR-0022](docs/adr/0022-frontend-flutter.md).
 
 ## Struttura repo
 
@@ -34,7 +34,7 @@ services/<nome-servizio>/   # shifts, registry (implementati); mezzi-magazzino, 
                              # ciascuno Go module a sé stante, con cmd/server, internal/, api/, Dockerfile
                              # api/ = spec Swagger generata dalle annotazioni sopra gli handler (swaggo/swag), servita su /docs/
                              # schema DB: entrambi via GORM AutoMigrate — vedi ADR-0019/0020
-web/                         # app React (Vite + TS)
+app/                         # app Flutter (Dart) — web, iOS, Android, vedi ADR-0022
 config/<committee-slug>/    # override per-comitato (es. config/pavullo/registry/roles.json) — creata via via che servono
 docs/
   backlog.md                # attività pianificate ma non ancora fatte — fonte di verità sul "cosa manca"
@@ -42,7 +42,7 @@ docs/
   funzionale/                # cosa si può fare oggi sull'applicativo, per area, dal punto di vista di chi lo usa
   deploy-e-fork/             # percorso completo per far partire il progetto da zero (fork, segreti, deploy, verifica)
 deploy/                     # docker-compose.yml, .env.example, README setup Raspberry Pi
-.github/workflows/          # ci.yml (build/test/vet/govulncheck/npm audit), deploy.yml (self-hosted runner)
+.github/workflows/          # ci.yml (build/test/vet/govulncheck, flutter analyze/test), deploy.yml (self-hosted runner)
 ```
 
 ## Target di deploy e costo
@@ -63,9 +63,9 @@ Dipendenze esterne già scelte e perché:
 
 CI (obbligatoria prima del merge):
 - Go: `go build`, `go vet`, `go test`, `govulncheck` (tool ufficiale del team Go) — nessuna vulnerabilità nota deve passare.
-- Frontend: `npm run build`, `npm run lint`, `npm audit --audit-level=high`.
+- Frontend: `dart format --set-exit-if-changed`, `flutter analyze`, `flutter test`, `flutter build web`.
 
-Aggiornamento dipendenze: **Renovate** (`renovate.json`, preset `config:recommended`) apre PR automatiche per Go modules, npm, immagini Docker base e versioni delle GitHub Actions. Le PR di sicurezza vanno prioritizzate rispetto alle altre.
+Aggiornamento dipendenze: **Renovate** (`renovate.json`, preset `config:recommended`) apre PR automatiche per Go modules, pacchetti pub (Dart/Flutter), immagini Docker base e versioni delle GitHub Actions. Le PR di sicurezza vanno prioritizzate rispetto alle altre.
 
 ## Documentazione
 
