@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 /// Banner d'errore riusato identico in tutte le schermate con un form
 /// (login, attivazione account, cambio password): sfondo tenue del colore
@@ -14,29 +15,36 @@ class ErrorBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.error_outline_rounded,
-            color: colorScheme.onErrorContainer,
-            size: 20,
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: colorScheme.errorContainer,
+            borderRadius: BorderRadius.circular(12),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(color: colorScheme.onErrorContainer),
-            ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.error_outline_rounded,
+                color: colorScheme.onErrorContainer,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(color: colorScheme.onErrorContainer),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        )
+        // Ogni volta che questo banner COMPARE (es. dopo un tentativo di
+        // login fallito) riparte da capo con dissolvenza + un piccolo
+        // "scatto" orizzontale (`shake`): un tocco leggero che richiama
+        // l'attenzione senza essere invadente.
+        .animate()
+        .fadeIn(duration: 200.ms)
+        .shake(hz: 4, curve: Curves.easeInOut, duration: 300.ms);
   }
 }
 
@@ -52,28 +60,35 @@ class SuccessBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.check_circle_outline_rounded,
-            color: colorScheme.onPrimaryContainer,
-            size: 20,
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(12),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(color: colorScheme.onPrimaryContainer),
-            ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.check_circle_outline_rounded,
+                color: colorScheme.onPrimaryContainer,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(color: colorScheme.onPrimaryContainer),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        )
+        // Stessa animazione di ingresso del banner d'errore, ma senza lo
+        // "shake" (un successo non ha bisogno di richiamare l'attenzione
+        // con la stessa urgenza di un errore) — solo una dissolvenza con
+        // un leggero movimento verso l'alto.
+        .animate()
+        .fadeIn(duration: 200.ms)
+        .slideY(begin: 0.15, end: 0, curve: Curves.easeOutCubic);
   }
 }

@@ -61,11 +61,27 @@ class CommitteeTheme {
   /// Material di default" e una con un'identità propria, pur restando
   /// dentro le regole di Material 3 (niente reinventato da zero).
   ThemeData toThemeData(Brightness brightness) {
+    // `ColorScheme.fromSeed` non usa MAI il colore che gli passi così com'è
+    // per il ruolo "primary": lo rimappa sempre a un tono fisso (per
+    // rispettare il contrasto testo/sfondo previsto da Material 3),
+    // indipendentemente dalla "variante" scelta — anche con `fidelity`
+    // (che pure aiuta a preservare tonalità/saturazione) il risultato resta
+    // più tenue del colore esatto del brand.
     final colorScheme = ColorScheme.fromSeed(
       seedColor: primary,
       brightness: brightness,
       surface: brightness == Brightness.light ? surface : null,
+      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
     );
+
+    // Il colore "vero" del comitato, usato senza filtri, funziona bene sullo
+    // sfondo SCURO (dove prima sembrava spento) ma è troppo aggressivo su
+    // sfondo bianco: nel tema chiaro si lascia invece la versione più tenue
+    // già calcolata da Material 3, pensata apposta per restare leggibile e
+    // bilanciata su superfici chiare.
+    final tunedColorScheme = brightness == Brightness.dark
+        ? colorScheme.copyWith(primary: primary, onPrimary: Colors.white)
+        : colorScheme;
 
     // "Plus Jakarta Sans" al posto del font di sistema: da solo cambia
     // moltissimo la percezione di cura visiva, per zero lavoro di design.
@@ -83,12 +99,12 @@ class CommitteeTheme {
 
     return ThemeData(
       useMaterial3: true,
-      colorScheme: colorScheme,
+      colorScheme: tunedColorScheme,
       textTheme: textTheme,
-      scaffoldBackgroundColor: colorScheme.surface,
+      scaffoldBackgroundColor: tunedColorScheme.surface,
       appBarTheme: AppBarTheme(
-        backgroundColor: colorScheme.surface,
-        foregroundColor: colorScheme.onSurface,
+        backgroundColor: tunedColorScheme.surface,
+        foregroundColor: tunedColorScheme.onSurface,
         elevation: 0,
         scrolledUnderElevation: 0,
         titleTextStyle: textTheme.titleLarge?.copyWith(
@@ -101,7 +117,9 @@ class CommitteeTheme {
       // pagina senza bisogno di un bordo marcato.
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        fillColor: tunedColorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.4,
+        ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 20,
           vertical: 18,
@@ -116,13 +134,13 @@ class CommitteeTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(fieldRadius),
-          borderSide: BorderSide(color: colorScheme.primary, width: 2),
+          borderSide: BorderSide(color: tunedColorScheme.primary, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(fieldRadius),
-          borderSide: BorderSide(color: colorScheme.error, width: 1.5),
+          borderSide: BorderSide(color: tunedColorScheme.error, width: 1.5),
         ),
-        labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+        labelStyle: TextStyle(color: tunedColorScheme.onSurfaceVariant),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(

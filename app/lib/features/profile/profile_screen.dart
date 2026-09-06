@@ -7,6 +7,7 @@ import '../../core/api_client.dart';
 import '../../core/api_exception.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/widgets/error_banner.dart';
+import '../../core/widgets/password_visibility_toggle.dart';
 import '../../core/widgets/theme_toggle_button.dart';
 import 'user_profile.dart';
 
@@ -302,12 +303,8 @@ class _ChangePasswordFormState extends ConsumerState<_ChangePasswordForm> {
             decoration: InputDecoration(
               labelText: 'profile.old_password_label'.tr(),
               prefixIcon: const Icon(Icons.lock_outline_rounded),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureOld
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                ),
+              suffixIcon: PasswordVisibilityToggle(
+                obscured: _obscureOld,
                 onPressed: () => setState(() => _obscureOld = !_obscureOld),
               ),
             ),
@@ -323,12 +320,8 @@ class _ChangePasswordFormState extends ConsumerState<_ChangePasswordForm> {
             decoration: InputDecoration(
               labelText: 'profile.new_password_label'.tr(),
               prefixIcon: const Icon(Icons.lock_reset_rounded),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureNew
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                ),
+              suffixIcon: PasswordVisibilityToggle(
+                obscured: _obscureNew,
                 onPressed: () => setState(() => _obscureNew = !_obscureNew),
               ),
             ),

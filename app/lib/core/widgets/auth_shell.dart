@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +6,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/committee_theme.dart';
 import 'brand_mark.dart';
 import 'theme_toggle_button.dart';
+
+/// Piccola scritta "SANITAS" sopra il monogramma del comitato: il comitato
+/// (es. "CRI Pavullo") resta il protagonista visivo — è la sua app, non
+/// quella di Sanitas — ma il nome della piattaforma resta comunque leggibile
+/// da qualche parte, così chi la usa sa cosa sta usando. "Sanitas" non è un
+/// dato di configurazione del comitato (non viola il contratto di
+/// forkabilità in `CLAUDE.md`): è il nome del progetto software stesso,
+/// scelto apposta neutro rispetto al brand di un singolo comitato (vedi
+/// ADR-0001) — resta lo stesso per ogni fork, non è personalizzabile.
+class _SanitasWordmark extends StatelessWidget {
+  const _SanitasWordmark({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'app.title'.tr().toUpperCase(),
+      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+        color: color,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 3,
+      ),
+    );
+  }
+}
 
 /// Involucro condiviso dalle schermate di autenticazione (login, attivazione
 /// account): su schermi larghi (web/desktop) mostra un pannello brandizzato
@@ -43,6 +70,14 @@ class AuthShell extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (!isWide) ...[
+                        Center(
+                          child: _SanitasWordmark(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         const Center(child: BrandMark(size: 72)),
                         const SizedBox(height: 32),
                       ],
@@ -98,6 +133,8 @@ class AuthShell extends ConsumerWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      const _SanitasWordmark(color: Colors.white70),
+                      const SizedBox(height: 16),
                       const BrandMark(size: 96, inverse: true),
                       const SizedBox(height: 28),
                       Text(
