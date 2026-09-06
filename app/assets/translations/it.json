@@ -26,7 +26,9 @@
     "submit": "Attiva account",
     "success": "Account attivato: ora puoi accedere",
     "missing_token": "Link di attivazione non valido: token mancante",
-    "passwords_dont_match": "Le password non coincidono"
+    "passwords_dont_match": "Le password non coincidono",
+    "password_requirements": "La password deve contenere almeno 8 caratteri",
+    "password_invalid": "Usa almeno 8 caratteri"
   },
   "profile": {
     "title": "Il mio profilo",

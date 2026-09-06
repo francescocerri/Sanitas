@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -38,6 +40,15 @@ class _ActivateAccountScreenState extends ConsumerState<ActivateAccountScreen> {
   bool _activated = false;
   String? _errorTranslationKey;
 
+  bool get _isPasswordValid =>
+      _passwordController.text.length >= 8 &&
+      utf8.encode(_passwordController.text).length <= 72;
+
+  bool get _canSubmit =>
+      !_isSubmitting &&
+      _isPasswordValid &&
+      _confirmPasswordController.text == _passwordController.text;
+
   @override
   void dispose() {
     _passwordController.dispose();
@@ -46,7 +57,7 @@ class _ActivateAccountScreenState extends ConsumerState<ActivateAccountScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_canSubmit || !_formKey.currentState!.validate()) return;
 
     setState(() {
       _isSubmitting = true;
@@ -129,6 +140,8 @@ class _ActivateAccountScreenState extends ConsumerState<ActivateAccountScreen> {
   Widget _buildForm(BuildContext context) {
     return Form(
           key: _formKey,
+          onChanged: () => setState(() {}),
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -163,9 +176,19 @@ class _ActivateAccountScreenState extends ConsumerState<ActivateAccountScreen> {
                 ),
                 obscureText: _obscurePassword,
                 autofillHints: const [AutofillHints.newPassword],
-                validator: (value) => (value == null || value.length < 8)
-                    ? 'login.password_required'.tr()
+                validator: (_) => !_isPasswordValid
+                    ? (_passwordController.text.length < 8
+                          ? 'activate_account.password_invalid'.tr()
+                          : 'activate_account.password_max_length'.tr())
                     : null,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${'activate_account.password_requirements'.tr()}. '
+                '${'activate_account.password_max_length'.tr()}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -185,7 +208,7 @@ class _ActivateAccountScreenState extends ConsumerState<ActivateAccountScreen> {
               ),
               const SizedBox(height: 28),
               FilledButton(
-                onPressed: _isSubmitting ? null : _submit,
+                onPressed: _canSubmit ? _submit : null,
                 child: _isSubmitting
                     ? const SizedBox(
                         width: 20,

@@ -6,6 +6,10 @@
 - **Un amministratore** (permesso di sistema, non un ruolo organizzativo) può creare un nuovo account per un volontario/socio, assegnandogli uno o più ruoli, e ricevere il link di attivazione da inoltrare a mano al nuovo utente. **Oggi questa operazione si fa solo da API** (`POST /v1/users`, es. via curl/Postman): non esiste ancora un pannello admin nell'app (voce di backlog separata). Chi riceve il link di attivazione lo apre invece direttamente nell'app, che gli mostra il form per impostare la propria password al primo accesso.
 - **Non esiste ancora l'auto-registrazione**: nessuno può crearsi da solo un account, deve farlo un amministratore.
 
+## Attivazione: scelta della password
+
+Il form mostra i requisiti prima dell'invio: almeno 8 caratteri, massimo 72 byte (lettere accentate ed emoji possono occupare più byte), senza obbligo di maiuscole, numeri o simboli. Il pulsante «Attiva account» resta disabilitato finché la password non rispetta i requisiti e la conferma non coincide; si disabilita anche durante l'invio.
+
 ## Cosa manca oggi (non ancora disponibile)
 
 - **Invio automatico dell'email di invito**: oggi il link di attivazione viene mostrato solo a chi crea l'account (l'amministratore), che deve inoltrarlo a mano al volontario (WhatsApp, di persona, ecc.). L'invio automatico via email è previsto ma non ancora fatto.
