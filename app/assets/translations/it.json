@@ -30,6 +30,24 @@
     "password_requirements": "La password deve contenere almeno 8 caratteri",
     "password_invalid": "Usa almeno 8 caratteri"
   },
+  "home": {
+    "title": "Home",
+    "greeting": "Bentornato, {username}",
+    "subtitle": "Scegli cosa fare",
+    "profile_title": "Il mio profilo",
+    "profile_subtitle": "Dati personali e password",
+    "create_user_title": "Nuovo utente",
+    "create_user_subtitle": "Crea un account e assegna i ruoli",
+    "admin_badge": "Solo admin",
+    "coming_soon_label": "In arrivo",
+    "coming_soon_badge": "Prossimamente",
+    "shifts_title": "Turni",
+    "shifts_subtitle": "Pianificazione e disponibilità",
+    "fleet_title": "Mezzi e magazzino",
+    "fleet_subtitle": "Veicoli, materiali e manutenzioni",
+    "emergencies_title": "Servizi ed emergenze",
+    "emergencies_subtitle": "Gestione dei servizi in corso"
+  },
   "profile": {
     "title": "Il mio profilo",
     "email_label": "Email",

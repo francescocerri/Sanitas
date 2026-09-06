@@ -158,9 +158,9 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          tooltip: 'profile.title'.tr(),
+          tooltip: 'home.title'.tr(),
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: _submitting ? null : () => context.go('/profilo'),
+          onPressed: _submitting ? null : () => context.go('/home'),
         ),
         title: Text('create_user.title'.tr()),
         actions: const [ThemeToggleButton(), SizedBox(width: 8)],

@@ -5,9 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/auth/auth_state.dart';
 import 'features/activate_account/activate_account_screen.dart';
+import 'features/create_user/create_user_screen.dart';
+import 'features/home/home_screen.dart';
 import 'features/login/login_screen.dart';
 import 'features/profile/profile_screen.dart';
-import 'features/create_user/create_user_screen.dart';
 import 'features/splash/splash_screen.dart';
 
 /// Sostituisce il taglio netto di default fra una schermata e l'altra con
@@ -64,12 +65,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         case AuthStatus.authenticated:
           if (location == '/users/new' &&
               !(authState.claims?.hasPermission('users:manage') ?? false)) {
-            return '/profilo';
+            return '/home';
           }
-          return (goingToLogin || goingToSplash) ? '/profilo' : null;
+          // Dopo il login si atterra sulla home (un punto di partenza da
+          // cui raggiungere le varie aree dell'app), non più dritti sul
+          // profilo — quello resta una delle destinazioni raggiungibili
+          // da lì, non più la prima schermata.
+          return (goingToLogin || goingToSplash) ? '/home' : null;
       }
     },
     routes: [
+      GoRoute(
+        path: '/home',
+        pageBuilder: (context, state) =>
+            _fadeTransitionPage(const HomeScreen()),
+      ),
       GoRoute(
         path: '/users/new',
         pageBuilder: (context, state) =>
