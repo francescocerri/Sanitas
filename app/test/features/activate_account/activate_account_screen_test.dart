@@ -123,18 +123,14 @@ void main() {
       await tester.enterText(fields.first, 'short');
       await tester.pumpAndSettle();
       expect(enabled(), isFalse);
-      await enter('a' * 73, 'a' * 73);
-      expect(enabled(), isFalse);
-      await enter('é' * 37, 'é' * 37);
-      expect(enabled(), isFalse);
-      await enter('é' * 36, 'é' * 36);
+      await enter('12345678', '12345678');
       expect(enabled(), isTrue);
       expect(controller.calls, isEmpty);
       await tester.ensureVisible(button);
       await tester.tap(button);
       await tester.pump();
       expect(enabled(), isFalse);
-      expect(controller.calls, ['é' * 36]);
+      expect(controller.calls, ['12345678']);
       await tester.runAsync(() async {
         controller.completion.complete();
         await controller.completion.future;

@@ -76,6 +76,10 @@ scripts/
 
 ## Multilingua e tema
 
+### Icona dell'app
+
+L'icona Sanitas (S intrecciata con dettaglio del battito) deriva da `../design/sanitas-icon/sanitas-icon-pulse-v3.png`. Le esportazioni PNG opache sono incluse in `web/` (favicon 32 px, icone PWA 192/512 px e Apple Touch 180 px), `android/app/src/main/res/mipmap-*/` (48–192 px) e `ios/Runner/Assets.xcassets/AppIcon.appiconset/` (dimensioni definite da `Contents.json`, inclusa l'icona App Store da 1024 px). Per sostituirla, rigenerare queste esportazioni dal nuovo master mantenendo nomi e dimensioni; il tema per-comitato non modifica automaticamente le icone installate.
+
 - **Lingua**: `easy_localization`, italiano di default (sovrascrivibile per comitato via `default_locale` in `config/<slug>/app/theme.json`). Ogni stringa visibile all'utente passa da `assets/translations/*.json`, mai testo hardcoded in una lingua nel codice.
 - **Colori**: personalizzabili per comitato (vedi sopra), applicati anche a tipografia (`google_fonts`, "Plus Jakarta Sans") e forma di campi/bottoni in `committee_theme.dart` — non solo la palette di Material di default. Chiaro/scuro è invece una preferenza personale dell'utente, persistita separatamente (vedi `theme_mode_controller.dart`).
 - **Identità visiva**: nessun comitato è tenuto a fornire un logo — `BrandMark` (`core/widgets/brand_mark.dart`) mostra l'iniziale del nome del comitato in un cerchio colorato, sostituibile in futuro con un'immagine vera.

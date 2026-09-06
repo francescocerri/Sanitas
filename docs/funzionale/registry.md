@@ -8,7 +8,7 @@
 
 ## Attivazione: scelta della password
 
-Il form mostra i requisiti prima dell'invio: almeno 8 caratteri, massimo 72 byte (lettere accentate ed emoji possono occupare più byte), senza obbligo di maiuscole, numeri o simboli. Il pulsante «Attiva account» resta disabilitato finché la password non rispetta i requisiti e la conferma non coincide; si disabilita anche durante l'invio.
+Il form mostra i requisiti prima dell'invio: almeno 8 caratteri. Il pulsante «Attiva account» resta disabilitato finché la password non rispetta i requisiti e la conferma non coincide; si disabilita anche durante l'invio.
 
 ## Cosa manca oggi (non ancora disponibile)
 

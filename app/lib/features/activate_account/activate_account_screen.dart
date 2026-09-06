@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -40,9 +38,7 @@ class _ActivateAccountScreenState extends ConsumerState<ActivateAccountScreen> {
   bool _activated = false;
   String? _errorTranslationKey;
 
-  bool get _isPasswordValid =>
-      _passwordController.text.length >= 8 &&
-      utf8.encode(_passwordController.text).length <= 72;
+  bool get _isPasswordValid => _passwordController.text.length >= 8;
 
   bool get _canSubmit =>
       !_isSubmitting &&
@@ -177,15 +173,12 @@ class _ActivateAccountScreenState extends ConsumerState<ActivateAccountScreen> {
                 obscureText: _obscurePassword,
                 autofillHints: const [AutofillHints.newPassword],
                 validator: (_) => !_isPasswordValid
-                    ? (_passwordController.text.length < 8
-                          ? 'activate_account.password_invalid'.tr()
-                          : 'activate_account.password_max_length'.tr())
+                    ? 'activate_account.password_invalid'.tr()
                     : null,
               ),
               const SizedBox(height: 8),
               Text(
-                '${'activate_account.password_requirements'.tr()}. '
-                '${'activate_account.password_max_length'.tr()}',
+                'activate_account.password_requirements'.tr(),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),

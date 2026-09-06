@@ -48,7 +48,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final location = state.matchedLocation;
       final goingToSplash = location == '/';
       final goingToLogin = location == '/login';
-      final goingToActivate = location == '/attiva-account';
+      final goingToActivate = location == '/user-activation';
 
       switch (authState.status) {
         case AuthStatus.unknown:
@@ -76,7 +76,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             _fadeTransitionPage(const LoginScreen()),
       ),
       GoRoute(
-        path: '/attiva-account',
+        path: '/user-activation',
         pageBuilder: (context, state) => _fadeTransitionPage(
           ActivateAccountScreen(
             inviteToken: state.uri.queryParameters['token'],
