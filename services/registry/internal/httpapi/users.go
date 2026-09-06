@@ -122,6 +122,94 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type listUsersResponse []user.User
+
+// @Summary	List all users (requires the users:manage permission)
+// @Tags		users
+// @Produce	json
+// @Security	BearerAuth
+// @Success	200	{object}	listUsersResponse
+// @Failure	403	"Missing required permission: users:manage"
+// @Router		/v1/users [get]
+func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := s.repo.ListUsers(r.Context())
+	if err != nil {
+		s.logger.Error("list users", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, listUsersResponse(users))
+}
+
+type updateUserRolesRequest struct {
+	Roles []string `json:"roles"`
+}
+
+// @Summary	Replace a user's roles (requires the users:manage permission)
+// @Tags		users
+// @Accept		json
+// @Produce	json
+// @Security	BearerAuth
+// @Param		id		path		string					true	"User ID"
+// @Param		ruoli	body		updateUserRolesRequest	true	"Full new set of role slugs"
+// @Success	200		{object}	user.User
+// @Failure	400		"Invalid payload or unknown role"
+// @Failure	403		"Missing required permission: users:manage"
+// @Failure	404		"User not found"
+// @Router		/v1/users/{id}/roles [patch]
+func (s *Server) handleUpdateUserRoles(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	if _, err := s.repo.GetByID(r.Context(), id); err != nil {
+		if errors.Is(err, user.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		s.logger.Error("get user by id", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	var req updateUserRolesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+
+	roleIDsBySlug, err := s.repo.RoleIDsBySlug(r.Context(), req.Roles)
+	if err != nil {
+		s.logger.Error("resolve roles", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	roleIDs := make([]string, 0, len(req.Roles))
+	for _, slug := range req.Roles {
+		roleID, ok := roleIDsBySlug[slug]
+		if !ok {
+			writeError(w, http.StatusBadRequest, "unknown role: "+slug)
+			return
+		}
+		roleIDs = append(roleIDs, roleID)
+	}
+
+	if err := s.repo.ReplaceRoles(r.Context(), id, roleIDs); err != nil {
+		s.logger.Error("replace roles", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Rilettura fresca invece di riusare i dati della richiesta: i
+	// permessi derivano dai ruoli via config, non c'è altro modo corretto
+	// di calcolarli per la risposta.
+	updated, err := s.repo.GetByID(r.Context(), id)
+	if err != nil {
+		s.logger.Error("get user by id", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
 type activateUserRequest struct {
 	Token    string `json:"token"`
 	Password string `json:"password"`

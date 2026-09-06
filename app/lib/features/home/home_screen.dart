@@ -54,6 +54,14 @@ class HomeScreen extends ConsumerWidget {
           badge: 'home.admin_badge'.tr(),
           onTap: () => context.go('/users/new'),
         ),
+      if (canManageUsers)
+        _HomeCard(
+          icon: Icons.manage_accounts_outlined,
+          title: 'home.manage_users_title'.tr(),
+          subtitle: 'home.manage_users_subtitle'.tr(),
+          badge: 'home.admin_badge'.tr(),
+          onTap: () => context.go('/users'),
+        ),
     ];
 
     final comingSoonCards = [

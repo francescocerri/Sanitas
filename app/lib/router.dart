@@ -9,6 +9,7 @@ import 'features/create_user/create_user_screen.dart';
 import 'features/forgot_password/forgot_password_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/login/login_screen.dart';
+import 'features/manage_users/manage_users_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/reset_password/reset_password_screen.dart';
 import 'features/splash/splash_screen.dart';
@@ -72,7 +73,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               ? null
               : '/login';
         case AuthStatus.authenticated:
-          if (location == '/users/new' &&
+          if (location.startsWith('/users') &&
               !(authState.claims?.hasPermission('users:manage') ?? false)) {
             return '/home';
           }
@@ -93,6 +94,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/users/new',
         pageBuilder: (context, state) =>
             _fadeTransitionPage(const CreateUserScreen()),
+      ),
+      GoRoute(
+        path: '/users',
+        pageBuilder: (context, state) =>
+            _fadeTransitionPage(const ManageUsersScreen()),
       ),
       GoRoute(
         path: '/',

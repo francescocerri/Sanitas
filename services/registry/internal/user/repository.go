@@ -203,6 +203,25 @@ func (r *Repository) ListRoles(ctx context.Context) ([]Role, error) {
 	return roles, nil
 }
 
+// ListUsers returns every user with Roles/Permissions populated — no
+// pagination, stessa scelta già fatta per ListRoles/shifts.List: la scala
+// di un comitato non lo giustifica ancora. Roles/Permissions non sono
+// colonne GORM (vedi User), quindi vanno popolate riga per riga come già fa
+// GetByID — un round-trip in più per utente, accettabile per un elenco
+// pensato per un pannello di amministrazione, non per un hot path.
+func (r *Repository) ListUsers(ctx context.Context) ([]User, error) {
+	users := make([]User, 0)
+	if err := r.db.WithContext(ctx).Order("username").Find(&users).Error; err != nil {
+		return nil, fmt.Errorf("user: list users: %w", err)
+	}
+	for i := range users {
+		if err := r.populateRolesAndPermissions(ctx, &users[i]); err != nil {
+			return nil, err
+		}
+	}
+	return users, nil
+}
+
 func (r *Repository) AssignRoles(ctx context.Context, userID string, roleIDs []string) error {
 	for _, roleID := range roleIDs {
 		err := r.db.WithContext(ctx).Exec(`
@@ -213,6 +232,28 @@ func (r *Repository) AssignRoles(ctx context.Context, userID string, roleIDs []s
 		}
 	}
 	return nil
+}
+
+// ReplaceRoles sostituisce l'intero insieme di ruoli di un utente — a
+// differenza di AssignRoles, solo additiva (mai una DELETE), usata alla
+// creazione dove non c'è nulla da rimuovere. In una transazione perché uno
+// stato intermedio "nessun ruolo" visibile da un'altra richiesta (es. un
+// controllo di permesso in corso) sarebbe peggio di un errore che annulla
+// tutto.
+func (r *Repository) ReplaceRoles(ctx context.Context, userID string, roleIDs []string) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`DELETE FROM user_roles WHERE user_id = ?`, userID).Error; err != nil {
+			return fmt.Errorf("user: replace roles: delete: %w", err)
+		}
+		for _, roleID := range roleIDs {
+			if err := tx.Exec(`
+				INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)
+				ON CONFLICT DO NOTHING`, userID, roleID).Error; err != nil {
+				return fmt.Errorf("user: replace roles: insert: %w", err)
+			}
+		}
+		return nil
+	})
 }
 
 func (r *Repository) GetRolesForUser(ctx context.Context, userID string) ([]string, error) {

@@ -62,6 +62,8 @@
     "profile_subtitle": "Dati personali e password",
     "create_user_title": "Nuovo utente",
     "create_user_subtitle": "Crea un account e assegna i ruoli",
+    "manage_users_title": "Gestisci utenti",
+    "manage_users_subtitle": "Elenco account e modifica dei ruoli",
     "admin_badge": "Solo admin",
     "coming_soon_label": "In arrivo",
     "coming_soon_badge": "Prossimamente",
@@ -127,5 +129,17 @@
     "another": "Crea un altro utente",
     "forbidden": "Non hai il permesso di gestire gli utenti.",
     "duplicate": "Email o username già in uso. Controlla i dati inseriti."
+  },
+  "manage_users": {
+    "title": "Gestisci utenti",
+    "search_hint": "Cerca per nome o email",
+    "empty": "Nessun utente trovato.",
+    "no_roles": "Nessun ruolo assegnato",
+    "no_role_section": "Senza ruolo",
+    "edit_roles": "Modifica ruoli",
+    "section_header": "{role} · {count}",
+    "save": "Salva",
+    "saved": "Ruoli aggiornati.",
+    "user_not_found": "Utente non trovato."
   }
 }
