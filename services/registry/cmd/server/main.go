@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -20,9 +21,10 @@ import (
 
 // @title			Sanitas — Registry API
 // @version		0.1.0
-// @description	Users, roles, authentication. Phase A: admin-created users, activation via
-// @description	token, login, password change. Sending real email (invites/forgot-password)
-// @description	is a later phase — see docs/adr/0013.
+// @description	Users, roles, authentication. Admin-created users, activation via token,
+// @description	login, password change. Invite emails are sent via SMTP when configured
+// @description	(see docs/adr/0023), otherwise the invite link is returned in the API
+// @description	response for the admin to forward by hand.
 //
 // @securityDefinitions.apikey	BearerAuth
 // @in							header
@@ -101,7 +103,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := httpapi.NewServer(repo, keys, cfg.CORSAllowedOrigin, cfg.InviteURLBase, logger)
+	emailBranding, err := user.LoadEmailBranding(cfg.EmailConfigPath)
+	if err != nil {
+		logger.Error("load email branding failed", "error", err)
+		os.Exit(1)
+	}
+
+	// mailer resta nil se SMTPHost non è configurato: l'invio dell'email di
+	// invito è opzionale, un fork che non lo configura mantiene il
+	// comportamento di sempre (link restituito nella risposta API) — vedi
+	// docs/adr/0023-invio-email-invito-smtp.md.
+	var mailer *user.Mailer
+	if cfg.SMTPHost != "" {
+		port, err := strconv.Atoi(cfg.SMTPPort)
+		if err != nil {
+			logger.Error("invalid SMTP_PORT", "value", cfg.SMTPPort, "error", err)
+			os.Exit(1)
+		}
+		mailer, err = user.NewMailer(cfg.SMTPHost, port, cfg.SMTPUsername, cfg.SMTPPassword, emailBranding)
+		if err != nil {
+			logger.Error("configure SMTP mailer failed", "error", err)
+			os.Exit(1)
+		}
+	}
+
+	server := httpapi.NewServer(repo, keys, cfg.CORSAllowedOrigin, cfg.InviteURLBase, mailer, emailBranding, logger)
 
 	httpServer := &http.Server{
 		Addr:    ":" + cfg.Port,

@@ -66,6 +66,22 @@ func loadDotEnv() {
 		if _, exists := os.LookupEnv(key); exists {
 			continue
 		}
-		os.Setenv(key, strings.TrimSpace(value))
+		os.Setenv(key, unquote(strings.TrimSpace(value)))
 	}
+}
+
+// unquote strips a single matching pair of surrounding quotes ('"' or "'")
+// from an .env value, if present — a standard .env convention this simple
+// line-based parser should honor rather than silently baking the literal
+// quote characters into the value (see registry's identical helper, same
+// cross-cutting config-loading pattern per ADR-0010).
+func unquote(value string) string {
+	if len(value) < 2 {
+		return value
+	}
+	first, last := value[0], value[len(value)-1]
+	if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+		return value[1 : len(value)-1]
+	}
+	return value
 }

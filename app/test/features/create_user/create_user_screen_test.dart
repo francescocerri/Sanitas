@@ -118,6 +118,7 @@ void main() {
                       : {
                           'invite_url':
                               'https://example.org/user-activation?token=test',
+                          'email_sent': false,
                         },
                 ),
               );
@@ -180,6 +181,57 @@ void main() {
       },
     );
   }
+
+  testWidgets('shows the email-sent state when the backend sends the invite', (
+    tester,
+  ) async {
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          handler.resolve(
+            Response(
+              requestOptions: options,
+              statusCode: options.method == 'GET' ? 200 : 201,
+              data: options.method == 'GET'
+                  ? []
+                  : {
+                      'invite_url':
+                          'https://example.org/user-activation?token=test',
+                      'email_sent': true,
+                    },
+            ),
+          );
+        },
+      ),
+    );
+    await mount(tester, dio);
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'test@example.org',
+    );
+    await tester.enterText(find.byType(TextFormField).at(1), 'test.user');
+    await tester.pumpAndSettle();
+    final submit = find.widgetWithText(
+      FilledButton,
+      'Crea utente e genera link',
+    );
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+
+    // Testo "email inviata" al posto di quello per il link da copiare, e
+    // nessuna delle due frasi ("copia il link"/"valido 7 giorni") mostrate
+    // in primo piano quando l'invio email non è configurato.
+    expect(find.text('Invito inviato.'), findsOneWidget);
+    expect(
+      find.text('Abbiamo mandato il link di attivazione a test@example.org.'),
+      findsOneWidget,
+    );
+    expect(find.text('Copia link di attivazione'), findsNothing);
+    expect(find.text('Copia comunque il link'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('denies users without permission without fetching roles', (
     tester,

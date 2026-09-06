@@ -452,11 +452,15 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "email_sent": {
+                    "description": "EmailSent is best-effort: the user is already created by the time we\nknow this, so a failed send never turns the request into an error —\nsee docs/adr/0023-invio-email-invito-smtp.md.",
+                    "type": "boolean"
+                },
                 "id": {
                     "type": "string"
                 },
                 "invite_url": {
-                    "description": "InviteURL is handed back directly in this response instead of being\nemailed: sending it for real (Gmail SMTP) is a separate follow-up\nactivity, this phase only lays the token groundwork. The admin\nforwards it to the volunteer by whatever channel they already use.",
+                    "description": "InviteURL is always returned regardless of EmailSent, as a fallback\nthe admin can still copy/forward by hand — e.g. if SMTP isn't\nconfigured for this deployment, or the send itself failed.",
                     "type": "string"
                 },
                 "permissions": {
@@ -513,7 +517,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "",
 	Schemes:          []string{},
 	Title:            "Sanitas — Registry API",
-	Description:      "Users, roles, authentication. Phase A: admin-created users, activation via\ntoken, login, password change. Sending real email (invites/forgot-password)\nis a later phase — see docs/adr/0013.",
+	Description:      "Users, roles, authentication. Admin-created users, activation via token,\nlogin, password change. Invite emails are sent via SMTP when configured\n(see docs/adr/0023), otherwise the invite link is returned in the API\nresponse for the admin to forward by hand.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

@@ -76,7 +76,9 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
   bool _submitting = false;
   String? _error;
   String? _inviteUrl;
+  bool _emailSent = false;
   String _createdUsername = '';
+  String _createdEmail = '';
 
   bool get _validEmail =>
       RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(_email.text.trim());
@@ -97,6 +99,7 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
       _roles.clear();
       _error = null;
       _inviteUrl = null;
+      _emailSent = false;
     });
   }
 
@@ -109,6 +112,7 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
       return;
     }
     final username = _username.text.trim();
+    final email = _email.text.trim();
     setState(() {
       _submitting = true;
       _error = null;
@@ -119,7 +123,7 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
           .post<Map<String, dynamic>>(
             '/v1/users',
             data: {
-              'email': _email.text.trim(),
+              'email': email,
               'username': username,
               'roles': _roles.toList(),
             },
@@ -127,7 +131,13 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
       if (!mounted) return;
       setState(() {
         _createdUsername = username;
+        _createdEmail = email;
         _inviteUrl = response.data!['invite_url'] as String;
+        // Assente in risposte più vecchie della funzionalità email? Mai:
+        // il campo è sempre presente lato backend, ma `as bool? ?? false`
+        // costa nulla e non fa mai crashare la UI per un contratto API
+        // che comunque non dovrebbe mai divergere.
+        _emailSent = response.data!['email_sent'] as bool? ?? false;
       });
     } on DioException catch (error) {
       if (mounted) setState(() => _error = _userError(error).translationKey);
@@ -484,51 +494,77 @@ class _CreateUserScreenState extends ConsumerState<CreateUserScreen> {
     );
   }
 
-  Widget _success(BuildContext context) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 560),
-      child: _panel(
-        context,
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Icon(
-              Icons.check_circle_outline_rounded,
-              size: 64,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'create_user.success_title'.tr(),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'create_user.success_body'.tr(
-                namedArgs: {'username': _createdUsername},
+  Widget _success(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: _panel(
+          context,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Icon(
+                _emailSent
+                    ? Icons.mark_email_read_outlined
+                    : Icons.check_circle_outline_rounded,
+                size: 64,
+                color: theme.colorScheme.primary,
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            SelectableText(_inviteUrl!),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: _copyInvite,
-              icon: const Icon(Icons.copy_rounded),
-              label: Text('create_user.copy'.tr()),
-            ),
-            const SizedBox(height: 16),
-            Text('create_user.expiry'.tr(), textAlign: TextAlign.center),
-            const SizedBox(height: 20),
-            _secondaryButton(
-              context,
-              onPressed: _reset,
-              label: 'create_user.another'.tr(),
-            ),
-          ],
+              const SizedBox(height: 20),
+              Text(
+                (_emailSent
+                        ? 'create_user.email_sent_title'
+                        : 'create_user.success_title')
+                    .tr(),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _emailSent
+                    ? 'create_user.email_sent_body'.tr(
+                        namedArgs: {'email': _createdEmail},
+                      )
+                    : 'create_user.success_body'.tr(
+                        namedArgs: {'username': _createdUsername},
+                      ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              if (_emailSent)
+                // L'email è già partita: il link resta disponibile solo
+                // come ripiego silenzioso (spam, indirizzo sbagliato...),
+                // non più in primo piano come quando l'invio non è
+                // configurato — vedi docs/adr/0023.
+                Center(
+                  child: TextButton.icon(
+                    onPressed: _copyInvite,
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: Text('create_user.copy_fallback'.tr()),
+                  ),
+                )
+              else ...[
+                SelectableText(_inviteUrl!),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: _copyInvite,
+                  icon: const Icon(Icons.copy_rounded),
+                  label: Text('create_user.copy'.tr()),
+                ),
+                const SizedBox(height: 16),
+                Text('create_user.expiry'.tr(), textAlign: TextAlign.center),
+              ],
+              const SizedBox(height: 20),
+              _secondaryButton(
+                context,
+                onPressed: _reset,
+                label: 'create_user.another'.tr(),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  ).animate().fadeIn(duration: 300.ms);
+    ).animate().fadeIn(duration: 300.ms);
+  }
 }

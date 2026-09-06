@@ -65,14 +65,19 @@ definitions:
         type: string
       email:
         type: string
+      email_sent:
+        description: |-
+          EmailSent is best-effort: the user is already created by the time we
+          know this, so a failed send never turns the request into an error —
+          see docs/adr/0023-invio-email-invito-smtp.md.
+        type: boolean
       id:
         type: string
       invite_url:
         description: |-
-          InviteURL is handed back directly in this response instead of being
-          emailed: sending it for real (Gmail SMTP) is a separate follow-up
-          activity, this phase only lays the token groundwork. The admin
-          forwards it to the volunteer by whatever channel they already use.
+          InviteURL is always returned regardless of EmailSent, as a fallback
+          the admin can still copy/forward by hand — e.g. if SMTP isn't
+          configured for this deployment, or the send itself failed.
         type: string
       permissions:
         items:
@@ -100,9 +105,10 @@ definitions:
 info:
   contact: {}
   description: |-
-    Users, roles, authentication. Phase A: admin-created users, activation via
-    token, login, password change. Sending real email (invites/forgot-password)
-    is a later phase — see docs/adr/0013.
+    Users, roles, authentication. Admin-created users, activation via token,
+    login, password change. Invite emails are sent via SMTP when configured
+    (see docs/adr/0023), otherwise the invite link is returned in the API
+    response for the admin to forward by hand.
   title: Sanitas — Registry API
   version: 0.1.0
 paths:

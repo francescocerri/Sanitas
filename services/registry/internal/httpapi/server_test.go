@@ -21,19 +21,31 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/francescocerri/sanitas/services/registry/internal/testdb"
+	"github.com/francescocerri/sanitas/services/registry/internal/testmail"
 	"github.com/francescocerri/sanitas/services/registry/internal/user"
 )
 
-var testDB *gorm.DB
+var (
+	testDB   *gorm.DB
+	testMail *testmail.Server
+)
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
-	db, cleanup, err := testdb.StartPostgres(ctx, user.Migrate)
+
+	db, cleanupDB, err := testdb.StartPostgres(ctx, user.Migrate)
 	if err != nil {
 		panic(err)
 	}
-	defer cleanup()
+	defer cleanupDB()
 	testDB = db
+
+	mail, cleanupMail, err := testmail.StartMailpit(ctx)
+	if err != nil {
+		panic(err)
+	}
+	defer cleanupMail()
+	testMail = mail
 
 	os.Exit(m.Run())
 }
@@ -73,7 +85,36 @@ func newTestServer(t *testing.T) (*Server, *user.Repository) {
 	})
 	repo := user.NewRepository(testDB)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	server := NewServer(repo, newTestKeyPair(t), "http://localhost:5173", "http://localhost:5173/attiva", logger)
+	server := NewServer(
+		repo, newTestKeyPair(t), "http://localhost:5173", "http://localhost:5173/attiva",
+		nil, user.EmailBranding{}, logger,
+	)
+	return server, repo
+}
+
+// newTestServerWithMailer è come newTestServer ma con un Mailer vero
+// puntato al server SMTP fittizio condiviso (testmail.StartMailpit,
+// avviato una sola volta in TestMain) — stesso codice di produzione,
+// cambia solo l'host SMTP. Usato solo dai test specifici sull'invio email:
+// tutti gli altri test non hanno bisogno di SMTP e restano invariati.
+func newTestServerWithMailer(t *testing.T) (*Server, *user.Repository) {
+	t.Helper()
+	t.Cleanup(func() {
+		if err := testDB.Exec("TRUNCATE users, roles, user_roles, tokens CASCADE").Error; err != nil {
+			t.Fatalf("truncate: %v", err)
+		}
+	})
+	repo := user.NewRepository(testDB)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	branding := user.EmailBranding{FromName: "Sanitas Test", FromAddress: "invites@sanitas.test", PrimaryColor: "#DA291C"}
+	mailer, err := user.NewMailer(testMail.SMTPHost, testMail.SMTPPort, "", "", branding)
+	if err != nil {
+		t.Fatalf("NewMailer: %v", err)
+	}
+	server := NewServer(
+		repo, newTestKeyPair(t), "http://localhost:5173", "http://localhost:5173/attiva",
+		mailer, branding, logger,
+	)
 	return server, repo
 }
 
@@ -403,6 +444,67 @@ func TestCreateUser_GrantedViaRolePermission(t *testing.T) {
 		createUserRequest{Email: "nuovo@example.org", Username: "nuovo"}, presidentToken)
 	if granted.Code != http.StatusCreated {
 		t.Fatalf("expected 201 for a role with users:manage, got %d: %s", granted.Code, granted.Body.String())
+	}
+}
+
+func TestCreateUser_SendsInviteEmailWhenSMTPConfigured(t *testing.T) {
+	server, repo := newTestServerWithMailer(t)
+	ctx := context.Background()
+	if err := user.Bootstrap(ctx, repo, "admin@example.org", "admin", "supersegreta"); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	adminToken := login(t, server, "admin", "supersegreta")
+
+	created := doJSON(t, server, http.MethodPost, "/v1/users",
+		createUserRequest{Email: "posta@example.org", Username: "posta"}, adminToken)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", created.Code, created.Body.String())
+	}
+	var resp createUserResponse
+	if err := json.Unmarshal(created.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if !resp.EmailSent {
+		t.Fatal("expected email_sent=true when SMTP is configured")
+	}
+	// invite_url resta comunque presente: è il ripiego se l'email non
+	// arrivasse per altri motivi (spam, ecc.), non solo per SMTP assente.
+	if resp.InviteURL == "" {
+		t.Fatal("expected invite_url to still be present alongside email_sent")
+	}
+
+	delivered, err := testMail.HasMessageTo(ctx, "posta@example.org")
+	if err != nil {
+		t.Fatalf("query mailpit: %v", err)
+	}
+	if !delivered {
+		t.Fatal("expected mailpit to have received an email addressed to posta@example.org")
+	}
+}
+
+func TestCreateUser_NoEmailSentWithoutSMTPConfigured(t *testing.T) {
+	// newTestServer (senza mailer) è quello che usano tutti gli altri test
+	// di questo file: qui lo asseriamo esplicitamente, perché è il
+	// comportamento che ogni fork senza SMTP configurato deve continuare
+	// ad avere (nessuna rottura, vedi docs/adr/0023).
+	server, repo := newTestServer(t)
+	ctx := context.Background()
+	if err := user.Bootstrap(ctx, repo, "admin@example.org", "admin", "supersegreta"); err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	adminToken := login(t, server, "admin", "supersegreta")
+
+	created := doJSON(t, server, http.MethodPost, "/v1/users",
+		createUserRequest{Email: "senzasmtp@example.org", Username: "senzasmtp"}, adminToken)
+	var resp createUserResponse
+	if err := json.Unmarshal(created.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if resp.EmailSent {
+		t.Fatal("expected email_sent=false without an SMTP mailer configured")
+	}
+	if resp.InviteURL == "" {
+		t.Fatal("expected invite_url to be present as the fallback")
 	}
 }
 

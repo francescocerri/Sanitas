@@ -60,6 +60,7 @@ Obiettivo: costo di esercizio molto basso, tendente a zero.
 
 Dipendenze esterne già scelte e perché:
 - `github.com/jackc/pgx/v5` — driver Postgres per Go, standard de facto, attivamente mantenuto (preferito a `lib/pq`, che è in sola manutenzione).
+- `github.com/wneessen/go-mail` (in `registry`) — client SMTP per l'invio email (invito, vedi ADR-0023), attivamente mantenuto; preferito a `net/smtp` (nessun supporto MIME/HTML) e a `gopkg.in/gomail.v2` (non più mantenuta).
 
 CI (obbligatoria prima del merge):
 - Go: `go build`, `go vet`, `go test`, `govulncheck` (tool ufficiale del team Go) — nessuna vulnerabilità nota deve passare.

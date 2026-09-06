@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -19,11 +20,14 @@ type createUserRequest struct {
 
 type createUserResponse struct {
 	user.User
-	// InviteURL is handed back directly in this response instead of being
-	// emailed: sending it for real (Gmail SMTP) is a separate follow-up
-	// activity, this phase only lays the token groundwork. The admin
-	// forwards it to the volunteer by whatever channel they already use.
+	// InviteURL is always returned regardless of EmailSent, as a fallback
+	// the admin can still copy/forward by hand — e.g. if SMTP isn't
+	// configured for this deployment, or the send itself failed.
 	InviteURL string `json:"invite_url"`
+	// EmailSent is best-effort: the user is already created by the time we
+	// know this, so a failed send never turns the request into an error —
+	// see docs/adr/0023-invio-email-invito-smtp.md.
+	EmailSent bool `json:"email_sent"`
 }
 
 // @Summary	Create a new user (requires the users:manage permission)
@@ -85,9 +89,30 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	inviteURL := s.inviteURLBase + "?token=" + token
+	emailSent := false
+	if s.mailer != nil {
+		// Un timeout tutto suo, più corto del WriteTimeout del server HTTP
+		// (10s, vedi cmd/server/main.go): un SMTP lento o mal configurato
+		// non deve mai poter bloccare la risposta abbastanza a lungo da far
+		// scadere il client, che altrimenti riproverebbe con la stessa
+		// email/username già creati con successo, trovandoli "duplicati".
+		emailCtx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		defer cancel()
+		if err := s.mailer.SendInviteEmail(emailCtx, created.Email, created.Username, inviteURL); err != nil {
+			// Non facciamo fallire la richiesta: l'utente è già stato
+			// creato con successo, l'invio è un effetto collaterale
+			// best-effort. L'admin ha comunque l'InviteURL come ripiego.
+			s.logger.Error("send invite email", "error", err, "user_id", created.ID)
+		} else {
+			emailSent = true
+		}
+	}
+
 	writeJSON(w, http.StatusCreated, createUserResponse{
 		User:      created,
-		InviteURL: s.inviteURLBase + "?token=" + token,
+		InviteURL: inviteURL,
+		EmailSent: emailSent,
 	})
 }
 

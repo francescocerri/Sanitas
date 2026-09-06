@@ -16,11 +16,31 @@ type Server struct {
 	keys          *user.KeyPair
 	allowedOrigin string
 	inviteURLBase string
+	// mailer è nil se l'SMTP non è configurato (vedi config.SMTPHost) —
+	// in quel caso handleCreateUser salta l'invio e si comporta come
+	// prima dell'introduzione di questa funzionalità.
+	mailer        *user.Mailer
+	emailBranding user.EmailBranding
 	logger        *slog.Logger
 }
 
-func NewServer(repo *user.Repository, keys *user.KeyPair, allowedOrigin, inviteURLBase string, logger *slog.Logger) *Server {
-	return &Server{repo: repo, keys: keys, allowedOrigin: allowedOrigin, inviteURLBase: inviteURLBase, logger: logger}
+func NewServer(
+	repo *user.Repository,
+	keys *user.KeyPair,
+	allowedOrigin, inviteURLBase string,
+	mailer *user.Mailer,
+	emailBranding user.EmailBranding,
+	logger *slog.Logger,
+) *Server {
+	return &Server{
+		repo:          repo,
+		keys:          keys,
+		allowedOrigin: allowedOrigin,
+		inviteURLBase: inviteURLBase,
+		mailer:        mailer,
+		emailBranding: emailBranding,
+		logger:        logger,
+	}
 }
 
 // v1 versions the resource endpoints only: /healthz, /docs/ and

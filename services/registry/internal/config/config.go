@@ -21,6 +21,21 @@ type Config struct {
 	InitialAdminEmail    string
 	InitialAdminUsername string
 	InitialAdminPassword string
+
+	// SMTP per l'invio automatico dell'email di invito (vedi
+	// docs/adr/0023-invio-email-invito-smtp.md). Tutti opzionali: se
+	// SMTPHost è vuoto, l'invio resta disabilitato e il comportamento è
+	// identico a prima di questa funzionalità (link da copiare a mano) —
+	// nessun fork è costretto a configurare Gmail per continuare a
+	// funzionare.
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUsername string
+	SMTPPassword string
+
+	// Percorso del file di branding (mittente) per-comitato, non un
+	// segreto — vedi internal/user.LoadEmailBranding.
+	EmailConfigPath string
 }
 
 func Load() (Config, error) {
@@ -36,6 +51,13 @@ func Load() (Config, error) {
 		InitialAdminEmail:    os.Getenv("INITIAL_ADMIN_EMAIL"),
 		InitialAdminUsername: os.Getenv("INITIAL_ADMIN_USERNAME"),
 		InitialAdminPassword: os.Getenv("INITIAL_ADMIN_PASSWORD"),
+
+		SMTPHost:     os.Getenv("SMTP_HOST"),
+		SMTPPort:     getEnv("SMTP_PORT", "587"),
+		SMTPUsername: os.Getenv("SMTP_USERNAME"),
+		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
+
+		EmailConfigPath: os.Getenv("EMAIL_CONFIG_PATH"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL not set")
@@ -80,6 +102,25 @@ func loadDotEnv() {
 		if _, exists := os.LookupEnv(key); exists {
 			continue
 		}
-		os.Setenv(key, strings.TrimSpace(value))
+		os.Setenv(key, unquote(strings.TrimSpace(value)))
 	}
+}
+
+// unquote strips a single matching pair of surrounding quotes ('"' or "'")
+// from an .env value, if present. This parser only treats a line as a
+// comment when "#" is its very first character (see loadDotEnv above), so
+// a value containing "#" — e.g. a URL fragment like ".../#/user-activation"
+// — never needed quoting in the first place; but quoting values is such a
+// standard .env convention that someone will reach for it anyway, and
+// without this the literal quote characters would end up baked into the
+// value (here: a broken invite link with stray '"' in it).
+func unquote(value string) string {
+	if len(value) < 2 {
+		return value
+	}
+	first, last := value[0], value[len(value)-1]
+	if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+		return value[1 : len(value)-1]
+	}
+	return value
 }
