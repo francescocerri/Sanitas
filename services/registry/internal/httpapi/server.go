@@ -12,13 +12,15 @@ import (
 )
 
 type Server struct {
-	repo          *user.Repository
-	keys          *user.KeyPair
-	allowedOrigin string
-	inviteURLBase string
+	repo                 *user.Repository
+	keys                 *user.KeyPair
+	allowedOrigin        string
+	inviteURLBase        string
+	passwordResetURLBase string
 	// mailer è nil se l'SMTP non è configurato (vedi config.SMTPHost) —
-	// in quel caso handleCreateUser salta l'invio e si comporta come
-	// prima dell'introduzione di questa funzionalità.
+	// in quel caso handleCreateUser/handleRequestPasswordReset saltano
+	// l'invio e si comportano come prima dell'introduzione di questa
+	// funzionalità.
 	mailer        *user.Mailer
 	emailBranding user.EmailBranding
 	logger        *slog.Logger
@@ -27,19 +29,20 @@ type Server struct {
 func NewServer(
 	repo *user.Repository,
 	keys *user.KeyPair,
-	allowedOrigin, inviteURLBase string,
+	allowedOrigin, inviteURLBase, passwordResetURLBase string,
 	mailer *user.Mailer,
 	emailBranding user.EmailBranding,
 	logger *slog.Logger,
 ) *Server {
 	return &Server{
-		repo:          repo,
-		keys:          keys,
-		allowedOrigin: allowedOrigin,
-		inviteURLBase: inviteURLBase,
-		mailer:        mailer,
-		emailBranding: emailBranding,
-		logger:        logger,
+		repo:                 repo,
+		keys:                 keys,
+		allowedOrigin:        allowedOrigin,
+		inviteURLBase:        inviteURLBase,
+		passwordResetURLBase: passwordResetURLBase,
+		mailer:               mailer,
+		emailBranding:        emailBranding,
+		logger:               logger,
 	}
 }
 
@@ -60,6 +63,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST "+v1+"/users", s.requirePermission(user.PermUsersManage, s.handleCreateUser))
 	mux.HandleFunc("POST "+v1+"/users/activate", s.handleActivateUser)
 	mux.HandleFunc("POST "+v1+"/password/change", s.requireAuth(s.handleChangePassword))
+	mux.HandleFunc("POST "+v1+"/password/reset/request", s.handleRequestPasswordReset)
+	mux.HandleFunc("POST "+v1+"/password/reset/confirm", s.handleConfirmPasswordReset)
 	mux.Handle("GET /docs/", docsHandler())
 	return s.withLogging(s.withCORS(mux))
 }
@@ -98,6 +103,7 @@ func (rec *statusRecorder) WriteHeader(status int) {
 var piiJSONFields = map[string]bool{
 	"email":        true,
 	"username":     true,
+	"identifier":   true,
 	"password":     true,
 	"old_password": true,
 	"new_password": true,

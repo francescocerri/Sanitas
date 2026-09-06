@@ -86,7 +86,7 @@ func newTestServer(t *testing.T) (*Server, *user.Repository) {
 	repo := user.NewRepository(testDB)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	server := NewServer(
-		repo, newTestKeyPair(t), "http://localhost:5173", "http://localhost:5173/attiva",
+		repo, newTestKeyPair(t), "http://localhost:5173", "http://localhost:5173/attiva", "http://localhost:5173/#/reset-password",
 		nil, user.EmailBranding{}, logger,
 	)
 	return server, repo
@@ -112,7 +112,7 @@ func newTestServerWithMailer(t *testing.T) (*Server, *user.Repository) {
 		t.Fatalf("NewMailer: %v", err)
 	}
 	server := NewServer(
-		repo, newTestKeyPair(t), "http://localhost:5173", "http://localhost:5173/attiva",
+		repo, newTestKeyPair(t), "http://localhost:5173", "http://localhost:5173/attiva", "http://localhost:5173/#/reset-password",
 		mailer, branding, logger,
 	)
 	return server, repo

@@ -183,6 +183,49 @@ class AuthController extends Notifier<AuthSession> {
       );
     }
   }
+
+  /// Chiede l'invio dell'email di reimpostazione password. Il backend
+  /// risponde sempre allo stesso modo (204), che l'identifier corrisponda o
+  /// no a un account reale — mai rivelare l'esistenza di un account, vedi
+  /// docs/adr/0024-recupero-password.md. Per questo la UI (vedi
+  /// forgot_password_screen.dart) mostra sempre lo stesso messaggio di
+  /// conferma, indipendentemente dalla risposta.
+  Future<void> requestPasswordReset({required String identifier}) async {
+    try {
+      await _rawDio.post<void>(
+        '/v1/password/reset/request',
+        data: {'identifier': identifier},
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(
+        e,
+        statusToKey: const {400: 'errors.invalid_payload'},
+      );
+    }
+  }
+
+  /// Imposta una nuova password a partire dal token ricevuto via email.
+  /// Non modifica lo stato di sessione, come `activateAccount`: dopo il
+  /// reset l'utente fa comunque login normalmente con la nuova password.
+  Future<void> confirmPasswordReset({
+    required String token,
+    required String password,
+  }) async {
+    try {
+      await _rawDio.post<void>(
+        '/v1/password/reset/confirm',
+        data: {'token': token, 'password': password},
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(
+        e,
+        statusToKey: const {
+          400: 'errors.invalid_payload',
+          401: 'errors.invalid_or_expired_token',
+        },
+      );
+    }
+  }
 }
 
 final authControllerProvider = NotifierProvider<AuthController, AuthSession>(

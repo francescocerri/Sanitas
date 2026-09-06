@@ -15,7 +15,31 @@
     "password_label": "Password",
     "submit": "Accedi",
     "identifier_required": "Inserisci email o username",
-    "password_required": "Inserisci la password"
+    "password_required": "Inserisci la password",
+    "forgot_password": "Password dimenticata?"
+  },
+  "forgot_password": {
+    "title": "Password dimenticata?",
+    "subtitle": "Inserisci email o username: se l'account esiste ti mandiamo un link per reimpostare la password",
+    "tagline": "Recupera l'accesso al tuo account",
+    "identifier_label": "Email o username",
+    "identifier_required": "Inserisci email o username",
+    "submit": "Invia link di reset",
+    "success": "Se l'account esiste, controlla la tua email: ti abbiamo mandato un link per reimpostare la password",
+    "back_to_login": "Torna al login"
+  },
+  "reset_password": {
+    "title": "Reimposta la password",
+    "subtitle": "Scegli una nuova password per il tuo account",
+    "tagline": "Un'ultima cosa prima di rientrare",
+    "password_label": "Nuova password",
+    "confirm_password_label": "Conferma password",
+    "submit": "Reimposta password",
+    "success": "Password reimpostata: ora puoi accedere",
+    "missing_token": "Link non valido: token mancante",
+    "passwords_dont_match": "Le password non coincidono",
+    "password_requirements": "La password deve contenere almeno 8 caratteri",
+    "password_invalid": "Usa almeno 8 caratteri"
   },
   "activate_account": {
     "title": "Attiva il tuo account",

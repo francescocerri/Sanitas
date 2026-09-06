@@ -74,6 +74,27 @@ func (m *Mailer) SendInviteEmail(ctx context.Context, toAddress, toName, inviteU
 	return nil
 }
 
+// SendPasswordResetEmail spedisce il link di reimpostazione password a un
+// utente che l'ha dimenticata. Stesso comportamento best-effort di
+// SendInviteEmail: il chiamante decide se propagare o solo loggare
+// l'errore — vedi docs/adr/0024-recupero-password.md.
+func (m *Mailer) SendPasswordResetEmail(ctx context.Context, toAddress, toName, resetURL string) error {
+	msg := mail.NewMsg()
+	if err := msg.FromFormat(m.branding.FromName, m.branding.FromAddress); err != nil {
+		return fmt.Errorf("password reset email: from: %w", err)
+	}
+	if err := msg.To(toAddress); err != nil {
+		return fmt.Errorf("password reset email: to: %w", err)
+	}
+	msg.Subject(fmt.Sprintf("Reimposta la password di %s", m.branding.displayName()))
+	msg.SetBodyString(mail.TypeTextHTML, passwordResetEmailHTML(toName, resetURL, m.branding))
+
+	if err := m.client.DialAndSendWithContext(ctx, msg); err != nil {
+		return fmt.Errorf("password reset email: send: %w", err)
+	}
+	return nil
+}
+
 // displayName è il nome del comitato da mostrare nell'intestazione
 // dell'email: coincide con `from_name` (già pensato per essere leggibile,
 // es. "CRI Pavullo") — non serve un campo a parte solo per questo.
@@ -147,6 +168,46 @@ func inviteEmailHTML(toName, inviteURL string, branding EmailBranding) string {
 </td></tr>
 </table>
 <p style="margin:0;font-size:13px;color:#6b7280;">Il link &egrave; valido per 7 giorni. Se il bottone non funziona, copia e incolla questo indirizzo nel browser:<br><a href="%s" style="color:%s;word-break:break-all;">%s</a></p>
+</td>
+</tr>
+</table>
+</body>
+</html>`, color, monogram, committeeName, name, color, url, url, color, url)
+}
+
+// passwordResetEmailHTML è strutturalmente identica a inviteEmailHTML (stesso
+// stile a tabella con CSS inline, stesso escaping) — cambiano solo il testo
+// del saluto/bottone e la durata di validità (1 ora invece di 7 giorni, vedi
+// passwordResetTokenTTL in internal/httpapi/users.go).
+func passwordResetEmailHTML(toName, resetURL string, branding EmailBranding) string {
+	color := html.EscapeString(branding.color())
+	committeeName := html.EscapeString(branding.displayName())
+	monogram := html.EscapeString(branding.monogram())
+	name := html.EscapeString(toName)
+	url := html.EscapeString(resetURL)
+
+	return fmt.Sprintf(`<!doctype html>
+<html>
+<body style="margin:0;padding:24px;background-color:#f3f4f6;font-family:Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:0 auto;background-color:#ffffff;border-radius:12px;overflow:hidden;">
+<tr>
+<td style="background-color:%s;padding:32px 24px;text-align:center;">
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+<tr><td style="width:56px;height:56px;border-radius:50%%;background-color:rgba(255,255,255,0.2);text-align:center;vertical-align:middle;font-size:24px;font-weight:bold;color:#ffffff;">%s</td></tr>
+</table>
+<p style="margin:16px 0 0;font-size:18px;font-weight:bold;color:#ffffff;">%s</p>
+</td>
+</tr>
+<tr>
+<td style="padding:32px 24px;color:#1f2937;font-size:15px;line-height:1.6;">
+<p style="margin:0 0 16px;">Ciao %s,</p>
+<p style="margin:0 0 24px;">Abbiamo ricevuto una richiesta di reimpostazione della password per il tuo account. Se non sei stato tu, ignora pure questa email.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+<tr><td style="border-radius:8px;background-color:%s;">
+<a href="%s" style="display:inline-block;padding:14px 28px;color:#ffffff;font-weight:bold;text-decoration:none;border-radius:8px;">Reimposta password</a>
+</td></tr>
+</table>
+<p style="margin:0;font-size:13px;color:#6b7280;">Il link &egrave; valido per 1 ora. Se il bottone non funziona, copia e incolla questo indirizzo nel browser:<br><a href="%s" style="color:%s;word-break:break-all;">%s</a></p>
 </td>
 </tr>
 </table>

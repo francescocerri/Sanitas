@@ -70,7 +70,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_httpapi.loginRequest"
+                            "$ref": "#/definitions/httpapi.loginRequest"
                         }
                     }
                 ],
@@ -78,7 +78,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_httpapi.authTokens"
+                            "$ref": "#/definitions/httpapi.authTokens"
                         }
                     },
                     "400": {
@@ -107,7 +107,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_httpapi.refreshRequest"
+                            "$ref": "#/definitions/httpapi.refreshRequest"
                         }
                     }
                 ],
@@ -142,7 +142,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.User"
+                            "$ref": "#/definitions/user.User"
                         }
                     },
                     "401": {
@@ -172,7 +172,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_httpapi.changePasswordRequest"
+                            "$ref": "#/definitions/httpapi.changePasswordRequest"
                         }
                     }
                 ],
@@ -185,6 +185,69 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Old password incorrect"
+                    }
+                }
+            }
+        },
+        "/v1/password/reset/confirm": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Confirm a password reset via the emailed token, setting a new password",
+                "parameters": [
+                    {
+                        "description": "Reset token and new password",
+                        "name": "conferma",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.confirmPasswordResetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Password reset"
+                    },
+                    "400": {
+                        "description": "Invalid payload"
+                    },
+                    "401": {
+                        "description": "Invalid, expired, or already used token"
+                    }
+                }
+            }
+        },
+        "/v1/password/reset/request": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Request a password reset email",
+                "parameters": [
+                    {
+                        "description": "Email or username",
+                        "name": "richiesta",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.requestPasswordResetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Always returned, whether or not the identifier matches an account"
+                    },
+                    "400": {
+                        "description": "Invalid payload"
                     }
                 }
             }
@@ -209,7 +272,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_httpapi.refreshRequest"
+                            "$ref": "#/definitions/httpapi.refreshRequest"
                         }
                     }
                 ],
@@ -217,7 +280,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_httpapi.authTokens"
+                            "$ref": "#/definitions/httpapi.authTokens"
                         }
                     },
                     "400": {
@@ -249,7 +312,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.Role"
+                                "$ref": "#/definitions/user.Role"
                             }
                         }
                     },
@@ -289,7 +352,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_httpapi.createUserRequest"
+                            "$ref": "#/definitions/httpapi.createUserRequest"
                         }
                     }
                 ],
@@ -297,7 +360,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/internal_httpapi.createUserResponse"
+                            "$ref": "#/definitions/httpapi.createUserResponse"
                         }
                     },
                     "400": {
@@ -331,7 +394,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_httpapi.activateUserRequest"
+                            "$ref": "#/definitions/httpapi.activateUserRequest"
                         }
                     }
                 ],
@@ -350,50 +413,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "github_com_francescocerri_sanitas_services_registry_internal_user.Role": {
-            "type": "object",
-            "properties": {
-                "display_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_francescocerri_sanitas_services_registry_internal_user.User": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "permissions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "roles": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_httpapi.activateUserRequest": {
+        "httpapi.activateUserRequest": {
             "type": "object",
             "properties": {
                 "password": {
@@ -404,7 +424,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_httpapi.authTokens": {
+        "httpapi.authTokens": {
             "type": "object",
             "properties": {
                 "refresh_token": {
@@ -415,7 +435,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_httpapi.changePasswordRequest": {
+        "httpapi.changePasswordRequest": {
             "type": "object",
             "properties": {
                 "new_password": {
@@ -426,7 +446,18 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_httpapi.createUserRequest": {
+        "httpapi.confirmPasswordResetRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "httpapi.createUserRequest": {
             "type": "object",
             "properties": {
                 "email": {
@@ -443,7 +474,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_httpapi.createUserResponse": {
+        "httpapi.createUserResponse": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -480,7 +511,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_httpapi.loginRequest": {
+        "httpapi.loginRequest": {
             "type": "object",
             "properties": {
                 "identifier": {
@@ -491,10 +522,61 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_httpapi.refreshRequest": {
+        "httpapi.refreshRequest": {
             "type": "object",
             "properties": {
                 "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "httpapi.requestPasswordResetRequest": {
+            "type": "object",
+            "properties": {
+                "identifier": {
+                    "type": "string"
+                }
+            }
+        },
+        "user.Role": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "user.User": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "username": {
                     "type": "string"
                 }
             }
@@ -517,7 +599,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "",
 	Schemes:          []string{},
 	Title:            "Sanitas — Registry API",
-	Description:      "Users, roles, authentication. Admin-created users, activation via token,\nlogin, password change. Invite emails are sent via SMTP when configured\n(see docs/adr/0023), otherwise the invite link is returned in the API\nresponse for the admin to forward by hand.",
+	Description:      "Users, roles, authentication. Admin-created users, activation via token,\nlogin, password change, forgot-password reset. Invite and reset emails are\nsent via SMTP when configured (see docs/adr/0023, docs/adr/0024), otherwise\nthe invite link is returned in the API response for the admin to forward by hand.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

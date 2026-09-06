@@ -1,54 +1,33 @@
 definitions:
-  github_com_francescocerri_sanitas_services_registry_internal_user.Role:
-    properties:
-      display_name:
-        type: string
-      id:
-        type: string
-      slug:
-        type: string
-    type: object
-  github_com_francescocerri_sanitas_services_registry_internal_user.User:
-    properties:
-      created_at:
-        type: string
-      email:
-        type: string
-      id:
-        type: string
-      permissions:
-        items:
-          type: string
-        type: array
-      roles:
-        items:
-          type: string
-        type: array
-      username:
-        type: string
-    type: object
-  internal_httpapi.activateUserRequest:
+  httpapi.activateUserRequest:
     properties:
       password:
         type: string
       token:
         type: string
     type: object
-  internal_httpapi.authTokens:
+  httpapi.authTokens:
     properties:
       refresh_token:
         type: string
       token:
         type: string
     type: object
-  internal_httpapi.changePasswordRequest:
+  httpapi.changePasswordRequest:
     properties:
       new_password:
         type: string
       old_password:
         type: string
     type: object
-  internal_httpapi.createUserRequest:
+  httpapi.confirmPasswordResetRequest:
+    properties:
+      password:
+        type: string
+      token:
+        type: string
+    type: object
+  httpapi.createUserRequest:
     properties:
       email:
         type: string
@@ -59,7 +38,7 @@ definitions:
       username:
         type: string
     type: object
-  internal_httpapi.createUserResponse:
+  httpapi.createUserResponse:
     properties:
       created_at:
         type: string
@@ -90,25 +69,58 @@ definitions:
       username:
         type: string
     type: object
-  internal_httpapi.loginRequest:
+  httpapi.loginRequest:
     properties:
       identifier:
         type: string
       password:
         type: string
     type: object
-  internal_httpapi.refreshRequest:
+  httpapi.refreshRequest:
     properties:
       refresh_token:
+        type: string
+    type: object
+  httpapi.requestPasswordResetRequest:
+    properties:
+      identifier:
+        type: string
+    type: object
+  user.Role:
+    properties:
+      display_name:
+        type: string
+      id:
+        type: string
+      slug:
+        type: string
+    type: object
+  user.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      permissions:
+        items:
+          type: string
+        type: array
+      roles:
+        items:
+          type: string
+        type: array
+      username:
         type: string
     type: object
 info:
   contact: {}
   description: |-
     Users, roles, authentication. Admin-created users, activation via token,
-    login, password change. Invite emails are sent via SMTP when configured
-    (see docs/adr/0023), otherwise the invite link is returned in the API
-    response for the admin to forward by hand.
+    login, password change, forgot-password reset. Invite and reset emails are
+    sent via SMTP when configured (see docs/adr/0023, docs/adr/0024), otherwise
+    the invite link is returned in the API response for the admin to forward by hand.
   title: Sanitas — Registry API
   version: 0.1.0
 paths:
@@ -145,14 +157,14 @@ paths:
         name: credenziali
         required: true
         schema:
-          $ref: '#/definitions/internal_httpapi.loginRequest'
+          $ref: '#/definitions/httpapi.loginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_httpapi.authTokens'
+            $ref: '#/definitions/httpapi.authTokens'
         "400":
           description: Invalid payload
         "401":
@@ -174,7 +186,7 @@ paths:
         name: refresh
         required: true
         schema:
-          $ref: '#/definitions/internal_httpapi.refreshRequest'
+          $ref: '#/definitions/httpapi.refreshRequest'
       responses:
         "204":
           description: Logged out
@@ -193,7 +205,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.User'
+            $ref: '#/definitions/user.User'
         "401":
           description: Authentication required
       security:
@@ -211,7 +223,7 @@ paths:
         name: password
         required: true
         schema:
-          $ref: '#/definitions/internal_httpapi.changePasswordRequest'
+          $ref: '#/definitions/httpapi.changePasswordRequest'
       responses:
         "204":
           description: Password changed
@@ -222,6 +234,46 @@ paths:
       security:
       - BearerAuth: []
       summary: Change the authenticated user's password
+      tags:
+      - auth
+  /v1/password/reset/confirm:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Reset token and new password
+        in: body
+        name: conferma
+        required: true
+        schema:
+          $ref: '#/definitions/httpapi.confirmPasswordResetRequest'
+      responses:
+        "204":
+          description: Password reset
+        "400":
+          description: Invalid payload
+        "401":
+          description: Invalid, expired, or already used token
+      summary: Confirm a password reset via the emailed token, setting a new password
+      tags:
+      - auth
+  /v1/password/reset/request:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Email or username
+        in: body
+        name: richiesta
+        required: true
+        schema:
+          $ref: '#/definitions/httpapi.requestPasswordResetRequest'
+      responses:
+        "204":
+          description: Always returned, whether or not the identifier matches an account
+        "400":
+          description: Invalid payload
+      summary: Request a password reset email
       tags:
       - auth
   /v1/refresh:
@@ -237,14 +289,14 @@ paths:
         name: refresh
         required: true
         schema:
-          $ref: '#/definitions/internal_httpapi.refreshRequest'
+          $ref: '#/definitions/httpapi.refreshRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_httpapi.authTokens'
+            $ref: '#/definitions/httpapi.authTokens'
         "400":
           description: Invalid payload
         "401":
@@ -261,7 +313,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.Role'
+              $ref: '#/definitions/user.Role'
             type: array
         "401":
           description: Authentication required
@@ -284,14 +336,14 @@ paths:
         name: utente
         required: true
         schema:
-          $ref: '#/definitions/internal_httpapi.createUserRequest'
+          $ref: '#/definitions/httpapi.createUserRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/internal_httpapi.createUserResponse'
+            $ref: '#/definitions/httpapi.createUserResponse'
         "400":
           description: Invalid payload or unknown role
         "403":
@@ -313,7 +365,7 @@ paths:
         name: attivazione
         required: true
         schema:
-          $ref: '#/definitions/internal_httpapi.activateUserRequest'
+          $ref: '#/definitions/httpapi.activateUserRequest'
       produces:
       - application/json
       responses:

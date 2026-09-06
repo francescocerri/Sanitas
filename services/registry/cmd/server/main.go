@@ -22,9 +22,9 @@ import (
 // @title			Sanitas — Registry API
 // @version		0.1.0
 // @description	Users, roles, authentication. Admin-created users, activation via token,
-// @description	login, password change. Invite emails are sent via SMTP when configured
-// @description	(see docs/adr/0023), otherwise the invite link is returned in the API
-// @description	response for the admin to forward by hand.
+// @description	login, password change, forgot-password reset. Invite and reset emails are
+// @description	sent via SMTP when configured (see docs/adr/0023, docs/adr/0024), otherwise
+// @description	the invite link is returned in the API response for the admin to forward by hand.
 //
 // @securityDefinitions.apikey	BearerAuth
 // @in							header
@@ -127,7 +127,7 @@ func main() {
 		}
 	}
 
-	server := httpapi.NewServer(repo, keys, cfg.CORSAllowedOrigin, cfg.InviteURLBase, mailer, emailBranding, logger)
+	server := httpapi.NewServer(repo, keys, cfg.CORSAllowedOrigin, cfg.InviteURLBase, cfg.PasswordResetURLBase, mailer, emailBranding, logger)
 
 	httpServer := &http.Server{
 		Addr:    ":" + cfg.Port,

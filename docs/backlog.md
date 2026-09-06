@@ -26,11 +26,6 @@ Quando un'attività è "una feature non banale" (per la convenzione in `CLAUDE.m
 - [x] **`shifts` verifica i JWT**: tutti gli endpoint `/v1/shifts*` richiedono un token valido, verificato localmente contro la JWKS di `registry` (nessuna chiamata sincrona per ogni richiesta). Vedi [ADR-0017](adr/0017-shifts-verifica-jwt.md). Solo autenticazione — l'autorizzazione granulare per ruolo resta la voce già separata qui sotto.
 
 ## Frontend (`app/`, Flutter)
-
-- [ ] **Scaffold del progetto Flutter** (`app/`, sostituisce il precedente scaffold React in `web/`): routing (`go_router`), stato/sessione (`flutter_riverpod`), client HTTP con interceptor di refresh (`dio`), i18n italiano/inglese (`easy_localization`), tema per-comitato caricato da `config/<slug>/app/theme.json`. Vedi [ADR-0022](adr/0022-frontend-flutter.md).
-- [ ] **Login**: form identifier+password contro `POST /v1/login` di `registry`, gestione errori localizzata, sessione con access token in memoria + refresh token in `flutter_secure_storage`.
-- [ ] **Attivazione account** da link di invito (`POST /v1/users/activate`) — oggi il link lo inoltra a mano un admin (vedi `docs/funzionale/registry.md`), serve solo la schermata che lo consuma.
-- [ ] **Refresh automatico**: interceptor `dio` su 401 + refresh proattivo allo startup dell'app.
 - [ ] **Test**: unit test su decode JWT e sul controller di sessione, widget test minimi sulle 3 schermate.
 - [x] **Creazione utenti Flutter**: UI approvata, accesso con `users:manage`, catalogo ruoli da `GET /v1/roles`, creazione via `POST /v1/users`, copia link di attivazione e gestione errori.
 - [ ] **Lista utenti e modifica dei ruoli di utenti esistenti**: da pianificare.

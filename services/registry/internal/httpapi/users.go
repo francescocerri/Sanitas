@@ -12,6 +12,12 @@ import (
 
 const inviteTokenTTL = 7 * 24 * time.Hour
 
+// passwordResetTokenTTL è volutamente molto più breve di inviteTokenTTL: un
+// reset è un'operazione sensibile e ripetibile su un account già esistente,
+// non ha senso un link valido per giorni come per un primo invito — vedi
+// docs/adr/0024-recupero-password.md.
+const passwordResetTokenTTL = 1 * time.Hour
+
 type createUserRequest struct {
 	Email    string   `json:"email"`
 	Username string   `json:"username"`

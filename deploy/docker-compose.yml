@@ -62,6 +62,7 @@ services:
       JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private_key.pem
       ROLES_SEED_PATH: /config/registry/roles.json
       INVITE_URL_BASE: ${INVITE_URL_BASE:-http://localhost:5173/attiva}
+      PASSWORD_RESET_URL_BASE: ${PASSWORD_RESET_URL_BASE:-http://localhost:5173/#/reset-password}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
       INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}

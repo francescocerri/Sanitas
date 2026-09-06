@@ -12,9 +12,10 @@ type Config struct {
 	DatabaseURL       string
 	CORSAllowedOrigin string
 
-	JWTPrivateKeyPath string
-	RolesSeedPath     string
-	InviteURLBase     string
+	JWTPrivateKeyPath    string
+	RolesSeedPath        string
+	InviteURLBase        string
+	PasswordResetURLBase string
 
 	// Only used to bootstrap the first account when the users table is
 	// empty (see internal/user.Bootstrap) — not required afterwards.
@@ -48,6 +49,7 @@ func Load() (Config, error) {
 		JWTPrivateKeyPath:    os.Getenv("JWT_PRIVATE_KEY_PATH"),
 		RolesSeedPath:        os.Getenv("ROLES_SEED_PATH"),
 		InviteURLBase:        getEnv("INVITE_URL_BASE", "http://localhost:5173/attiva"),
+		PasswordResetURLBase: getEnv("PASSWORD_RESET_URL_BASE", "http://localhost:5173/#/reset-password"),
 		InitialAdminEmail:    os.Getenv("INITIAL_ADMIN_EMAIL"),
 		InitialAdminUsername: os.Getenv("INITIAL_ADMIN_USERNAME"),
 		InitialAdminPassword: os.Getenv("INITIAL_ADMIN_PASSWORD"),

@@ -6,9 +6,11 @@ import 'core/auth/auth_controller.dart';
 import 'core/auth/auth_state.dart';
 import 'features/activate_account/activate_account_screen.dart';
 import 'features/create_user/create_user_screen.dart';
+import 'features/forgot_password/forgot_password_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/login/login_screen.dart';
 import 'features/profile/profile_screen.dart';
+import 'features/reset_password/reset_password_screen.dart';
 import 'features/splash/splash_screen.dart';
 
 /// Sostituisce il taglio netto di default fra una schermata e l'altra con
@@ -51,6 +53,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final goingToSplash = location == '/';
       final goingToLogin = location == '/login';
       final goingToActivate = location == '/user-activation';
+      final goingToForgotPassword = location == '/forgot-password';
+      final goingToResetPassword = location == '/reset-password';
 
       switch (authState.status) {
         case AuthStatus.unknown:
@@ -61,7 +65,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           // già una sessione valida salvata.
           return goingToSplash ? null : '/';
         case AuthStatus.unauthenticated:
-          return (goingToLogin || goingToActivate) ? null : '/login';
+          return (goingToLogin ||
+                  goingToActivate ||
+                  goingToForgotPassword ||
+                  goingToResetPassword)
+              ? null
+              : '/login';
         case AuthStatus.authenticated:
           if (location == '/users/new' &&
               !(authState.claims?.hasPermission('users:manage') ?? false)) {
@@ -101,6 +110,17 @@ final routerProvider = Provider<GoRouter>((ref) {
           ActivateAccountScreen(
             inviteToken: state.uri.queryParameters['token'],
           ),
+        ),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        pageBuilder: (context, state) =>
+            _fadeTransitionPage(const ForgotPasswordScreen()),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        pageBuilder: (context, state) => _fadeTransitionPage(
+          ResetPasswordScreen(resetToken: state.uri.queryParameters['token']),
         ),
       ),
       GoRoute(
