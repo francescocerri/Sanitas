@@ -3,7 +3,7 @@
 ## Chi può fare cosa oggi
 
 - **Chiunque abbia un account attivo** può accedere (login), vedere il proprio profilo (email, username, ruoli) e cambiare la propria password — tramite l'app Sanitas (`app/`, vedi [ADR-0022](../adr/0022-frontend-flutter.md)), non solo da API.
-- **Un amministratore** (permesso di sistema, non un ruolo organizzativo) può creare un nuovo account per un volontario/socio, assegnandogli uno o più ruoli, e ricevere il link di attivazione da inoltrare a mano al nuovo utente. **Oggi questa operazione si fa solo da API** (`POST /v1/users`, es. via curl/Postman): non esiste ancora un pannello admin nell'app (voce di backlog separata). Chi riceve il link di attivazione lo apre invece direttamente nell'app, che gli mostra il form per impostare la propria password al primo accesso.
+- **Chi ha il permesso `users:manage` tramite i propri ruoli** può creare un nuovo account per un volontario/socio, assegnandogli uno o più ruoli, e ricevere il link di attivazione da inoltrare a mano al nuovo utente. L’operazione è disponibile nell’app tramite «Crea utente» nel profilo. Chi riceve il link di attivazione lo apre invece direttamente nell'app, che gli mostra il form per impostare la propria password al primo accesso.
 - **Non esiste ancora l'auto-registrazione**: nessuno può crearsi da solo un account, deve farlo un amministratore.
 
 ## Attivazione: scelta della password
@@ -22,3 +22,7 @@ Il form mostra i requisiti prima dell'invio: almeno 8 caratteri. Il pulsante «A
 Presidente, Responsabile turni, Responsabile mezzi, Responsabile vestiario, Responsabile magazzino, Trainer MS, Trainer TSSA, Volontario base, Volontario sociali, Volontario emergenza.
 
 Un utente può avere più ruoli contemporaneamente (es. Presidente **e** Responsabile turni).
+
+## Catalogo ruoli per chi gestisce gli utenti
+
+Chi possiede il permesso `users:manage` può consultare via API i ruoli disponibili (`GET /v1/roles`). Nell’app, il pulsante «Crea utente» nel profilo apre il form con email, username e ruoli selezionabili. L’invio resta disabilitato con dati non validi o durante il caricamento dei ruoli e la creazione. Dopo il salvataggio si può copiare il link di attivazione (valido 7 giorni) o creare un altro utente. Email e username già in uso vengono segnalati mantenendo i dati del form. L’invio automatico dell’email è in backlog.

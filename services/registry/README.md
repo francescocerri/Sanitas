@@ -79,3 +79,7 @@ swag init -g cmd/server/main.go -d . -o api --parseInternal --parseDependency
 | `INITIAL_ADMIN_EMAIL`     | *(nessuno)*              | Email del primo admin, usata solo se `users` è vuota                |
 | `INITIAL_ADMIN_USERNAME`  | *(nessuno)*              | Username del primo admin                                            |
 | `INITIAL_ADMIN_PASSWORD`  | *(nessuno)*              | Password del primo admin                                            |
+
+## Catalogo ruoli
+
+`GET /v1/roles` richiede un Bearer token con il permesso `users:manage`, come la creazione utenti. Restituisce un array di oggetti con `id`, `slug`, `display_name`, ordinato per nome visualizzato e slug; se non ci sono ruoli restituisce `[]`. Include tutti i ruoli presenti nel database, anche il ruolo tecnico di bootstrap. Il client passa gli slug selezionati a `POST /v1/users`. Errori: 401 senza autenticazione valida, 403 senza permesso, 500 per errori interni.

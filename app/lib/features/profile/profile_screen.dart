@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
 import '../../core/api_exception.dart';
@@ -43,6 +44,11 @@ class ProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'home.title'.tr(),
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => context.go('/home'),
+        ),
         title: Text('profile.title'.tr()),
         actions: [
           const ThemeToggleButton(),
@@ -142,13 +148,7 @@ class _ProfileContent extends StatelessWidget {
               const SizedBox(height: 28),
               _SectionCard(
                 children: [
-                  _InfoRow(
-                    icon: Icons.badge_outlined,
-                    label: 'profile.roles_label'.tr(),
-                    value: profile.roles.isEmpty
-                        ? '—'
-                        : profile.roles.join(', '),
-                  ),
+                  _RolesRow(roles: profile.roles),
                   const Divider(height: 24),
                   _InfoRow(
                     icon: Icons.calendar_today_outlined,
@@ -220,6 +220,87 @@ class _InfoRow extends StatelessWidget {
         Text(label, style: Theme.of(context).textTheme.labelLarge),
         const Spacer(),
         Text(value, style: Theme.of(context).textTheme.bodyMedium),
+      ],
+    );
+  }
+}
+
+/// Riga dedicata ai ruoli: a differenza di [_InfoRow] (un'unica riga
+/// etichetta+valore, va bene per un valore corto come una data), qui il
+/// valore è una LISTA di lunghezza variabile — con più di un ruolo, un
+/// unico `Text` con `join(', ')` andava in overflow orizzontale invece di
+/// andare a capo. Ogni ruolo diventa un "chip" arrotondato dentro un `Wrap`,
+/// che sposta l'elemento in eccesso sulla riga successiva da solo.
+class _RolesRow extends StatelessWidget {
+  const _RolesRow({required this.roles});
+
+  final List<String> roles;
+
+  /// I ruoli arrivano da `GET /v1/me` come slug tecnici (es.
+  /// "shift_manager", non "Responsabile turni" — quel nome "carino" vive
+  /// solo in `config/<slug>/registry/roles.json` lato backend ed è esposto
+  /// solo da `GET /v1/roles`, protetto dal permesso `users:manage` che un
+  /// volontario qualunque non ha). Qui ci limitiamo a un abbellimento
+  /// puramente testuale (via spazi, maiuscole) che non richiede permessi
+  /// né chiamate API in più — non è la vera etichetta italiana del ruolo,
+  /// ma è comunque molto più leggibile dello slug grezzo.
+  static String _prettify(String slug) {
+    return slug
+        .split('_')
+        .where((word) => word.isNotEmpty)
+        .map((word) => word[0].toUpperCase() + word.substring(1))
+        .join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.badge_outlined,
+              size: 20,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'profile.roles_label'.tr(),
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (roles.isEmpty)
+          Text('—', style: Theme.of(context).textTheme.bodyMedium)
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: roles
+                .map(
+                  (role) => Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      _prettify(role),
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
       ],
     );
   }

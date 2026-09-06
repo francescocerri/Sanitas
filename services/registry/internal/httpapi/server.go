@@ -36,6 +36,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST "+v1+"/refresh", s.handleRefresh)
 	mux.HandleFunc("POST "+v1+"/logout", s.handleLogout)
 	mux.HandleFunc("GET "+v1+"/me", s.requireAuth(s.handleMe))
+	mux.HandleFunc("GET "+v1+"/roles", s.requirePermission(user.PermUsersManage, s.handleListRoles))
 	mux.HandleFunc("POST "+v1+"/users", s.requirePermission(user.PermUsersManage, s.handleCreateUser))
 	mux.HandleFunc("POST "+v1+"/users/activate", s.handleActivateUser)
 	mux.HandleFunc("POST "+v1+"/password/change", s.requireAuth(s.handleChangePassword))
