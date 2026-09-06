@@ -1,0 +1,47 @@
+{
+  "app": {
+    "title": "Sanitas"
+  },
+  "common": {
+    "loading": "Loading...",
+    "retry": "Retry",
+    "logout": "Log out"
+  },
+  "login": {
+    "title": "Log in",
+    "identifier_label": "Email or username",
+    "password_label": "Password",
+    "submit": "Log in",
+    "identifier_required": "Enter your email or username",
+    "password_required": "Enter your password"
+  },
+  "activate_account": {
+    "title": "Activate your account",
+    "password_label": "New password",
+    "confirm_password_label": "Confirm password",
+    "submit": "Activate account",
+    "success": "Account activated: you can now log in",
+    "missing_token": "Invalid activation link: missing token",
+    "passwords_dont_match": "Passwords don't match"
+  },
+  "profile": {
+    "title": "My profile",
+    "email_label": "Email",
+    "username_label": "Username",
+    "roles_label": "Roles",
+    "member_since": "Member since {date}",
+    "change_password_title": "Change password",
+    "old_password_label": "Current password",
+    "new_password_label": "New password",
+    "change_password_submit": "Update password",
+    "change_password_success": "Password updated"
+  },
+  "errors": {
+    "invalid_credentials": "Incorrect email/username or password",
+    "invalid_payload": "Invalid data: please check the fields",
+    "invalid_or_expired_token": "Invalid or expired link",
+    "incorrect_old_password": "The current password is incorrect",
+    "network": "Could not reach the server: check your connection",
+    "unknown": "An unexpected error occurred"
+  }
+}

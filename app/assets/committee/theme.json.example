@@ -1,0 +1,9 @@
+{
+  "committee_name": "Nome del tuo comitato",
+  "default_locale": "it",
+  "colors": {
+    "primary": "#2563EB",
+    "secondary": "#0F172A",
+    "surface": "#FFFFFF"
+  }
+}
