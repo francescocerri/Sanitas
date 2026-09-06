@@ -22,3 +22,7 @@ Il form mostra i requisiti prima dell'invio: almeno 8 caratteri. Il pulsante «A
 Presidente, Responsabile turni, Responsabile mezzi, Responsabile vestiario, Responsabile magazzino, Trainer MS, Trainer TSSA, Volontario base, Volontario sociali, Volontario emergenza.
 
 Un utente può avere più ruoli contemporaneamente (es. Presidente **e** Responsabile turni).
+
+## Catalogo ruoli per chi gestisce gli utenti
+
+Chi possiede il permesso `users:manage` può consultare via API i ruoli disponibili (`GET /v1/roles`). La schermata Flutter di creazione utente è in fase di approvazione grafica e non è ancora implementata.

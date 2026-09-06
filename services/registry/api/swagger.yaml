@@ -1,4 +1,13 @@
 definitions:
+  github_com_francescocerri_sanitas_services_registry_internal_user.Role:
+    properties:
+      display_name:
+        type: string
+      id:
+        type: string
+      slug:
+        type: string
+    type: object
   github_com_francescocerri_sanitas_services_registry_internal_user.User:
     properties:
       created_at:
@@ -237,6 +246,28 @@ paths:
       summary: Refresh the access token
       tags:
       - auth
+  /v1/roles:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.Role'
+            type: array
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: users:manage'
+        "500":
+          description: Internal error
+      security:
+      - BearerAuth: []
+      summary: List available roles (requires the users:manage permission)
+      tags:
+      - roles
   /v1/users:
     post:
       consumes:

@@ -194,6 +194,15 @@ func (r *Repository) RoleIDsBySlug(ctx context.Context, slugs []string) (map[str
 	return result, nil
 }
 
+// ListRoles returns the database catalog in a stable order for role selectors.
+func (r *Repository) ListRoles(ctx context.Context) ([]Role, error) {
+	roles := make([]Role, 0)
+	if err := r.db.WithContext(ctx).Order("display_name").Order("slug").Find(&roles).Error; err != nil {
+		return nil, fmt.Errorf("user: list roles: %w", err)
+	}
+	return roles, nil
+}
+
 func (r *Repository) AssignRoles(ctx context.Context, userID string, roleIDs []string) error {
 	for _, roleID := range roleIDs {
 		err := r.db.WithContext(ctx).Exec(`

@@ -32,7 +32,7 @@ Quando un'attività è "una feature non banale" (per la convenzione in `CLAUDE.m
 - [ ] **Profilo self-service**: `GET /v1/me`, cambio password (`POST /v1/password/change`), logout (`POST /v1/logout`).
 - [ ] **Refresh automatico**: interceptor `dio` su 401 + refresh proattivo allo startup dell'app.
 - [ ] **Test**: unit test su decode JWT e sul controller di sessione, widget test minimi sulle 3 schermate.
-- [ ] **Pannello admin utenti/ruoli** (creazione utenti, assegnazione ruoli, lista utenti) — fuori perimetro della prima iterazione, richiede anche un nuovo endpoint backend (`GET /v1/roles`, oggi non esiste) per popolare un selettore ruoli. Da pianificare a parte.
+- [ ] **Pannello admin utenti/ruoli** (creazione utenti, assegnazione ruoli, lista utenti) — fuori perimetro della prima iterazione, UI di creazione in approvazione; `GET /v1/roles` ora disponibile per popolare il selettore ruoli. Lista utenti ancora da pianificare.
 - [ ] **Strategia di hosting/distribuzione**: come si serve la build web in produzione (oggi `deploy/docker-compose.yml` non ha alcun servizio frontend) e come si arriva a una pubblicazione reale su App Store/Google Play (account sviluppatore, firma, CI di release) — non affrontato nella prima iterazione.
 
 ## Database / ORM
@@ -58,3 +58,5 @@ Ognuno replicherà le stesse convenzioni (commenti, Swagger, linee guida Go, tes
 
 - [x] Definire dove tracciare le attività e le decisioni (questo file + `docs/adr/`).
 - [ ] Tenere `docs/backlog.md` e `docs/adr/` aggiornati ad ogni sessione rilevante — responsabilità condivisa umano/Claude, richiamata in `CLAUDE.md`.
+
+- [x] **Catalogo ruoli per creazione utenti**: `GET /v1/roles`, protetto da `users:manage`, con ID, slug e nome visualizzato; ordinamento per nome e slug.

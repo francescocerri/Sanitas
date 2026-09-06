@@ -229,6 +229,42 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/roles": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "List available roles (requires the users:manage permission)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.Role"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: users:manage"
+                    },
+                    "500": {
+                        "description": "Internal error"
+                    }
+                }
+            }
+        },
         "/v1/users": {
             "post": {
                 "security": [
@@ -314,6 +350,20 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "github_com_francescocerri_sanitas_services_registry_internal_user.Role": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_francescocerri_sanitas_services_registry_internal_user.User": {
             "type": "object",
             "properties": {
