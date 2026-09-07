@@ -31,6 +31,14 @@ func (r *Repository) Ping(ctx context.Context) error {
 	return sqlDB.PingContext(ctx)
 }
 
+func (r *Repository) CountTemplates(ctx context.Context) (int, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&ShiftTemplate{}).Count(&n).Error; err != nil {
+		return 0, fmt.Errorf("shift: count templates: %w", err)
+	}
+	return int(n), nil
+}
+
 // CreateTemplate ignores any id the caller passed in t, and always creates
 // an active template (see the comment on ShiftTemplate.Active — no DB
 // default, forced here instead, to sidestep the GORM zero-value-omits-insert
@@ -64,6 +72,27 @@ func (r *Repository) ListTemplates(ctx context.Context) ([]ShiftTemplate, error)
 		return nil, fmt.Errorf("shift: list templates: %w", err)
 	}
 	return result, nil
+}
+
+// UpdateTemplate replaces weekday/start_time/end_time/label/active for id.
+// A map, not `.Updates(t)`: GORM's struct-based Updates skips Go zero
+// values (same gotcha as Create, see the comment on ShiftTemplate.Active)
+// — a caller setting Active to false would otherwise be silently ignored.
+func (r *Repository) UpdateTemplate(ctx context.Context, id string, t ShiftTemplate) (ShiftTemplate, error) {
+	result := r.db.WithContext(ctx).Model(&ShiftTemplate{}).Where("id = ?", id).Updates(map[string]any{
+		"weekday":    t.Weekday,
+		"start_time": t.StartTime,
+		"end_time":   t.EndTime,
+		"label":      t.Label,
+		"active":     t.Active,
+	})
+	if result.Error != nil {
+		return ShiftTemplate{}, fmt.Errorf("shift: update template: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ShiftTemplate{}, ErrNotFound
+	}
+	return r.GetTemplate(ctx, id)
 }
 
 // CreateBooking ignores any id/status/decided_by/decided_at the caller

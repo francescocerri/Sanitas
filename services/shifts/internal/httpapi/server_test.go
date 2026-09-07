@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -215,5 +216,151 @@ func TestRequirePermission(t *testing.T) {
 	handler.ServeHTTP(withPermRec, withPermReq)
 	if withPermRec.Code != http.StatusOK {
 		t.Fatalf("expected 200 with the right permission, got %d: %s", withPermRec.Code, withPermRec.Body.String())
+	}
+}
+
+func TestCreateAndListShiftTemplates(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	configureToken := issuer.token(t, []string{permShiftsConfigure})
+	readToken := issuer.token(t, []string{permShiftsRead})
+
+	body, _ := json.Marshal(createTemplateRequest{Weekday: 4, StartTime: "20:00", EndTime: "08:00", Label: "Turno Serale"})
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/shift-templates", bytes.NewReader(body))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer "+configureToken)
+	createRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+	var created shift.ShiftTemplate
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if created.ID == "" {
+		t.Fatal("expected a non-empty id")
+	}
+	if !created.Active {
+		t.Fatal("expected a newly created template to be active")
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/shift-templates", nil)
+	listReq.Header.Set("Authorization", "Bearer "+readToken)
+	listRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+	var listed []shift.ShiftTemplate
+	if err := json.Unmarshal(listRec.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listed) != 1 || listed[0].ID != created.ID {
+		t.Fatalf("expected the created template in the list, got %+v", listed)
+	}
+}
+
+func TestCreateShiftTemplate_RequiresConfigurePermission(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	body, _ := json.Marshal(createTemplateRequest{Weekday: 4, StartTime: "20:00", EndTime: "08:00", Label: "x"})
+
+	readOnly := issuer.token(t, []string{permShiftsRead})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-templates", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+readOnly)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 with only shifts:read, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestListShiftTemplates_RequiresReadPermission(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/shift-templates", nil)
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, nil))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 with no permissions, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateShiftTemplate_ValidatesFields(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	token := issuer.token(t, []string{permShiftsConfigure})
+
+	for _, tc := range []struct {
+		name string
+		req  createTemplateRequest
+	}{
+		{"weekday too low", createTemplateRequest{Weekday: -1, StartTime: "08:00", EndTime: "14:00", Label: "x"}},
+		{"weekday too high", createTemplateRequest{Weekday: 7, StartTime: "08:00", EndTime: "14:00", Label: "x"}},
+		{"malformed start_time", createTemplateRequest{Weekday: 1, StartTime: "8:00", EndTime: "14:00", Label: "x"}},
+		{"malformed end_time", createTemplateRequest{Weekday: 1, StartTime: "08:00", EndTime: "24:00", Label: "x"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(tc.req)
+			req := httptest.NewRequest(http.MethodPost, "/v1/shift-templates", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			server.Routes().ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestUpdateShiftTemplate(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	token := issuer.token(t, []string{permShiftsConfigure})
+
+	createBody, _ := json.Marshal(createTemplateRequest{Weekday: 6, StartTime: "08:00", EndTime: "14:00", Label: "Turno Mattina"})
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/shift-templates", bytes.NewReader(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer "+token)
+	createRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(createRec, createReq)
+	var created shift.ShiftTemplate
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+
+	updateBody, _ := json.Marshal(updateTemplateRequest{Weekday: 0, StartTime: "09:00", EndTime: "13:00", Label: "Modificato", Active: false})
+	updateReq := httptest.NewRequest(http.MethodPatch, "/v1/shift-templates/"+created.ID, bytes.NewReader(updateBody))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateReq.Header.Set("Authorization", "Bearer "+token)
+	updateRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(updateRec, updateReq)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", updateRec.Code, updateRec.Body.String())
+	}
+	var updated shift.ShiftTemplate
+	if err := json.Unmarshal(updateRec.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decode update response: %v", err)
+	}
+	if updated.Active {
+		t.Fatal("expected Active to be false after the update")
+	}
+	if updated.Label != "Modificato" {
+		t.Fatalf("expected the label to be updated, got %q", updated.Label)
+	}
+}
+
+func TestUpdateShiftTemplate_NotFound(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	token := issuer.token(t, []string{permShiftsConfigure})
+
+	body, _ := json.Marshal(updateTemplateRequest{Weekday: 1, StartTime: "08:00", EndTime: "14:00", Label: "x", Active: true})
+	req := httptest.NewRequest(http.MethodPatch, "/v1/shift-templates/00000000-0000-0000-0000-000000000000", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

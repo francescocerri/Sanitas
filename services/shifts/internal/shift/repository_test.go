@@ -139,6 +139,73 @@ func TestRepository_ListTemplatesOrdersByWeekdayAndStartTime(t *testing.T) {
 	}
 }
 
+func TestRepository_CountTemplates(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+
+	n, err := repo.CountTemplates(ctx)
+	if err != nil {
+		t.Fatalf("CountTemplates: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("expected 0 templates, got %d", n)
+	}
+
+	newTestTemplate(t, repo)
+
+	n, err = repo.CountTemplates(ctx)
+	if err != nil {
+		t.Fatalf("CountTemplates: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("expected 1 template, got %d", n)
+	}
+}
+
+func TestRepository_UpdateTemplate(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+
+	updated, err := repo.UpdateTemplate(ctx, tpl.ID, ShiftTemplate{
+		Weekday:   int(time.Sunday),
+		StartTime: "09:00",
+		EndTime:   "13:00",
+		Label:     "Turno modificato",
+		Active:    false,
+	})
+	if err != nil {
+		t.Fatalf("UpdateTemplate: %v", err)
+	}
+	if updated.Weekday != int(time.Sunday) || updated.StartTime != "09:00" || updated.EndTime != "13:00" || updated.Label != "Turno modificato" {
+		t.Fatalf("unexpected fields after update: %+v", updated)
+	}
+	// The whole point of the map-based update (see UpdateTemplate): Active
+	// must actually become false, not silently stay true.
+	if updated.Active {
+		t.Fatal("expected Active to be false after the update, got true")
+	}
+
+	got, err := repo.GetTemplate(ctx, tpl.ID)
+	if err != nil {
+		t.Fatalf("GetTemplate: %v", err)
+	}
+	if got.Active {
+		t.Fatal("expected the persisted row to have Active=false")
+	}
+}
+
+func TestRepository_UpdateTemplateNotFound(t *testing.T) {
+	repo := newTestRepository(t)
+
+	_, err := repo.UpdateTemplate(context.Background(), "00000000-0000-0000-0000-000000000000", ShiftTemplate{
+		Weekday: int(time.Monday), StartTime: "08:00", EndTime: "14:00", Label: "x", Active: true,
+	})
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
 func TestRepository_CreateAndGetBooking(t *testing.T) {
 	repo := newTestRepository(t)
 	ctx := context.Background()
