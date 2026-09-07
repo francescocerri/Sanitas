@@ -22,7 +22,9 @@ import (
 // — see docs/adr/0018/0025.
 const (
 	permShiftsRead      = "shifts:read"
+	permShiftsWrite     = "shifts:write"
 	permShiftsConfigure = "shifts:configure"
+	permShiftsRequest   = "shifts:request"
 )
 
 type Server struct {
@@ -42,8 +44,8 @@ func NewServer(repo *shift.Repository, authClient *authclient.Client, allowedOri
 // annotations, each @Router spells out its real full path instead).
 const v1 = "/v1"
 
-// Booking routes (request/approve/direct-book) return in later "Gestione
-// turni" backlog items (4-6) — see docs/adr/0025-modello-dati-turni.md.
+// Approve/reject and direct-book routes return in later "Gestione turni"
+// backlog items (5-6) — see docs/adr/0025-modello-dati-turni.md.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
@@ -51,6 +53,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST "+v1+"/shift-templates", s.requirePermission(permShiftsConfigure, s.handleCreateTemplate))
 	mux.HandleFunc("PATCH "+v1+"/shift-templates/{id}", s.requirePermission(permShiftsConfigure, s.handleUpdateTemplate))
 	mux.HandleFunc("GET "+v1+"/shift-occurrences", s.requirePermission(permShiftsRead, s.handleListOccurrences))
+	mux.HandleFunc("POST "+v1+"/shift-bookings", s.requirePermission(permShiftsRequest, s.handleCreateBooking))
+	mux.HandleFunc("GET "+v1+"/shift-bookings/pending-count", s.requirePermission(permShiftsWrite, s.handlePendingBookingsCount))
 	mux.Handle("GET /docs/", docsHandler())
 	return s.withLogging(s.withCORS(mux))
 }
@@ -91,6 +95,16 @@ func (s *Server) requirePermission(permission string, next http.HandlerFunc) htt
 		}
 		next(w, r)
 	})
+}
+
+// claimsFromContext reads the claims requireAuth already verified and
+// stashed in the request context — used by handlers that need the
+// caller's own identity (claims.Subject), not just a permission check
+// (see handleCreateBooking). Never nil when called from a handler reached
+// through requireAuth/requirePermission.
+func claimsFromContext(r *http.Request) *authclient.Claims {
+	claims, _ := r.Context().Value(claimsContextKey{}).(*authclient.Claims)
+	return claims
 }
 
 // CORS is deliberately minimal (one configurable origin, GET/POST only): the

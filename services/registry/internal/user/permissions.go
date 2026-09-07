@@ -13,18 +13,25 @@ const (
 	// prenotazioni e prenotare direttamente per un volontario. Vedi
 	// docs/adr/0025-modello-dati-turni.md.
 	PermShiftsConfigure = "shifts:configure"
+	// PermShiftsRequest permette di richiedere una prenotazione su uno slot
+	// libero — assegnato solo al ruolo "volontario di emergenza"
+	// (config/pavullo/registry/roles.json). Un permesso dedicato, non un
+	// controllo su claims.Roles: stesso meccanismo usato per ogni altra
+	// autorizzazione in questo sistema.
+	PermShiftsRequest = "shifts:request"
 )
 
 // AllPermissions grants everything — used only to seed the bootstrap admin's
 // technical role (see Bootstrap), never assigned to an organizational role
 // from config.
-var AllPermissions = []string{PermUsersManage, PermShiftsRead, PermShiftsWrite, PermShiftsConfigure}
+var AllPermissions = []string{PermUsersManage, PermShiftsRead, PermShiftsWrite, PermShiftsConfigure, PermShiftsRequest}
 
 var knownPermissions = map[string]bool{
 	PermUsersManage:     true,
 	PermShiftsRead:      true,
 	PermShiftsWrite:     true,
 	PermShiftsConfigure: true,
+	PermShiftsRequest:   true,
 }
 
 func isKnownPermission(slug string) bool {

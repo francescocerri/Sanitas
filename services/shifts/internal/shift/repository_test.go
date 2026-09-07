@@ -341,3 +341,114 @@ func TestRepository_OnlyOneConfirmedBookingPerSlot(t *testing.T) {
 		t.Fatal("expected confirming a second booking for the same template+date to fail")
 	}
 }
+
+func TestRepository_HasConfirmedBooking(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+	date := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+
+	has, err := repo.HasConfirmedBooking(ctx, tpl.ID, date)
+	if err != nil {
+		t.Fatalf("HasConfirmedBooking: %v", err)
+	}
+	if has {
+		t.Fatal("expected no confirmed booking yet")
+	}
+
+	pending, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	if err != nil {
+		t.Fatalf("CreateBooking: %v", err)
+	}
+	has, err = repo.HasConfirmedBooking(ctx, tpl.ID, date)
+	if err != nil {
+		t.Fatalf("HasConfirmedBooking: %v", err)
+	}
+	if has {
+		t.Fatal("a pending booking must not count as confirmed")
+	}
+
+	if err := testDB.Model(&Booking{}).Where("id = ?", pending.ID).Update("status", BookingStatusConfirmed).Error; err != nil {
+		t.Fatalf("confirm booking: %v", err)
+	}
+	has, err = repo.HasConfirmedBooking(ctx, tpl.ID, date)
+	if err != nil {
+		t.Fatalf("HasConfirmedBooking: %v", err)
+	}
+	if !has {
+		t.Fatal("expected a confirmed booking now")
+	}
+}
+
+func TestRepository_HasBookingForVolunteer(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+	date := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+
+	has, err := repo.HasBookingForVolunteer(ctx, tpl.ID, date, testVolunteerID)
+	if err != nil {
+		t.Fatalf("HasBookingForVolunteer: %v", err)
+	}
+	if has {
+		t.Fatal("expected no booking yet")
+	}
+
+	booking, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	if err != nil {
+		t.Fatalf("CreateBooking: %v", err)
+	}
+	has, err = repo.HasBookingForVolunteer(ctx, tpl.ID, date, testVolunteerID)
+	if err != nil {
+		t.Fatalf("HasBookingForVolunteer: %v", err)
+	}
+	if !has {
+		t.Fatal("expected a pending booking to count")
+	}
+
+	// rejected/cancelled don't block a new request.
+	if err := testDB.Model(&Booking{}).Where("id = ?", booking.ID).Update("status", BookingStatusRejected).Error; err != nil {
+		t.Fatalf("reject booking: %v", err)
+	}
+	has, err = repo.HasBookingForVolunteer(ctx, tpl.ID, date, testVolunteerID)
+	if err != nil {
+		t.Fatalf("HasBookingForVolunteer: %v", err)
+	}
+	if has {
+		t.Fatal("a rejected booking must not block a new request")
+	}
+}
+
+func TestRepository_CountPendingBookings(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+	date := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+
+	n, err := repo.CountPendingBookings(ctx)
+	if err != nil {
+		t.Fatalf("CountPendingBookings: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("expected 0, got %d", n)
+	}
+
+	confirmed, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	if err != nil {
+		t.Fatalf("CreateBooking: %v", err)
+	}
+	if err := testDB.Model(&Booking{}).Where("id = ?", confirmed.ID).Update("status", BookingStatusConfirmed).Error; err != nil {
+		t.Fatalf("confirm booking: %v", err)
+	}
+	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date.AddDate(0, 0, 7), StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
+		t.Fatalf("CreateBooking pending: %v", err)
+	}
+
+	n, err = repo.CountPendingBookings(ctx)
+	if err != nil {
+		t.Fatalf("CountPendingBookings: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("expected 1 (confirmed one excluded), got %d", n)
+	}
+}
