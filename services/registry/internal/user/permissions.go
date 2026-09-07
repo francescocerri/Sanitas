@@ -8,17 +8,23 @@ const (
 	PermUsersManage = "users:manage"
 	PermShiftsRead  = "shifts:read"
 	PermShiftsWrite = "shifts:write"
+	// PermShiftsConfigure decide giorni/orari dei turni-template (ricorrenti)
+	// — distinto da PermShiftsWrite, che resta per approvare/rifiutare
+	// prenotazioni e prenotare direttamente per un volontario. Vedi
+	// docs/adr/0025-modello-dati-turni.md.
+	PermShiftsConfigure = "shifts:configure"
 )
 
 // AllPermissions grants everything — used only to seed the bootstrap admin's
 // technical role (see Bootstrap), never assigned to an organizational role
 // from config.
-var AllPermissions = []string{PermUsersManage, PermShiftsRead, PermShiftsWrite}
+var AllPermissions = []string{PermUsersManage, PermShiftsRead, PermShiftsWrite, PermShiftsConfigure}
 
 var knownPermissions = map[string]bool{
-	PermUsersManage: true,
-	PermShiftsRead:  true,
-	PermShiftsWrite: true,
+	PermUsersManage:     true,
+	PermShiftsRead:      true,
+	PermShiftsWrite:     true,
+	PermShiftsConfigure: true,
 }
 
 func isKnownPermission(slug string) bool {

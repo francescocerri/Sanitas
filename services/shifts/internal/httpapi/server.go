@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -14,15 +13,6 @@ import (
 
 	"github.com/francescocerri/sanitas/services/shifts/internal/authclient"
 	"github.com/francescocerri/sanitas/services/shifts/internal/shift"
-)
-
-// Permission slugs this service checks — same string values as registry's
-// user.PermShiftsRead/PermShiftsWrite (independent Go modules, no shared
-// code, see ADR-0003/ADR-0017) — which role gets which is per-committee
-// config on registry's side, not something shifts decides — see docs/adr/0018.
-const (
-	permShiftsRead  = "shifts:read"
-	permShiftsWrite = "shifts:write"
 )
 
 type Server struct {
@@ -42,12 +32,13 @@ func NewServer(repo *shift.Repository, authClient *authclient.Client, allowedOri
 // annotations, each @Router spells out its real full path instead).
 const v1 = "/v1"
 
+// Le route sulla risorsa turni (turni-template, prenotazioni) tornano nelle
+// prossime voci del backlog "Gestione turni" (2-6), sul nuovo modello dati
+// — vedi docs/adr/0025-modello-dati-turni.md. Fino ad allora restano solo
+// le route operative/meta.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
-	mux.HandleFunc("GET "+v1+"/shifts", s.requirePermission(permShiftsRead, s.handleListShifts))
-	mux.HandleFunc("POST "+v1+"/shifts", s.requirePermission(permShiftsWrite, s.handleCreateShift))
-	mux.HandleFunc("GET "+v1+"/shifts/{id}", s.requirePermission(permShiftsRead, s.handleGetShift))
 	mux.Handle("GET /docs/", docsHandler())
 	return s.withLogging(s.withCORS(mux))
 }
@@ -201,75 +192,6 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-}
-
-// @Summary	List shifts (requires the shifts:read permission)
-// @Tags		shifts
-// @Produce	json
-// @Security	BearerAuth
-// @Success	200	{array}	shift.Shift
-// @Failure	401	"Authentication required"
-// @Failure	403	"Missing required permission: shifts:read"
-// @Router		/v1/shifts [get]
-func (s *Server) handleListShifts(w http.ResponseWriter, r *http.Request) {
-	shifts, err := s.repo.List(r.Context())
-	if err != nil {
-		s.logger.Error("list shifts", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	writeJSON(w, http.StatusOK, shifts)
-}
-
-// @Summary	Create a new shift (requires the shifts:write permission)
-// @Tags		shifts
-// @Accept		json
-// @Produce	json
-// @Security	BearerAuth
-// @Param		shift	body		shift.Shift	true	"New shift (id and status in the input are ignored)"
-// @Success	201		{object}	shift.Shift
-// @Failure	400		"Invalid payload"
-// @Failure	401		"Authentication required"
-// @Failure	403		"Missing required permission: shifts:write"
-// @Router		/v1/shifts [post]
-func (s *Server) handleCreateShift(w http.ResponseWriter, r *http.Request) {
-	var input shift.Shift
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid payload")
-		return
-	}
-	created, err := s.repo.Create(r.Context(), input)
-	if err != nil {
-		s.logger.Error("create shift", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	writeJSON(w, http.StatusCreated, created)
-}
-
-// @Summary	Get a shift by id (requires the shifts:read permission)
-// @Tags		shifts
-// @Produce	json
-// @Security	BearerAuth
-// @Param		id	path		string	true	"Shift id (UUID)"
-// @Success	200	{object}	shift.Shift
-// @Failure	401	"Authentication required"
-// @Failure	403	"Missing required permission: shifts:read"
-// @Failure	404	"Shift not found"
-// @Router		/v1/shifts/{id} [get]
-func (s *Server) handleGetShift(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	t, err := s.repo.Get(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, shift.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "shift not found")
-			return
-		}
-		s.logger.Error("get shift", "error", err, "id", id)
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	writeJSON(w, http.StatusOK, t)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

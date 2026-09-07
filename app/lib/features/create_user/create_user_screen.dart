@@ -35,15 +35,19 @@ ApiException _userError(DioException error) => ApiException.fromDioException(
   },
 );
 
+// Il catalogo ruoli è di sola lettura per chiunque sia autenticato (vedi
+// GET /v1/roles in services/registry): nessun controllo su
+// canManageUsersProvider qui, riusato anche da manage_users_screen.dart
+// per mostrare il nome dei ruoli a chi non ha users:manage. Chi crea
+// utenti resta comunque protetto altrove: la rotta /users/new è
+// raggiungibile solo con quel permesso (vedi router.dart) e
+// POST /v1/users lo richiede anche lato backend.
 final availableRolesProvider = FutureProvider.autoDispose<List<AvailableRole>>((
   ref,
 ) async {
   ref.watch(
     authControllerProvider.select((session) => session.claims?.subject),
   );
-  if (!ref.watch(canManageUsersProvider)) {
-    throw const ApiException('create_user.forbidden');
-  }
   try {
     final response = await ref
         .watch(apiDioProvider)

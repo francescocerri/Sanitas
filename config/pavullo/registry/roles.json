@@ -1,6 +1,6 @@
 [
   { "slug": "president", "display_name": "Presidente", "permissions": ["users:manage", "shifts:read", "shifts:write"] },
-  { "slug": "shift_manager", "display_name": "Responsabile turni", "permissions": ["shifts:read", "shifts:write"] },
+  { "slug": "shift_manager", "display_name": "Responsabile turni", "permissions": ["shifts:read", "shifts:write", "shifts:configure"] },
   { "slug": "vehicle_manager", "display_name": "Responsabile mezzi", "permissions": ["shifts:read"] },
   { "slug": "uniform_manager", "display_name": "Responsabile vestiario", "permissions": ["shifts:read"] },
   { "slug": "warehouse_manager", "display_name": "Responsabile magazzino", "permissions": ["shifts:read"] },

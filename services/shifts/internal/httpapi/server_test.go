@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -25,20 +24,14 @@ import (
 
 var testDB *gorm.DB
 
-// testVolunteerID is a real registry.users row seeded by testdb.StartPostgres
-// — shifts.shifts.volunteer_id is now an FK, so tests need an existing user
-// to reference instead of an arbitrary placeholder string.
-var testVolunteerID string
-
 func TestMain(m *testing.M) {
 	ctx := context.Background()
-	db, volunteerID, cleanup, err := testdb.StartPostgres(ctx, shift.Migrate)
+	db, _, cleanup, err := testdb.StartPostgres(ctx, shift.Migrate)
 	if err != nil {
 		panic(err)
 	}
 	defer cleanup()
 	testDB = db
-	testVolunteerID = volunteerID
 
 	os.Exit(m.Run())
 }
@@ -95,8 +88,7 @@ func bigEndianExponent(e int) []byte {
 }
 
 // token signs a JWT carrying the given permissions — the shape
-// requirePermission actually checks (see docs/adr/0018). Roles aren't
-// checked by any logic in shifts, so tests only ever need to set permissions.
+// requirePermission actually checks (see docs/adr/0018).
 func (iss *testIssuer) token(t *testing.T, permissions []string) string {
 	t.Helper()
 	claims := authclient.Claims{
@@ -124,8 +116,8 @@ func (iss *testIssuer) token(t *testing.T, permissions []string) string {
 func newTestServerWithIssuer(t *testing.T) (*Server, *testIssuer) {
 	t.Helper()
 	t.Cleanup(func() {
-		if err := testDB.Exec("TRUNCATE shifts").Error; err != nil {
-			t.Fatalf("truncate shifts: %v", err)
+		if err := testDB.Exec("TRUNCATE bookings, shift_templates").Error; err != nil {
+			t.Fatalf("truncate: %v", err)
 		}
 	})
 	repo := shift.NewRepository(testDB)
@@ -140,16 +132,13 @@ func newTestServerWithIssuer(t *testing.T) (*Server, *testIssuer) {
 	return NewServer(repo, authClient, "http://localhost:5173", logger), issuer
 }
 
-// newTestServer is newTestServerWithIssuer for the common case: a token
-// with every shifts permission, for tests that aren't exercising
-// authorization itself (see TestShifts_RequirePermission for that).
-func newTestServer(t *testing.T) (*Server, string) {
-	server, issuer := newTestServerWithIssuer(t)
-	return server, issuer.token(t, []string{permShiftsRead, permShiftsWrite})
+func newTestServer(t *testing.T) *Server {
+	server, _ := newTestServerWithIssuer(t)
+	return server
 }
 
 func TestHealthz(t *testing.T) {
-	server, _ := newTestServer(t)
+	server := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
 
@@ -160,173 +149,71 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
-func TestCreateAndGetShift(t *testing.T) {
-	server, token := newTestServer(t)
+// requireAuth/requirePermission have no business route to exercise them
+// against right now (see docs/adr/0025-modello-dati-turni.md — the old
+// /v1/shifts* routes are gone, the new ones return in later backlog items),
+// so these tests mount the middleware directly over a stub handler instead
+// of going through Routes(). The middleware itself doesn't change with the
+// domain model, so this coverage stays meaningful across the gap.
+func TestRequireAuth(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
 
-	body, _ := json.Marshal(shift.Shift{
-		VolunteerID: testVolunteerID,
-		Date:        "2026-09-10",
-		StartTime:   "08:00",
-		EndTime:     "14:00",
-	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/shifts", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(rec, req)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /protected", server.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	handler := server.withLogging(server.withCORS(mux))
 
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("POST /v1/shifts: expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var created shift.Shift
-	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decode create response: %v", err)
-	}
-	if created.ID == "" {
-		t.Fatal("expected a non-empty id in the create response")
-	}
-
-	getReq := httptest.NewRequest(http.MethodGet, "/v1/shifts/"+created.ID, nil)
-	getReq.Header.Set("Authorization", "Bearer "+token)
-	getRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(getRec, getReq)
-
-	if getRec.Code != http.StatusOK {
-		t.Fatalf("GET /v1/shifts/{id}: expected 200, got %d: %s", getRec.Code, getRec.Body.String())
-	}
-}
-
-func TestGetShiftNotFound(t *testing.T) {
-	server, token := newTestServer(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/shifts/00000000-0000-0000-0000-000000000000", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", rec.Code)
-	}
-	var body map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode error response: %v", err)
-	}
-	if body["error"] != "shift not found" {
-		t.Fatalf("unexpected error body: %v", body)
-	}
-}
-
-func TestCreateShiftInvalidPayload(t *testing.T) {
-	server, token := newTestServer(t)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/shifts", bytes.NewReader([]byte("not json")))
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rec.Code)
-	}
-}
-
-func TestShifts_RequireAuth(t *testing.T) {
-	server, token := newTestServer(t)
-
-	noAuth := httptest.NewRequest(http.MethodGet, "/v1/shifts", nil)
+	noAuth := httptest.NewRequest(http.MethodGet, "/protected", nil)
 	noAuthRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(noAuthRec, noAuth)
+	handler.ServeHTTP(noAuthRec, noAuth)
 	if noAuthRec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 with no Authorization header, got %d: %s", noAuthRec.Code, noAuthRec.Body.String())
 	}
 
-	invalid := httptest.NewRequest(http.MethodGet, "/v1/shifts", nil)
+	invalid := httptest.NewRequest(http.MethodGet, "/protected", nil)
 	invalid.Header.Set("Authorization", "Bearer not-a-real-token")
 	invalidRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(invalidRec, invalid)
+	handler.ServeHTTP(invalidRec, invalid)
 	if invalidRec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 with an invalid token, got %d: %s", invalidRec.Code, invalidRec.Body.String())
 	}
 
-	valid := httptest.NewRequest(http.MethodGet, "/v1/shifts", nil)
-	valid.Header.Set("Authorization", "Bearer "+token)
+	valid := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	valid.Header.Set("Authorization", "Bearer "+issuer.token(t, nil))
 	validRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(validRec, valid)
+	handler.ServeHTTP(validRec, valid)
 	if validRec.Code != http.StatusOK {
 		t.Fatalf("expected 200 with a valid token, got %d: %s", validRec.Code, validRec.Body.String())
 	}
 }
 
 // A valid token isn't enough on its own — the right permission must be
-// among its claims, checked per action (see docs/adr/0018): shifts:read
-// for the two GETs, shifts:write for creating one.
-func TestShifts_RequirePermission(t *testing.T) {
+// among its claims, checked per action (see docs/adr/0018).
+func TestRequirePermission(t *testing.T) {
 	server, issuer := newTestServerWithIssuer(t)
 
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /protected", server.requirePermission("some:permission", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	handler := server.withLogging(server.withCORS(mux))
+
 	noPermissions := issuer.token(t, nil)
-	rec := httptest.NewRequest(http.MethodGet, "/v1/shifts", nil)
-	rec.Header.Set("Authorization", "Bearer "+noPermissions)
-	w := httptest.NewRecorder()
-	server.Routes().ServeHTTP(w, rec)
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("GET /v1/shifts with no permissions: expected 403, got %d: %s", w.Code, w.Body.String())
+	noPermReq := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	noPermReq.Header.Set("Authorization", "Bearer "+noPermissions)
+	noPermRec := httptest.NewRecorder()
+	handler.ServeHTTP(noPermRec, noPermReq)
+	if noPermRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 with no permissions, got %d: %s", noPermRec.Code, noPermRec.Body.String())
 	}
 
-	readOnly := issuer.token(t, []string{permShiftsRead})
-
-	readReq := httptest.NewRequest(http.MethodGet, "/v1/shifts", nil)
-	readReq.Header.Set("Authorization", "Bearer "+readOnly)
-	readRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(readRec, readReq)
-	if readRec.Code != http.StatusOK {
-		t.Fatalf("GET /v1/shifts with shifts:read: expected 200, got %d: %s", readRec.Code, readRec.Body.String())
-	}
-
-	body, _ := json.Marshal(shift.Shift{VolunteerID: testVolunteerID, Date: "2026-09-10", StartTime: "08:00", EndTime: "14:00"})
-	writeReq := httptest.NewRequest(http.MethodPost, "/v1/shifts", bytes.NewReader(body))
-	writeReq.Header.Set("Content-Type", "application/json")
-	writeReq.Header.Set("Authorization", "Bearer "+readOnly)
-	writeRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(writeRec, writeReq)
-	if writeRec.Code != http.StatusForbidden {
-		t.Fatalf("POST /v1/shifts with only shifts:read: expected 403, got %d: %s", writeRec.Code, writeRec.Body.String())
-	}
-
-	writeToken := issuer.token(t, []string{permShiftsWrite})
-	writeReq2 := httptest.NewRequest(http.MethodPost, "/v1/shifts", bytes.NewReader(body))
-	writeReq2.Header.Set("Content-Type", "application/json")
-	writeReq2.Header.Set("Authorization", "Bearer "+writeToken)
-	writeRec2 := httptest.NewRecorder()
-	server.Routes().ServeHTTP(writeRec2, writeReq2)
-	if writeRec2.Code != http.StatusCreated {
-		t.Fatalf("POST /v1/shifts with shifts:write: expected 201, got %d: %s", writeRec2.Code, writeRec2.Body.String())
-	}
-}
-
-func TestCreateShiftLogsBodyWithPIIRedacted(t *testing.T) {
-	server, token := newTestServer(t)
-
-	var logBuf bytes.Buffer
-	server.logger = slog.New(slog.NewJSONHandler(&logBuf, nil))
-
-	body, _ := json.Marshal(shift.Shift{
-		VolunteerID: testVolunteerID,
-		Date:        "2026-09-10",
-		StartTime:   "08:00",
-		EndTime:     "14:00",
-	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/shifts", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
-	logged := logBuf.String()
-	if bytes.Contains(logBuf.Bytes(), []byte(testVolunteerID)) {
-		t.Fatalf("PII leaked into the log: %s", logged)
-	}
-	if !bytes.Contains(logBuf.Bytes(), []byte("[redacted]")) {
-		t.Fatalf("expected the request-handled log line to contain the redacted body, got: %s", logged)
+	withPermission := issuer.token(t, []string{"some:permission"})
+	withPermReq := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	withPermReq.Header.Set("Authorization", "Bearer "+withPermission)
+	withPermRec := httptest.NewRecorder()
+	handler.ServeHTTP(withPermRec, withPermReq)
+	if withPermRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with the right permission, got %d: %s", withPermRec.Code, withPermRec.Body.String())
 	}
 }

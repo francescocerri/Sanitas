@@ -305,7 +305,7 @@ const docTemplate = `{
                 "tags": [
                     "roles"
                 ],
-                "summary": "List available roles (requires the users:manage permission)",
+                "summary": "List available roles (any authenticated user)",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -319,9 +319,6 @@ const docTemplate = `{
                     "401": {
                         "description": "Authentication required"
                     },
-                    "403": {
-                        "description": "Missing required permission: users:manage"
-                    },
                     "500": {
                         "description": "Internal error"
                     }
@@ -329,6 +326,34 @@ const docTemplate = `{
             }
         },
         "/v1/users": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "List all users (any authenticated user)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/user.User"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -407,6 +432,60 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Invalid, expired, or already used token"
+                    }
+                }
+            }
+        },
+        "/v1/users/{id}/roles": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Replace a user's roles (requires the users:manage permission)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Full new set of role slugs",
+                        "name": "ruoli",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.updateUserRolesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/user.User"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload or unknown role"
+                    },
+                    "403": {
+                        "description": "Missing required permission: users:manage"
+                    },
+                    "404": {
+                        "description": "User not found"
                     }
                 }
             }
@@ -535,6 +614,17 @@ const docTemplate = `{
             "properties": {
                 "identifier": {
                     "type": "string"
+                }
+            }
+        },
+        "httpapi.updateUserRolesRequest": {
+            "type": "object",
+            "properties": {
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

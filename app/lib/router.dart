@@ -9,6 +9,7 @@ import 'features/create_user/create_user_screen.dart';
 import 'features/forgot_password/forgot_password_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/login/login_screen.dart';
+import 'features/manage_users/manage_users_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/reset_password/reset_password_screen.dart';
 import 'features/splash/splash_screen.dart';
@@ -72,6 +73,10 @@ final routerProvider = Provider<GoRouter>((ref) {
               ? null
               : '/login';
         case AuthStatus.authenticated:
+          // Solo la creazione utenti richiede il permesso a livello di
+          // rotta: l'elenco ("/users") è una rubrica aperta a chiunque sia
+          // autenticato, la modifica dei ruoli lì dentro si nasconde da
+          // sola per chi non ha il permesso (vedi manage_users_screen.dart).
           if (location == '/users/new' &&
               !(authState.claims?.hasPermission('users:manage') ?? false)) {
             return '/home';
@@ -93,6 +98,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/users/new',
         pageBuilder: (context, state) =>
             _fadeTransitionPage(const CreateUserScreen()),
+      ),
+      GoRoute(
+        path: '/users',
+        pageBuilder: (context, state) =>
+            _fadeTransitionPage(const ManageUsersScreen()),
       ),
       GoRoute(
         path: '/',

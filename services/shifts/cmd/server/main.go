@@ -41,8 +41,10 @@ const (
 
 // @title			Sanitas — Shifts API
 // @version		0.1.0
-// @description	Shift management. The data model is intentionally skeletal (see docs/adr/0005
-// @description	in the repository): it validates the end-to-end pipeline, not the final domain design.
+// @description	Shift management. Recurring shift templates (day of week + time range) and
+// @description	volunteer bookings against them — see docs/adr/0025-modello-dati-turni.md in
+// @description	the repository. The resource endpoints themselves are still being rebuilt on
+// @description	top of this model (see docs/backlog.md); only /healthz and /docs/ exist today.
 //
 // @securityDefinitions.apikey	BearerAuth
 // @in							header
