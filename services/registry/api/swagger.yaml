@@ -1,33 +1,61 @@
 definitions:
-  httpapi.activateUserRequest:
+  github_com_francescocerri_sanitas_services_registry_internal_user.Role:
+    properties:
+      display_name:
+        type: string
+      id:
+        type: string
+      slug:
+        type: string
+    type: object
+  github_com_francescocerri_sanitas_services_registry_internal_user.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      permissions:
+        items:
+          type: string
+        type: array
+      roles:
+        items:
+          type: string
+        type: array
+      username:
+        type: string
+    type: object
+  internal_httpapi.activateUserRequest:
     properties:
       password:
         type: string
       token:
         type: string
     type: object
-  httpapi.authTokens:
+  internal_httpapi.authTokens:
     properties:
       refresh_token:
         type: string
       token:
         type: string
     type: object
-  httpapi.changePasswordRequest:
+  internal_httpapi.changePasswordRequest:
     properties:
       new_password:
         type: string
       old_password:
         type: string
     type: object
-  httpapi.confirmPasswordResetRequest:
+  internal_httpapi.confirmPasswordResetRequest:
     properties:
       password:
         type: string
       token:
         type: string
     type: object
-  httpapi.createUserRequest:
+  internal_httpapi.createUserRequest:
     properties:
       email:
         type: string
@@ -38,7 +66,7 @@ definitions:
       username:
         type: string
     type: object
-  httpapi.createUserResponse:
+  internal_httpapi.createUserResponse:
     properties:
       created_at:
         type: string
@@ -69,57 +97,29 @@ definitions:
       username:
         type: string
     type: object
-  httpapi.loginRequest:
+  internal_httpapi.loginRequest:
     properties:
       identifier:
         type: string
       password:
         type: string
     type: object
-  httpapi.refreshRequest:
+  internal_httpapi.refreshRequest:
     properties:
       refresh_token:
         type: string
     type: object
-  httpapi.requestPasswordResetRequest:
+  internal_httpapi.requestPasswordResetRequest:
     properties:
       identifier:
         type: string
     type: object
-  httpapi.updateUserRolesRequest:
+  internal_httpapi.updateUserRolesRequest:
     properties:
       roles:
         items:
           type: string
         type: array
-    type: object
-  user.Role:
-    properties:
-      display_name:
-        type: string
-      id:
-        type: string
-      slug:
-        type: string
-    type: object
-  user.User:
-    properties:
-      created_at:
-        type: string
-      email:
-        type: string
-      id:
-        type: string
-      permissions:
-        items:
-          type: string
-        type: array
-      roles:
-        items:
-          type: string
-        type: array
-      username:
-        type: string
     type: object
 info:
   contact: {}
@@ -164,14 +164,14 @@ paths:
         name: credenziali
         required: true
         schema:
-          $ref: '#/definitions/httpapi.loginRequest'
+          $ref: '#/definitions/internal_httpapi.loginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/httpapi.authTokens'
+            $ref: '#/definitions/internal_httpapi.authTokens'
         "400":
           description: Invalid payload
         "401":
@@ -193,7 +193,7 @@ paths:
         name: refresh
         required: true
         schema:
-          $ref: '#/definitions/httpapi.refreshRequest'
+          $ref: '#/definitions/internal_httpapi.refreshRequest'
       responses:
         "204":
           description: Logged out
@@ -212,7 +212,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/user.User'
+            $ref: '#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.User'
         "401":
           description: Authentication required
       security:
@@ -230,7 +230,7 @@ paths:
         name: password
         required: true
         schema:
-          $ref: '#/definitions/httpapi.changePasswordRequest'
+          $ref: '#/definitions/internal_httpapi.changePasswordRequest'
       responses:
         "204":
           description: Password changed
@@ -253,7 +253,7 @@ paths:
         name: conferma
         required: true
         schema:
-          $ref: '#/definitions/httpapi.confirmPasswordResetRequest'
+          $ref: '#/definitions/internal_httpapi.confirmPasswordResetRequest'
       responses:
         "204":
           description: Password reset
@@ -274,7 +274,7 @@ paths:
         name: richiesta
         required: true
         schema:
-          $ref: '#/definitions/httpapi.requestPasswordResetRequest'
+          $ref: '#/definitions/internal_httpapi.requestPasswordResetRequest'
       responses:
         "204":
           description: Always returned, whether or not the identifier matches an account
@@ -296,14 +296,14 @@ paths:
         name: refresh
         required: true
         schema:
-          $ref: '#/definitions/httpapi.refreshRequest'
+          $ref: '#/definitions/internal_httpapi.refreshRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/httpapi.authTokens'
+            $ref: '#/definitions/internal_httpapi.authTokens'
         "400":
           description: Invalid payload
         "401":
@@ -320,7 +320,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/user.Role'
+              $ref: '#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.Role'
             type: array
         "401":
           description: Authentication required
@@ -340,7 +340,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/user.User'
+              $ref: '#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.User'
             type: array
         "401":
           description: Authentication required
@@ -358,14 +358,14 @@ paths:
         name: utente
         required: true
         schema:
-          $ref: '#/definitions/httpapi.createUserRequest'
+          $ref: '#/definitions/internal_httpapi.createUserRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/httpapi.createUserResponse'
+            $ref: '#/definitions/internal_httpapi.createUserResponse'
         "400":
           description: Invalid payload or unknown role
         "403":
@@ -392,14 +392,14 @@ paths:
         name: ruoli
         required: true
         schema:
-          $ref: '#/definitions/httpapi.updateUserRolesRequest'
+          $ref: '#/definitions/internal_httpapi.updateUserRolesRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/user.User'
+            $ref: '#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.User'
         "400":
           description: Invalid payload or unknown role
         "403":
@@ -421,7 +421,7 @@ paths:
         name: attivazione
         required: true
         schema:
-          $ref: '#/definitions/httpapi.activateUserRequest'
+          $ref: '#/definitions/internal_httpapi.activateUserRequest'
       produces:
       - application/json
       responses:

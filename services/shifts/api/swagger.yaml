@@ -1,29 +1,5 @@
 definitions:
-  httpapi.createTemplateRequest:
-    properties:
-      end_time:
-        type: string
-      label:
-        type: string
-      start_time:
-        type: string
-      weekday:
-        type: integer
-    type: object
-  httpapi.updateTemplateRequest:
-    properties:
-      active:
-        type: boolean
-      end_time:
-        type: string
-      label:
-        type: string
-      start_time:
-        type: string
-      weekday:
-        type: integer
-    type: object
-  shift.ShiftTemplate:
+  github_com_francescocerri_sanitas_services_shifts_internal_shift.ShiftTemplate:
     properties:
       active:
         description: |-
@@ -56,6 +32,30 @@ definitions:
           numbering scheme to remember.
         type: integer
     type: object
+  internal_httpapi.createTemplateRequest:
+    properties:
+      end_time:
+        type: string
+      label:
+        type: string
+      start_time:
+        type: string
+      weekday:
+        type: integer
+    type: object
+  internal_httpapi.updateTemplateRequest:
+    properties:
+      active:
+        type: boolean
+      end_time:
+        type: string
+      label:
+        type: string
+      start_time:
+        type: string
+      weekday:
+        type: integer
+    type: object
 info:
   contact: {}
   description: |-
@@ -85,7 +85,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/shift.ShiftTemplate'
+              $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.ShiftTemplate'
             type: array
         "401":
           description: Authentication required
@@ -105,14 +105,14 @@ paths:
         name: template
         required: true
         schema:
-          $ref: '#/definitions/httpapi.createTemplateRequest'
+          $ref: '#/definitions/internal_httpapi.createTemplateRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/shift.ShiftTemplate'
+            $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.ShiftTemplate'
         "400":
           description: Invalid payload
         "401":
@@ -139,14 +139,14 @@ paths:
         name: template
         required: true
         schema:
-          $ref: '#/definitions/httpapi.updateTemplateRequest'
+          $ref: '#/definitions/internal_httpapi.updateTemplateRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/shift.ShiftTemplate'
+            $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.ShiftTemplate'
         "400":
           description: Invalid payload
         "401":

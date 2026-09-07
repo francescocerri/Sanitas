@@ -51,7 +51,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/shift.ShiftTemplate"
+                                "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.ShiftTemplate"
                             }
                         }
                     },
@@ -86,7 +86,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.createTemplateRequest"
+                            "$ref": "#/definitions/internal_httpapi.createTemplateRequest"
                         }
                     }
                 ],
@@ -94,7 +94,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/shift.ShiftTemplate"
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.ShiftTemplate"
                         }
                     },
                     "400": {
@@ -140,7 +140,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.updateTemplateRequest"
+                            "$ref": "#/definitions/internal_httpapi.updateTemplateRequest"
                         }
                     }
                 ],
@@ -148,7 +148,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/shift.ShiftTemplate"
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.ShiftTemplate"
                         }
                     },
                     "400": {
@@ -168,44 +168,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "httpapi.createTemplateRequest": {
-            "type": "object",
-            "properties": {
-                "end_time": {
-                    "type": "string"
-                },
-                "label": {
-                    "type": "string"
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "weekday": {
-                    "type": "integer"
-                }
-            }
-        },
-        "httpapi.updateTemplateRequest": {
-            "type": "object",
-            "properties": {
-                "active": {
-                    "type": "boolean"
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "label": {
-                    "type": "string"
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "weekday": {
-                    "type": "integer"
-                }
-            }
-        },
-        "shift.ShiftTemplate": {
+        "github_com_francescocerri_sanitas_services_shifts_internal_shift.ShiftTemplate": {
             "type": "object",
             "properties": {
                 "active": {
@@ -228,6 +191,43 @@ const docTemplate = `{
                 },
                 "weekday": {
                     "description": "Weekday follows Go's time.Weekday (0=Sunday...6=Saturday): reuses a\nstdlib conversion for generating occurrences instead of inventing a\nnumbering scheme to remember.",
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_httpapi.createTemplateRequest": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "weekday": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_httpapi.updateTemplateRequest": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "weekday": {
                     "type": "integer"
                 }
             }

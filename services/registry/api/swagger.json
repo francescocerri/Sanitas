@@ -62,7 +62,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.loginRequest"
+                            "$ref": "#/definitions/internal_httpapi.loginRequest"
                         }
                     }
                 ],
@@ -70,7 +70,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.authTokens"
+                            "$ref": "#/definitions/internal_httpapi.authTokens"
                         }
                     },
                     "400": {
@@ -99,7 +99,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.refreshRequest"
+                            "$ref": "#/definitions/internal_httpapi.refreshRequest"
                         }
                     }
                 ],
@@ -134,7 +134,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/user.User"
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.User"
                         }
                     },
                     "401": {
@@ -164,7 +164,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.changePasswordRequest"
+                            "$ref": "#/definitions/internal_httpapi.changePasswordRequest"
                         }
                     }
                 ],
@@ -197,7 +197,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.confirmPasswordResetRequest"
+                            "$ref": "#/definitions/internal_httpapi.confirmPasswordResetRequest"
                         }
                     }
                 ],
@@ -230,7 +230,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.requestPasswordResetRequest"
+                            "$ref": "#/definitions/internal_httpapi.requestPasswordResetRequest"
                         }
                     }
                 ],
@@ -264,7 +264,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.refreshRequest"
+                            "$ref": "#/definitions/internal_httpapi.refreshRequest"
                         }
                     }
                 ],
@@ -272,7 +272,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.authTokens"
+                            "$ref": "#/definitions/internal_httpapi.authTokens"
                         }
                     },
                     "400": {
@@ -304,7 +304,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/user.Role"
+                                "$ref": "#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.Role"
                             }
                         }
                     },
@@ -337,7 +337,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/user.User"
+                                "$ref": "#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.User"
                             }
                         }
                     },
@@ -369,7 +369,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.createUserRequest"
+                            "$ref": "#/definitions/internal_httpapi.createUserRequest"
                         }
                     }
                 ],
@@ -377,7 +377,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.createUserResponse"
+                            "$ref": "#/definitions/internal_httpapi.createUserResponse"
                         }
                     },
                     "400": {
@@ -411,7 +411,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.activateUserRequest"
+                            "$ref": "#/definitions/internal_httpapi.activateUserRequest"
                         }
                     }
                 ],
@@ -459,7 +459,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.updateUserRolesRequest"
+                            "$ref": "#/definitions/internal_httpapi.updateUserRolesRequest"
                         }
                     }
                 ],
@@ -467,7 +467,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/user.User"
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.User"
                         }
                     },
                     "400": {
@@ -484,7 +484,50 @@
         }
     },
     "definitions": {
-        "httpapi.activateUserRequest": {
+        "github_com_francescocerri_sanitas_services_registry_internal_user.Role": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_francescocerri_sanitas_services_registry_internal_user.User": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_httpapi.activateUserRequest": {
             "type": "object",
             "properties": {
                 "password": {
@@ -495,7 +538,7 @@
                 }
             }
         },
-        "httpapi.authTokens": {
+        "internal_httpapi.authTokens": {
             "type": "object",
             "properties": {
                 "refresh_token": {
@@ -506,7 +549,7 @@
                 }
             }
         },
-        "httpapi.changePasswordRequest": {
+        "internal_httpapi.changePasswordRequest": {
             "type": "object",
             "properties": {
                 "new_password": {
@@ -517,7 +560,7 @@
                 }
             }
         },
-        "httpapi.confirmPasswordResetRequest": {
+        "internal_httpapi.confirmPasswordResetRequest": {
             "type": "object",
             "properties": {
                 "password": {
@@ -528,7 +571,7 @@
                 }
             }
         },
-        "httpapi.createUserRequest": {
+        "internal_httpapi.createUserRequest": {
             "type": "object",
             "properties": {
                 "email": {
@@ -545,7 +588,7 @@
                 }
             }
         },
-        "httpapi.createUserResponse": {
+        "internal_httpapi.createUserResponse": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -582,7 +625,7 @@
                 }
             }
         },
-        "httpapi.loginRequest": {
+        "internal_httpapi.loginRequest": {
             "type": "object",
             "properties": {
                 "identifier": {
@@ -593,7 +636,7 @@
                 }
             }
         },
-        "httpapi.refreshRequest": {
+        "internal_httpapi.refreshRequest": {
             "type": "object",
             "properties": {
                 "refresh_token": {
@@ -601,7 +644,7 @@
                 }
             }
         },
-        "httpapi.requestPasswordResetRequest": {
+        "internal_httpapi.requestPasswordResetRequest": {
             "type": "object",
             "properties": {
                 "identifier": {
@@ -609,7 +652,7 @@
                 }
             }
         },
-        "httpapi.updateUserRolesRequest": {
+        "internal_httpapi.updateUserRolesRequest": {
             "type": "object",
             "properties": {
                 "roles": {
@@ -617,49 +660,6 @@
                     "items": {
                         "type": "string"
                     }
-                }
-            }
-        },
-        "user.Role": {
-            "type": "object",
-            "properties": {
-                "display_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "user.User": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "permissions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "roles": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "username": {
-                    "type": "string"
                 }
             }
         }

@@ -46,7 +46,7 @@ Suddivisione in attività autonome, ciascuna con la propria sessione di Plan Mod
 ### Turni (dipende dalla sezione "Gestione turni" sopra)
 
 9. [ ] **Plumbing: secondo client HTTP per il servizio shifts**: nuova costante `SHIFTS_API_URL`, nuovo `Dio` dedicato (stesso interceptor di refresh-token già usato per registry) — prerequisito prima di qualunque schermata reale, oggi l'app parla solo con `registry`.
-10. [ ] **Schermata turni del volontario**: attiva la card "Turni" in home (oggi disabilitata); vista a calendario con turni coperti/scoperti/propri; form di richiesta con multi-selezione di più slot → endpoint bulk (voce 7 sopra).
+10. [ ] **Schermata turni del volontario**: attiva la card "Turni" in home (oggi disabilitata); vista a calendario con turni coperti/scoperti/propri. Sarà una parte fondamentale di digitalizzazione, deve essere molto accattivante e chiaro il calendario. Facciamo più viste se sono necessarie; form di richiesta con multi-selezione di più slot → endpoint bulk (voce 7 sopra).
 11. [ ] **Schermata turni del gestore turni**: vista a calendario orientata alla copertura complessiva; gestione dei turni-template attivi (voce 2 sopra); lista delle richieste in sospeso con contatore e azioni approva/rifiuta; prenotazione diretta per un volontario (voce 6 sopra).
 
 ## Database / ORM
