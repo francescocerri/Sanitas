@@ -22,6 +22,207 @@
                     }
                 }
             }
+        },
+        "/v1/shift-templates": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shift-templates"
+                ],
+                "summary": "List shift templates (requires the shifts:read permission)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/shift.ShiftTemplate"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:read"
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shift-templates"
+                ],
+                "summary": "Create a shift template (requires the shifts:configure permission)",
+                "parameters": [
+                    {
+                        "description": "Weekday (0=Sunday..6=Saturday), start/end time (HH:MM), label",
+                        "name": "template",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.createTemplateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/shift.ShiftTemplate"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload"
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:configure"
+                    }
+                }
+            }
+        },
+        "/v1/shift-templates/{id}": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shift-templates"
+                ],
+                "summary": "Replace a shift template (requires the shifts:configure permission)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Template id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Full new set of fields",
+                        "name": "template",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.updateTemplateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/shift.ShiftTemplate"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload"
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:configure"
+                    },
+                    "404": {
+                        "description": "Template not found"
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "httpapi.createTemplateRequest": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "weekday": {
+                    "type": "integer"
+                }
+            }
+        },
+        "httpapi.updateTemplateRequest": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "weekday": {
+                    "type": "integer"
+                }
+            }
+        },
+        "shift.ShiftTemplate": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "description": "No DB default (`default:true`): for a bool field, GORM omits a Go\nzero value (false) from the INSERT and the DB default would still\napply — a caller explicitly wanting `false` would be silently\nignored. The repository sets Active by hand at creation (see\nCreateTemplate), same principle already used for Booking.Status.",
+                    "type": "boolean"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "label": {
+                    "description": "Cosmetic, shown in the UI (e.g. \"Turno 3\") — empty string allowed,\ndoesn't drive any logic.",
+                    "type": "string"
+                },
+                "start_time": {
+                    "description": "\"HH:MM\". EndTime \u003c StartTime means an overnight shift spanning two\ndays (e.g. 20:00-08:00) — these are times of day, not timestamps: no\ntime.Time here, sidesteps timezone/fake-date concerns for a value\nthat's only ever \"what time of day\".",
+                    "type": "string"
+                },
+                "weekday": {
+                    "description": "Weekday follows Go's time.Weekday (0=Sunday...6=Saturday): reuses a\nstdlib conversion for generating occurrences instead of inventing a\nnumbering scheme to remember.",
+                    "type": "integer"
+                }
+            }
         }
     },
     "securityDefinitions": {

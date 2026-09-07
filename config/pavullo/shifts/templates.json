@@ -1,0 +1,8 @@
+[
+  { "weekday": 4, "start_time": "20:00", "end_time": "08:00", "label": "Turno Serale" },
+  { "weekday": 6, "start_time": "08:00", "end_time": "14:00", "label": "Turno Mattina" },
+  { "weekday": 6, "start_time": "14:00", "end_time": "20:00", "label": "Turno Pomeriggio" },
+  { "weekday": 6, "start_time": "20:00", "end_time": "08:00", "label": "Turno Serale" },
+  { "weekday": 0, "start_time": "08:00", "end_time": "14:00", "label": "Turno Mattina" },
+  { "weekday": 0, "start_time": "14:00", "end_time": "20:00", "label": "Turno Pomeriggio" }
+]

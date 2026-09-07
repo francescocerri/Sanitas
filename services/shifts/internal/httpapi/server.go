@@ -15,6 +15,16 @@ import (
 	"github.com/francescocerri/sanitas/services/shifts/internal/shift"
 )
 
+// Permission slugs this service checks — same string values as registry's
+// user.PermShiftsRead/PermShiftsConfigure (independent Go modules, no
+// shared code, see ADR-0003/ADR-0017) — which role gets which is
+// per-committee config on registry's side, not something shifts decides
+// — see docs/adr/0018/0025.
+const (
+	permShiftsRead      = "shifts:read"
+	permShiftsConfigure = "shifts:configure"
+)
+
 type Server struct {
 	repo          *shift.Repository
 	authClient    *authclient.Client
@@ -32,13 +42,14 @@ func NewServer(repo *shift.Repository, authClient *authclient.Client, allowedOri
 // annotations, each @Router spells out its real full path instead).
 const v1 = "/v1"
 
-// Le route sulla risorsa turni (turni-template, prenotazioni) tornano nelle
-// prossime voci del backlog "Gestione turni" (2-6), sul nuovo modello dati
-// — vedi docs/adr/0025-modello-dati-turni.md. Fino ad allora restano solo
-// le route operative/meta.
+// Booking routes (request/approve/direct-book) return in later "Gestione
+// turni" backlog items (4-6) — see docs/adr/0025-modello-dati-turni.md.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
+	mux.HandleFunc("GET "+v1+"/shift-templates", s.requirePermission(permShiftsRead, s.handleListTemplates))
+	mux.HandleFunc("POST "+v1+"/shift-templates", s.requirePermission(permShiftsConfigure, s.handleCreateTemplate))
+	mux.HandleFunc("PATCH "+v1+"/shift-templates/{id}", s.requirePermission(permShiftsConfigure, s.handleUpdateTemplate))
 	mux.Handle("GET /docs/", docsHandler())
 	return s.withLogging(s.withCORS(mux))
 }

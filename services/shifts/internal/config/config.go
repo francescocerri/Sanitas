@@ -12,6 +12,10 @@ type Config struct {
 	DatabaseURL       string
 	CORSAllowedOrigin string
 	AuthJWKSURL       string
+	// Optional: path to a per-committee JSON seed file for shift templates
+	// (see internal/shift.SeedTemplates). Empty means no seeding — a fork
+	// that doesn't configure this just starts with no templates.
+	TemplatesSeedPath string
 }
 
 func Load() (Config, error) {
@@ -22,6 +26,7 @@ func Load() (Config, error) {
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		CORSAllowedOrigin: getEnv("CORS_ALLOWED_ORIGIN", "http://localhost:5173"),
 		AuthJWKSURL:       os.Getenv("AUTH_JWKS_URL"),
+		TemplatesSeedPath: os.Getenv("TEMPLATES_SEED_PATH"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL not set")

@@ -1,3 +1,61 @@
+definitions:
+  httpapi.createTemplateRequest:
+    properties:
+      end_time:
+        type: string
+      label:
+        type: string
+      start_time:
+        type: string
+      weekday:
+        type: integer
+    type: object
+  httpapi.updateTemplateRequest:
+    properties:
+      active:
+        type: boolean
+      end_time:
+        type: string
+      label:
+        type: string
+      start_time:
+        type: string
+      weekday:
+        type: integer
+    type: object
+  shift.ShiftTemplate:
+    properties:
+      active:
+        description: |-
+          No DB default (`default:true`): for a bool field, GORM omits a Go
+          zero value (false) from the INSERT and the DB default would still
+          apply — a caller explicitly wanting `false` would be silently
+          ignored. The repository sets Active by hand at creation (see
+          CreateTemplate), same principle already used for Booking.Status.
+        type: boolean
+      end_time:
+        type: string
+      id:
+        type: string
+      label:
+        description: |-
+          Cosmetic, shown in the UI (e.g. "Turno 3") — empty string allowed,
+          doesn't drive any logic.
+        type: string
+      start_time:
+        description: |-
+          "HH:MM". EndTime < StartTime means an overnight shift spanning two
+          days (e.g. 20:00-08:00) — these are times of day, not timestamps: no
+          time.Time here, sidesteps timezone/fake-date concerns for a value
+          that's only ever "what time of day".
+        type: string
+      weekday:
+        description: |-
+          Weekday follows Go's time.Weekday (0=Sunday...6=Saturday): reuses a
+          stdlib conversion for generating occurrences instead of inventing a
+          numbering scheme to remember.
+        type: integer
+    type: object
 info:
   contact: {}
   description: |-
@@ -18,6 +76,90 @@ paths:
       summary: Liveness check
       tags:
       - system
+  /v1/shift-templates:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/shift.ShiftTemplate'
+            type: array
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:read'
+      security:
+      - BearerAuth: []
+      summary: List shift templates (requires the shifts:read permission)
+      tags:
+      - shift-templates
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Weekday (0=Sunday..6=Saturday), start/end time (HH:MM), label
+        in: body
+        name: template
+        required: true
+        schema:
+          $ref: '#/definitions/httpapi.createTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/shift.ShiftTemplate'
+        "400":
+          description: Invalid payload
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:configure'
+      security:
+      - BearerAuth: []
+      summary: Create a shift template (requires the shifts:configure permission)
+      tags:
+      - shift-templates
+  /v1/shift-templates/{id}:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Template id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Full new set of fields
+        in: body
+        name: template
+        required: true
+        schema:
+          $ref: '#/definitions/httpapi.updateTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/shift.ShiftTemplate'
+        "400":
+          description: Invalid payload
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:configure'
+        "404":
+          description: Template not found
+      security:
+      - BearerAuth: []
+      summary: Replace a shift template (requires the shifts:configure permission)
+      tags:
+      - shift-templates
 securityDefinitions:
   BearerAuth:
     description: |-

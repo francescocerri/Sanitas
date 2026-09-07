@@ -38,6 +38,13 @@ services:
       # shifts non emette token, verifica solo quelli emessi da registry —
       # rete interna del compose, sempre porta 8080 (vedi docs/adr/0017).
       AUTH_JWKS_URL: http://registry:8080/.well-known/jwks.json
+      # Seed una tantum dei turni-template (solo se la tabella è vuota,
+      # non riapplicato ad ogni avvio — vedi docs/adr/0025-modello-dati-turni.md).
+      TEMPLATES_SEED_PATH: /config/shifts/templates.json
+    volumes:
+      # Stesso volume di config già montato in registry (vedi sotto): dati
+      # specifici del comitato, mai copiati nell'immagine, montati da fuori.
+      - ${COMMITTEE_CONFIG_DIR:-../config/pavullo}:/config:ro
     depends_on:
       postgres:
         condition: service_healthy

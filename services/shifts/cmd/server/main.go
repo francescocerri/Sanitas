@@ -97,13 +97,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	repo := shift.NewRepository(db)
+	if err := shift.SeedTemplates(ctx, repo, cfg.TemplatesSeedPath); err != nil {
+		logger.Error("seed shift templates failed", "error", err)
+		os.Exit(1)
+	}
+
 	authClient := authclient.New(cfg.AuthJWKSURL)
 	if err := fetchJWKSWithRetry(ctx, authClient, logger); err != nil {
 		logger.Error("fetch JWKS from registry failed", "error", err)
 		os.Exit(1)
 	}
 
-	repo := shift.NewRepository(db)
 	server := httpapi.NewServer(repo, authClient, cfg.CORSAllowedOrigin, logger)
 
 	httpServer := &http.Server{
