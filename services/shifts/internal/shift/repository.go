@@ -10,8 +10,10 @@ import (
 
 // ErrNotFound is the domain error for "no matching row" — gorm.ErrRecordNotFound
 // is translated here, so callers above this layer (HTTP) don't need to know
-// about GORM to tell a 404 apart from a real error.
-var ErrNotFound = errors.New("shift not found")
+// about GORM to tell a 404 apart from a real error. Shared by both entities
+// below: the caller already knows which one it asked for, no need for a
+// separate error per type.
+var ErrNotFound = errors.New("not found")
 
 type Repository struct {
 	db *gorm.DB
@@ -29,35 +31,74 @@ func (r *Repository) Ping(ctx context.Context) error {
 	return sqlDB.PingContext(ctx)
 }
 
-func (r *Repository) List(ctx context.Context) ([]Shift, error) {
-	// []Shift{}, not a nil slice: encodes to `[]` in JSON, not `null`.
-	result := []Shift{}
-	if err := r.db.WithContext(ctx).Order("date, start_time").Find(&result).Error; err != nil {
-		return nil, fmt.Errorf("shift: list: %w", err)
+// CreateTemplate ignores any id the caller passed in t, and always creates
+// an active template (see the comment on ShiftTemplate.Active — no DB
+// default, forced here instead, to sidestep the GORM zero-value-omits-insert
+// gotcha for a bool "default"). Deactivating an existing one is a separate
+// concern for whichever endpoint builds on this method.
+func (r *Repository) CreateTemplate(ctx context.Context, t ShiftTemplate) (ShiftTemplate, error) {
+	t.ID = ""
+	t.Active = true
+	if err := r.db.WithContext(ctx).Create(&t).Error; err != nil {
+		return ShiftTemplate{}, fmt.Errorf("shift: create template: %w", err)
+	}
+	return t, nil
+}
+
+func (r *Repository) GetTemplate(ctx context.Context, id string) (ShiftTemplate, error) {
+	var t ShiftTemplate
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&t).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ShiftTemplate{}, ErrNotFound
+	}
+	if err != nil {
+		return ShiftTemplate{}, fmt.Errorf("shift: get template: %w", err)
+	}
+	return t, nil
+}
+
+func (r *Repository) ListTemplates(ctx context.Context) ([]ShiftTemplate, error) {
+	// []ShiftTemplate{}, not a nil slice: encodes to `[]` in JSON, not `null`.
+	result := []ShiftTemplate{}
+	if err := r.db.WithContext(ctx).Order("weekday, start_time").Find(&result).Error; err != nil {
+		return nil, fmt.Errorf("shift: list templates: %w", err)
 	}
 	return result, nil
 }
 
-// Create ignores any id/status the caller passed in s (per the API contract,
-// see @Param in httpapi) — cleared before Create so GORM lets their DB
-// defaults apply instead of inserting a client-supplied value.
-func (r *Repository) Create(ctx context.Context, s Shift) (Shift, error) {
-	s.ID = ""
-	s.Status = ""
-	if err := r.db.WithContext(ctx).Create(&s).Error; err != nil {
-		return Shift{}, fmt.Errorf("shift: create: %w", err)
+// CreateBooking ignores any id/status/decided_by/decided_at the caller
+// passed in b — cleared before Create so GORM lets the DB default
+// ("pending") apply instead of inserting a client-supplied value. Every
+// booking starts pending; confirming one already at creation time (a
+// manager's direct booking, no approval needed) is a separate follow-up
+// concern for whichever endpoint builds on this method.
+func (r *Repository) CreateBooking(ctx context.Context, b Booking) (Booking, error) {
+	b.ID = ""
+	b.Status = ""
+	b.DecidedBy = nil
+	b.DecidedAt = nil
+	if err := r.db.WithContext(ctx).Create(&b).Error; err != nil {
+		return Booking{}, fmt.Errorf("shift: create booking: %w", err)
 	}
-	return s, nil
+	return b, nil
 }
 
-func (r *Repository) Get(ctx context.Context, id string) (Shift, error) {
-	var s Shift
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&s).Error
+func (r *Repository) GetBooking(ctx context.Context, id string) (Booking, error) {
+	var b Booking
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&b).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Shift{}, ErrNotFound
+		return Booking{}, ErrNotFound
 	}
 	if err != nil {
-		return Shift{}, fmt.Errorf("shift: get: %w", err)
+		return Booking{}, fmt.Errorf("shift: get booking: %w", err)
 	}
-	return s, nil
+	return b, nil
+}
+
+func (r *Repository) ListBookings(ctx context.Context) ([]Booking, error) {
+	result := []Booking{}
+	if err := r.db.WithContext(ctx).Order("date, start_time").Find(&result).Error; err != nil {
+		return nil, fmt.Errorf("shift: list bookings: %w", err)
+	}
+	return result, nil
 }
