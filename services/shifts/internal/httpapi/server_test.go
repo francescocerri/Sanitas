@@ -25,14 +25,21 @@ import (
 
 var testDB *gorm.DB
 
+// testVolunteerID is a real registry.users row seeded by testdb.StartPostgres
+// — bookings.volunteer_id is an FK, and handleCreateBooking now writes
+// claims.Subject there, so tests creating a booking need a token whose
+// Subject is an id that actually exists (see tokenFor).
+var testVolunteerID string
+
 func TestMain(m *testing.M) {
 	ctx := context.Background()
-	db, _, cleanup, err := testdb.StartPostgres(ctx, shift.Migrate)
+	db, volunteerID, cleanup, err := testdb.StartPostgres(ctx, shift.Migrate)
 	if err != nil {
 		panic(err)
 	}
 	defer cleanup()
 	testDB = db
+	testVolunteerID = volunteerID
 
 	os.Exit(m.Run())
 }
@@ -89,16 +96,26 @@ func bigEndianExponent(e int) []byte {
 }
 
 // token signs a JWT carrying the given permissions — the shape
-// requirePermission actually checks (see docs/adr/0018).
+// requirePermission actually checks (see docs/adr/0018). Subject is a
+// fixed placeholder, fine for every test that doesn't write it anywhere
+// (most of them); tests that do (e.g. creating a booking, where
+// claims.Subject becomes volunteer_id — a real FK) need tokenFor instead.
 func (iss *testIssuer) token(t *testing.T, permissions []string) string {
+	t.Helper()
+	return iss.tokenFor(t, "test-user", permissions)
+}
+
+// tokenFor is token but with a caller-chosen Subject — needed wherever the
+// claims' subject ends up written to the database (see comment on token).
+func (iss *testIssuer) tokenFor(t *testing.T, subject string, permissions []string) string {
 	t.Helper()
 	claims := authclient.Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   "test-user",
+			Subject:   subject,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
-		Username:    "test-user",
+		Username:    subject,
 		Permissions: permissions,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)

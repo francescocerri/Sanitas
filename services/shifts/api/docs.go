@@ -31,6 +31,89 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/shift-bookings": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shift-bookings"
+                ],
+                "summary": "Request a booking for an open slot (requires the shifts:request permission)",
+                "parameters": [
+                    {
+                        "description": "Template id and date (YYYY-MM-DD)",
+                        "name": "booking",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_httpapi.createBookingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload, past date, inactive template, or weekday mismatch"
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:request"
+                    },
+                    "404": {
+                        "description": "Template not found"
+                    },
+                    "409": {
+                        "description": "Slot already confirmed, or the caller already has a pending/confirmed booking for it"
+                    }
+                }
+            }
+        },
+        "/v1/shift-bookings/pending-count": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shift-bookings"
+                ],
+                "summary": "Count pending booking requests (requires the shifts:write permission)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_httpapi.pendingBookingsCountResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:write"
+                    }
+                }
+            }
+        },
         "/v1/shift-occurrences": {
             "get": {
                 "security": [
@@ -220,6 +303,57 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "decided_at": {
+                    "type": "string"
+                },
+                "decided_by": {
+                    "description": "DecidedBy/DecidedAt stay nil while the request is pending; for a\nmanager's direct booking (no approval needed) they're already set at\ncreation time.",
+                    "type": "string"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingStatus"
+                },
+                "template_id": {
+                    "type": "string"
+                },
+                "volunteer_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "confirmed",
+                "rejected",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "BookingStatusPending",
+                "BookingStatusConfirmed",
+                "BookingStatusRejected",
+                "BookingStatusCancelled"
+            ]
+        },
         "github_com_francescocerri_sanitas_services_shifts_internal_shift.Occurrence": {
             "type": "object",
             "properties": {
@@ -286,6 +420,17 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_httpapi.createBookingRequest": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "template_id": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_httpapi.createTemplateRequest": {
             "type": "object",
             "properties": {
@@ -299,6 +444,14 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "weekday": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_httpapi.pendingBookingsCountResponse": {
+            "type": "object",
+            "properties": {
+                "pending_count": {
                     "type": "integer"
                 }
             }

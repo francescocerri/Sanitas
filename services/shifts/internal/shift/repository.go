@@ -222,3 +222,43 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time) ([
 	}
 	return occurrences, nil
 }
+
+// HasConfirmedBooking reports whether a template+date slot is already
+// occupied by a confirmed booking — the availability check a new request
+// must pass (see handleCreateBooking).
+func (r *Repository) HasConfirmedBooking(ctx context.Context, templateID string, date time.Time) (bool, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&Booking{}).
+		Where("template_id = ? AND date = ? AND status = ?", templateID, date, BookingStatusConfirmed).
+		Count(&n).Error
+	if err != nil {
+		return false, fmt.Errorf("shift: has confirmed booking: %w", err)
+	}
+	return n > 0, nil
+}
+
+// HasBookingForVolunteer reports whether volunteerID already has a
+// pending or confirmed booking for this template+date — rejected/cancelled
+// ones don't count, a volunteer can always request again after either.
+func (r *Repository) HasBookingForVolunteer(ctx context.Context, templateID string, date time.Time, volunteerID string) (bool, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&Booking{}).
+		Where("template_id = ? AND date = ? AND volunteer_id = ? AND status IN ?", templateID, date, volunteerID,
+			[]BookingStatus{BookingStatusPending, BookingStatusConfirmed}).
+		Count(&n).Error
+	if err != nil {
+		return false, fmt.Errorf("shift: has booking for volunteer: %w", err)
+	}
+	return n > 0, nil
+}
+
+// CountPendingBookings is the shift manager's in-app badge count — global,
+// not scoped to any date range (unlike ListOccurrences), so it stays
+// accurate regardless of what the calendar happens to be showing.
+func (r *Repository) CountPendingBookings(ctx context.Context) (int, error) {
+	var n int64
+	if err := r.db.WithContext(ctx).Model(&Booking{}).Where("status = ?", BookingStatusPending).Count(&n).Error; err != nil {
+		return 0, fmt.Errorf("shift: count pending bookings: %w", err)
+	}
+	return int(n), nil
+}

@@ -35,3 +35,7 @@ Il dominio richiesto: il gestore turni imposta turni ricorrenti (giorno della se
 - Le 3 route esistenti (`GET/POST /v1/shifts`, `GET /v1/shifts/{id}`) sono rimosse insieme ai relativi handler: fino alle prossime voci di backlog (gestione turni-template, calendario/copertura, richiesta/approvazione/prenotazione diretta), `shifts` espone solo `/healthz` e `/docs/`. Non è una regressione: quelle route erano anch'esse placeholder, mai usate da un client reale.
 - `internal/shift.Repository` guadagna `CreateTemplate`/`GetTemplate`/`ListTemplates` e `CreateBooking`/`GetBooking`/`ListBookings` — stesso mirror di Create/Get/List che il vecchio modello aveva per un'unica entità, ora per due. Update/transizioni di stato non ancora presenti: arrivano con gli endpoint che li useranno.
 - `registry`: nuova costante `PermShiftsConfigure`, aggiunta a `AllPermissions`/`knownPermissions` — il bootstrap admin la eredita come tutte le altre.
+
+## Aggiornamento (voce di backlog 4, "richiesta di prenotazione")
+
+Sopra si era ipotizzato di verificare "chi può richiedere una prenotazione" leggendo `claims.Roles` per il ruolo `emergency_volunteer`, senza un permesso dedicato. Sostituito in fase di implementazione: nuovo permesso `PermShiftsRequest = "shifts:request"`, assegnato solo a `emergency_volunteer` — stesso meccanismo di autorizzazione (permessi, non ruoli) usato ovunque nel sistema, scelta esplicita del comitato per non introdurre un secondo asse di controllo. `shifts` continua quindi a non guardare mai `claims.Roles`.

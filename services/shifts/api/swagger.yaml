@@ -1,4 +1,43 @@
 definitions:
+  github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking:
+    properties:
+      created_at:
+        type: string
+      date:
+        type: string
+      decided_at:
+        type: string
+      decided_by:
+        description: |-
+          DecidedBy/DecidedAt stay nil while the request is pending; for a
+          manager's direct booking (no approval needed) they're already set at
+          creation time.
+        type: string
+      end_time:
+        type: string
+      id:
+        type: string
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingStatus'
+      template_id:
+        type: string
+      volunteer_id:
+        type: string
+    type: object
+  github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingStatus:
+    enum:
+    - pending
+    - confirmed
+    - rejected
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - BookingStatusPending
+    - BookingStatusConfirmed
+    - BookingStatusRejected
+    - BookingStatusCancelled
   github_com_francescocerri_sanitas_services_shifts_internal_shift.Occurrence:
     properties:
       date:
@@ -59,6 +98,13 @@ definitions:
           numbering scheme to remember.
         type: integer
     type: object
+  internal_httpapi.createBookingRequest:
+    properties:
+      date:
+        type: string
+      template_id:
+        type: string
+    type: object
   internal_httpapi.createTemplateRequest:
     properties:
       end_time:
@@ -68,6 +114,11 @@ definitions:
       start_time:
         type: string
       weekday:
+        type: integer
+    type: object
+  internal_httpapi.pendingBookingsCountResponse:
+    properties:
+      pending_count:
         type: integer
     type: object
   internal_httpapi.updateTemplateRequest:
@@ -103,6 +154,58 @@ paths:
       summary: Liveness check
       tags:
       - system
+  /v1/shift-bookings:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Template id and date (YYYY-MM-DD)
+        in: body
+        name: booking
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.createBookingRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking'
+        "400":
+          description: Invalid payload, past date, inactive template, or weekday mismatch
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:request'
+        "404":
+          description: Template not found
+        "409":
+          description: Slot already confirmed, or the caller already has a pending/confirmed
+            booking for it
+      security:
+      - BearerAuth: []
+      summary: Request a booking for an open slot (requires the shifts:request permission)
+      tags:
+      - shift-bookings
+  /v1/shift-bookings/pending-count:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_httpapi.pendingBookingsCountResponse'
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:write'
+      security:
+      - BearerAuth: []
+      summary: Count pending booking requests (requires the shifts:write permission)
+      tags:
+      - shift-bookings
   /v1/shift-occurrences:
     get:
       parameters:
