@@ -70,7 +70,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.loginRequest"
+                            "$ref": "#/definitions/internal_httpapi.loginRequest"
                         }
                     }
                 ],
@@ -78,7 +78,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.authTokens"
+                            "$ref": "#/definitions/internal_httpapi.authTokens"
                         }
                     },
                     "400": {
@@ -107,7 +107,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.refreshRequest"
+                            "$ref": "#/definitions/internal_httpapi.refreshRequest"
                         }
                     }
                 ],
@@ -142,7 +142,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/user.User"
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.User"
                         }
                     },
                     "401": {
@@ -172,7 +172,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.changePasswordRequest"
+                            "$ref": "#/definitions/internal_httpapi.changePasswordRequest"
                         }
                     }
                 ],
@@ -205,7 +205,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.confirmPasswordResetRequest"
+                            "$ref": "#/definitions/internal_httpapi.confirmPasswordResetRequest"
                         }
                     }
                 ],
@@ -238,7 +238,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.requestPasswordResetRequest"
+                            "$ref": "#/definitions/internal_httpapi.requestPasswordResetRequest"
                         }
                     }
                 ],
@@ -272,7 +272,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.refreshRequest"
+                            "$ref": "#/definitions/internal_httpapi.refreshRequest"
                         }
                     }
                 ],
@@ -280,7 +280,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.authTokens"
+                            "$ref": "#/definitions/internal_httpapi.authTokens"
                         }
                     },
                     "400": {
@@ -312,7 +312,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/user.Role"
+                                "$ref": "#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.Role"
                             }
                         }
                     },
@@ -345,7 +345,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/user.User"
+                                "$ref": "#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.User"
                             }
                         }
                     },
@@ -377,7 +377,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.createUserRequest"
+                            "$ref": "#/definitions/internal_httpapi.createUserRequest"
                         }
                     }
                 ],
@@ -385,7 +385,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/httpapi.createUserResponse"
+                            "$ref": "#/definitions/internal_httpapi.createUserResponse"
                         }
                     },
                     "400": {
@@ -419,7 +419,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.activateUserRequest"
+                            "$ref": "#/definitions/internal_httpapi.activateUserRequest"
                         }
                     }
                 ],
@@ -467,7 +467,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/httpapi.updateUserRolesRequest"
+                            "$ref": "#/definitions/internal_httpapi.updateUserRolesRequest"
                         }
                     }
                 ],
@@ -475,7 +475,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/user.User"
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_registry_internal_user.User"
                         }
                     },
                     "400": {
@@ -492,7 +492,50 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "httpapi.activateUserRequest": {
+        "github_com_francescocerri_sanitas_services_registry_internal_user.Role": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_francescocerri_sanitas_services_registry_internal_user.User": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_httpapi.activateUserRequest": {
             "type": "object",
             "properties": {
                 "password": {
@@ -503,7 +546,7 @@ const docTemplate = `{
                 }
             }
         },
-        "httpapi.authTokens": {
+        "internal_httpapi.authTokens": {
             "type": "object",
             "properties": {
                 "refresh_token": {
@@ -514,7 +557,7 @@ const docTemplate = `{
                 }
             }
         },
-        "httpapi.changePasswordRequest": {
+        "internal_httpapi.changePasswordRequest": {
             "type": "object",
             "properties": {
                 "new_password": {
@@ -525,7 +568,7 @@ const docTemplate = `{
                 }
             }
         },
-        "httpapi.confirmPasswordResetRequest": {
+        "internal_httpapi.confirmPasswordResetRequest": {
             "type": "object",
             "properties": {
                 "password": {
@@ -536,7 +579,7 @@ const docTemplate = `{
                 }
             }
         },
-        "httpapi.createUserRequest": {
+        "internal_httpapi.createUserRequest": {
             "type": "object",
             "properties": {
                 "email": {
@@ -553,7 +596,7 @@ const docTemplate = `{
                 }
             }
         },
-        "httpapi.createUserResponse": {
+        "internal_httpapi.createUserResponse": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -590,7 +633,7 @@ const docTemplate = `{
                 }
             }
         },
-        "httpapi.loginRequest": {
+        "internal_httpapi.loginRequest": {
             "type": "object",
             "properties": {
                 "identifier": {
@@ -601,7 +644,7 @@ const docTemplate = `{
                 }
             }
         },
-        "httpapi.refreshRequest": {
+        "internal_httpapi.refreshRequest": {
             "type": "object",
             "properties": {
                 "refresh_token": {
@@ -609,7 +652,7 @@ const docTemplate = `{
                 }
             }
         },
-        "httpapi.requestPasswordResetRequest": {
+        "internal_httpapi.requestPasswordResetRequest": {
             "type": "object",
             "properties": {
                 "identifier": {
@@ -617,7 +660,7 @@ const docTemplate = `{
                 }
             }
         },
-        "httpapi.updateUserRolesRequest": {
+        "internal_httpapi.updateUserRolesRequest": {
             "type": "object",
             "properties": {
                 "roles": {
@@ -625,49 +668,6 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
-                }
-            }
-        },
-        "user.Role": {
-            "type": "object",
-            "properties": {
-                "display_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "user.User": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "permissions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "roles": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "username": {
-                    "type": "string"
                 }
             }
         }
