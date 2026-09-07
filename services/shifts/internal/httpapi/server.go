@@ -50,6 +50,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET "+v1+"/shift-templates", s.requirePermission(permShiftsRead, s.handleListTemplates))
 	mux.HandleFunc("POST "+v1+"/shift-templates", s.requirePermission(permShiftsConfigure, s.handleCreateTemplate))
 	mux.HandleFunc("PATCH "+v1+"/shift-templates/{id}", s.requirePermission(permShiftsConfigure, s.handleUpdateTemplate))
+	mux.HandleFunc("GET "+v1+"/shift-occurrences", s.requirePermission(permShiftsRead, s.handleListOccurrences))
 	mux.Handle("GET /docs/", docsHandler())
 	return s.withLogging(s.withCORS(mux))
 }

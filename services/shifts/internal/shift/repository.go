@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -74,6 +75,16 @@ func (r *Repository) ListTemplates(ctx context.Context) ([]ShiftTemplate, error)
 	return result, nil
 }
 
+// ListActiveTemplates is ListTemplates filtered to active ones — the only
+// ones relevant when generating calendar occurrences (see ListOccurrences).
+func (r *Repository) ListActiveTemplates(ctx context.Context) ([]ShiftTemplate, error) {
+	result := []ShiftTemplate{}
+	if err := r.db.WithContext(ctx).Where("active").Order("weekday, start_time").Find(&result).Error; err != nil {
+		return nil, fmt.Errorf("shift: list active templates: %w", err)
+	}
+	return result, nil
+}
+
 // UpdateTemplate replaces weekday/start_time/end_time/label/active for id.
 // A map, not `.Updates(t)`: GORM's struct-based Updates skips Go zero
 // values (same gotcha as Create, see the comment on ShiftTemplate.Active)
@@ -130,4 +141,84 @@ func (r *Repository) ListBookings(ctx context.Context) ([]Booking, error) {
 		return nil, fmt.Errorf("shift: list bookings: %w", err)
 	}
 	return result, nil
+}
+
+// ListBookingsInRange returns bookings whose date falls within [from, to],
+// both inclusive — the raw material ListOccurrences uses to compute
+// coverage, not meant to be returned to a client as-is.
+func (r *Repository) ListBookingsInRange(ctx context.Context, from, to time.Time) ([]Booking, error) {
+	result := []Booking{}
+	if err := r.db.WithContext(ctx).Where("date BETWEEN ? AND ?", from, to).Find(&result).Error; err != nil {
+		return nil, fmt.Errorf("shift: list bookings in range: %w", err)
+	}
+	return result, nil
+}
+
+// occurrenceKey identifies one calendar slot: a template on a specific day.
+type occurrenceKey struct {
+	templateID string
+	date       string // time.Time isn't a valid map key across different locations/monotonic readings; the DATE-only value formatted as YYYY-MM-DD is.
+}
+
+// ListOccurrences generates every occurrence of an active template within
+// [from, to] (both inclusive) and attaches its coverage status by looking
+// up bookings in the same range — see docs/backlog.md "Gestione turni",
+// voce 3. Occurrences are never stored: a day/slot combination only exists
+// as the join of a template's weekday against the calendar.
+//
+// Status precedence when multiple bookings exist for the same slot+date
+// (e.g. several pending requests before one is confirmed): confirmed beats
+// pending beats free. rejected/cancelled bookings never affect status.
+func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time) ([]Occurrence, error) {
+	templates, err := r.ListActiveTemplates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bookings, err := r.ListBookingsInRange(ctx, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	statusByKey := make(map[occurrenceKey]OccurrenceStatus, len(bookings))
+	for _, b := range bookings {
+		if b.Status != BookingStatusPending && b.Status != BookingStatusConfirmed {
+			continue
+		}
+		key := occurrenceKey{templateID: b.TemplateID, date: b.Date.Format("2006-01-02")}
+		status := OccurrenceStatusPending
+		if b.Status == BookingStatusConfirmed {
+			status = OccurrenceStatusConfirmed
+		}
+		if status == OccurrenceStatusConfirmed || statusByKey[key] != OccurrenceStatusConfirmed {
+			statusByKey[key] = status
+		}
+	}
+
+	// Date-outer, template-inner: templates are already ordered by
+	// (weekday, start_time), so this loop produces occurrences already
+	// sorted by (date, start_time) — no separate sort needed.
+	occurrences := []Occurrence{}
+	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+		weekday := int(d.Weekday())
+		for _, t := range templates {
+			if t.Weekday != weekday {
+				continue
+			}
+			key := occurrenceKey{templateID: t.ID, date: d.Format("2006-01-02")}
+			status := OccurrenceStatusFree
+			if s, ok := statusByKey[key]; ok {
+				status = s
+			}
+			occurrences = append(occurrences, Occurrence{
+				TemplateID: t.ID,
+				Date:       d,
+				Weekday:    weekday,
+				StartTime:  t.StartTime,
+				EndTime:    t.EndTime,
+				Label:      t.Label,
+				Status:     status,
+			})
+		}
+	}
+	return occurrences, nil
 }
