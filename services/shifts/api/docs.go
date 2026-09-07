@@ -31,6 +31,58 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/shift-occurrences": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shift-occurrences"
+                ],
+                "summary": "List shift occurrences with coverage status in a date range (requires the shifts:read permission)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date, inclusive (YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date, inclusive (YYYY-MM-DD)",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Occurrence"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Missing or invalid from/to, or range too wide"
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:read"
+                    }
+                }
+            }
+        },
         "/v1/shift-templates": {
             "get": {
                 "security": [
@@ -168,6 +220,45 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "github_com_francescocerri_sanitas_services_shifts_internal_shift.Occurrence": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.OccurrenceStatus"
+                },
+                "template_id": {
+                    "type": "string"
+                },
+                "weekday": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_francescocerri_sanitas_services_shifts_internal_shift.OccurrenceStatus": {
+            "type": "string",
+            "enum": [
+                "free",
+                "pending",
+                "confirmed"
+            ],
+            "x-enum-varnames": [
+                "OccurrenceStatusFree",
+                "OccurrenceStatusPending",
+                "OccurrenceStatusConfirmed"
+            ]
+        },
         "github_com_francescocerri_sanitas_services_shifts_internal_shift.ShiftTemplate": {
             "type": "object",
             "properties": {

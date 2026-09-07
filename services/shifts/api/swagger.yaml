@@ -1,4 +1,31 @@
 definitions:
+  github_com_francescocerri_sanitas_services_shifts_internal_shift.Occurrence:
+    properties:
+      date:
+        type: string
+      end_time:
+        type: string
+      label:
+        type: string
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.OccurrenceStatus'
+      template_id:
+        type: string
+      weekday:
+        type: integer
+    type: object
+  github_com_francescocerri_sanitas_services_shifts_internal_shift.OccurrenceStatus:
+    enum:
+    - free
+    - pending
+    - confirmed
+    type: string
+    x-enum-varnames:
+    - OccurrenceStatusFree
+    - OccurrenceStatusPending
+    - OccurrenceStatusConfirmed
   github_com_francescocerri_sanitas_services_shifts_internal_shift.ShiftTemplate:
     properties:
       active:
@@ -76,6 +103,40 @@ paths:
       summary: Liveness check
       tags:
       - system
+  /v1/shift-occurrences:
+    get:
+      parameters:
+      - description: Start date, inclusive (YYYY-MM-DD)
+        in: query
+        name: from
+        required: true
+        type: string
+      - description: End date, inclusive (YYYY-MM-DD)
+        in: query
+        name: to
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Occurrence'
+            type: array
+        "400":
+          description: Missing or invalid from/to, or range too wide
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:read'
+      security:
+      - BearerAuth: []
+      summary: List shift occurrences with coverage status in a date range (requires
+        the shifts:read permission)
+      tags:
+      - shift-occurrences
   /v1/shift-templates:
     get:
       produces:
