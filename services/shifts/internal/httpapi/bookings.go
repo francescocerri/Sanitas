@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -33,18 +35,21 @@ func (s *Server) handleCreateBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid payload")
 		return
 	}
-	date, ok := parseAndValidateBookingDate(w, req.Date)
-	if !ok {
+	date, verr := parseAndValidateBookingDate(req.Date)
+	if verr != nil {
+		writeError(w, verr.status, verr.message)
 		return
 	}
-	template, ok := s.getActiveTemplateForDate(w, r, req.TemplateID, date)
-	if !ok {
+	template, verr := s.getActiveTemplateForDate(r.Context(), req.TemplateID, date)
+	if verr != nil {
+		writeError(w, verr.status, verr.message)
 		return
 	}
 
 	volunteerID := claimsFromContext(r).Subject
-	if !s.checkSlotAvailability(w, r, template.ID, date, volunteerID,
-		"you already have a pending or confirmed booking for this slot") {
+	if verr := s.checkSlotAvailability(r.Context(), template.ID, date, volunteerID,
+		"you already have a pending or confirmed booking for this slot"); verr != nil {
+		writeError(w, verr.status, verr.message)
 		return
 	}
 
@@ -63,79 +68,79 @@ func (s *Server) handleCreateBooking(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, created)
 }
 
-// parseAndValidateBookingDate parses raw and checks it's not in the past,
-// writing the appropriate 400 and returning ok=false on either failure —
-// shared by handleCreateBooking and handleCreateDirectBooking.
-func parseAndValidateBookingDate(w http.ResponseWriter, raw string) (date time.Time, ok bool) {
+// validationError carries the HTTP status/message a failed validation step
+// should produce, without writing to a ResponseWriter directly — lets the
+// same validation helpers serve both a single-item handler (writes the
+// error immediately) and the bulk handler (needs to prefix it with which
+// item in the list failed before writing anything).
+type validationError struct {
+	status  int
+	message string
+}
+
+func (e *validationError) Error() string { return e.message }
+
+// parseAndValidateBookingDate parses raw and checks it's not in the past —
+// shared by handleCreateBooking, handleCreateDirectBooking and
+// handleCreateBulkBooking.
+func parseAndValidateBookingDate(raw string) (time.Time, *validationError) {
 	date, err := time.Parse(dateLayout, raw)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "date must be a valid date in YYYY-MM-DD format")
-		return time.Time{}, false
+		return time.Time{}, &validationError{http.StatusBadRequest, "date must be a valid date in YYYY-MM-DD format"}
 	}
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	if date.Before(today) {
-		writeError(w, http.StatusBadRequest, "date must not be in the past")
-		return time.Time{}, false
+		return time.Time{}, &validationError{http.StatusBadRequest, "date must not be in the past"}
 	}
-	return date, true
+	return date, nil
 }
 
 // getActiveTemplateForDate fetches templateID, checks it's active and that
-// date falls on its weekday, writing the appropriate error and returning
-// ok=false on any failure — shared by handleCreateBooking and
-// handleCreateDirectBooking.
-func (s *Server) getActiveTemplateForDate(w http.ResponseWriter, r *http.Request, templateID string, date time.Time) (template shift.ShiftTemplate, ok bool) {
-	template, err := s.repo.GetTemplate(r.Context(), templateID)
+// date falls on its weekday — shared by handleCreateBooking,
+// handleCreateDirectBooking and handleCreateBulkBooking.
+func (s *Server) getActiveTemplateForDate(ctx context.Context, templateID string, date time.Time) (shift.ShiftTemplate, *validationError) {
+	template, err := s.repo.GetTemplate(ctx, templateID)
 	if err != nil {
 		if errors.Is(err, shift.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "template not found")
-			return shift.ShiftTemplate{}, false
+			return shift.ShiftTemplate{}, &validationError{http.StatusNotFound, "template not found"}
 		}
 		s.logger.Error("get shift template", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return shift.ShiftTemplate{}, false
+		return shift.ShiftTemplate{}, &validationError{http.StatusInternalServerError, "internal error"}
 	}
 	if !template.Active {
-		writeError(w, http.StatusBadRequest, "template is not active")
-		return shift.ShiftTemplate{}, false
+		return shift.ShiftTemplate{}, &validationError{http.StatusBadRequest, "template is not active"}
 	}
 	if int(date.Weekday()) != template.Weekday {
-		writeError(w, http.StatusBadRequest, "date does not fall on the template's weekday")
-		return shift.ShiftTemplate{}, false
+		return shift.ShiftTemplate{}, &validationError{http.StatusBadRequest, "date does not fall on the template's weekday"}
 	}
-	return template, true
+	return template, nil
 }
 
 // checkSlotAvailability rejects a booking attempt that would land on an
 // already-confirmed slot, or duplicate a pending/confirmed booking
-// volunteerID already has for it — shared by handleCreateBooking and
-// handleCreateDirectBooking (different duplicateMessage: "you already
-// have..." for a volunteer's own request vs "the chosen volunteer already
-// has..." for a manager's direct booking).
-func (s *Server) checkSlotAvailability(w http.ResponseWriter, r *http.Request, templateID string, date time.Time, volunteerID, duplicateMessage string) bool {
-	ctx := r.Context()
+// volunteerID already has for it — shared by handleCreateBooking,
+// handleCreateDirectBooking and handleCreateBulkBooking (different
+// duplicateMessage: "you already have..." for a volunteer's own request vs
+// "the chosen volunteer already has..." for a manager's direct booking).
+func (s *Server) checkSlotAvailability(ctx context.Context, templateID string, date time.Time, volunteerID, duplicateMessage string) *validationError {
 	confirmed, err := s.repo.HasConfirmedBooking(ctx, templateID, date)
 	if err != nil {
 		s.logger.Error("check confirmed booking", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return false
+		return &validationError{http.StatusInternalServerError, "internal error"}
 	}
 	if confirmed {
-		writeError(w, http.StatusConflict, "this slot is already confirmed")
-		return false
+		return &validationError{http.StatusConflict, "this slot is already confirmed"}
 	}
 
 	hasBooking, err := s.repo.HasBookingForVolunteer(ctx, templateID, date, volunteerID)
 	if err != nil {
 		s.logger.Error("check volunteer booking", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return false
+		return &validationError{http.StatusInternalServerError, "internal error"}
 	}
 	if hasBooking {
-		writeError(w, http.StatusConflict, duplicateMessage)
-		return false
+		return &validationError{http.StatusConflict, duplicateMessage}
 	}
-	return true
+	return nil
 }
 
 type createDirectBookingRequest struct {
@@ -167,16 +172,19 @@ func (s *Server) handleCreateDirectBooking(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "volunteer_id is required")
 		return
 	}
-	date, ok := parseAndValidateBookingDate(w, req.Date)
-	if !ok {
+	date, verr := parseAndValidateBookingDate(req.Date)
+	if verr != nil {
+		writeError(w, verr.status, verr.message)
 		return
 	}
-	template, ok := s.getActiveTemplateForDate(w, r, req.TemplateID, date)
-	if !ok {
+	template, verr := s.getActiveTemplateForDate(r.Context(), req.TemplateID, date)
+	if verr != nil {
+		writeError(w, verr.status, verr.message)
 		return
 	}
-	if !s.checkSlotAvailability(w, r, template.ID, date, req.VolunteerID,
-		"the chosen volunteer already has a pending or confirmed booking for this slot") {
+	if verr := s.checkSlotAvailability(r.Context(), template.ID, date, req.VolunteerID,
+		"the chosen volunteer already has a pending or confirmed booking for this slot"); verr != nil {
+		writeError(w, verr.status, verr.message)
 		return
 	}
 
@@ -194,6 +202,90 @@ func (s *Server) handleCreateDirectBooking(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		s.logger.Error("create direct booking", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+type createBulkBookingItem struct {
+	TemplateID string `json:"template_id"`
+	Date       string `json:"date"`
+}
+
+type createBulkBookingRequest struct {
+	Bookings []createBulkBookingItem `json:"bookings"`
+}
+
+// @Summary	Request bookings for multiple open slots in one all-or-nothing call (requires the shifts:request permission)
+// @Tags		shift-bookings
+// @Accept		json
+// @Produce	json
+// @Security	BearerAuth
+// @Param		bookings	body		createBulkBookingRequest	true	"Non-empty list of template id + date (YYYY-MM-DD) pairs, no duplicates"
+// @Success	201			{array}		shift.Booking
+// @Failure	400			"Invalid payload, empty/duplicate list, or the Nth item has a past/malformed date, inactive template, or weekday mismatch"
+// @Failure	401			"Authentication required"
+// @Failure	403			"Missing required permission: shifts:request"
+// @Failure	404			"The Nth item's template was not found"
+// @Failure	409			"The Nth item's slot is already confirmed, or the caller already has a pending/confirmed booking for it"
+// @Router		/v1/shift-bookings/bulk [post]
+func (s *Server) handleCreateBulkBooking(w http.ResponseWriter, r *http.Request) {
+	var req createBulkBookingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+	if len(req.Bookings) == 0 {
+		writeError(w, http.StatusBadRequest, "at least one booking is required")
+		return
+	}
+
+	// A duplicate (template_id, date) pair within the same request would
+	// otherwise pass per-item validation twice — neither one exists in the
+	// DB yet at check time — and end up inserted twice.
+	type slot struct{ templateID, date string }
+	seen := make(map[slot]bool, len(req.Bookings))
+	for _, item := range req.Bookings {
+		key := slot{item.TemplateID, item.Date}
+		if seen[key] {
+			writeError(w, http.StatusBadRequest, "duplicate template_id/date pair in request")
+			return
+		}
+		seen[key] = true
+	}
+
+	ctx := r.Context()
+	volunteerID := claimsFromContext(r).Subject
+	toCreate := make([]shift.Booking, 0, len(req.Bookings))
+	for i, item := range req.Bookings {
+		date, verr := parseAndValidateBookingDate(item.Date)
+		if verr != nil {
+			writeError(w, verr.status, fmt.Sprintf("booking %d: %s", i+1, verr.message))
+			return
+		}
+		template, verr := s.getActiveTemplateForDate(ctx, item.TemplateID, date)
+		if verr != nil {
+			writeError(w, verr.status, fmt.Sprintf("booking %d: %s", i+1, verr.message))
+			return
+		}
+		if verr := s.checkSlotAvailability(ctx, template.ID, date, volunteerID,
+			"you already have a pending or confirmed booking for this slot"); verr != nil {
+			writeError(w, verr.status, fmt.Sprintf("booking %d: %s", i+1, verr.message))
+			return
+		}
+		toCreate = append(toCreate, shift.Booking{
+			TemplateID:  template.ID,
+			VolunteerID: volunteerID,
+			Date:        date,
+			StartTime:   template.StartTime,
+			EndTime:     template.EndTime,
+		})
+	}
+
+	created, err := s.repo.CreateBookingsAtomic(ctx, toCreate)
+	if err != nil {
+		s.logger.Error("create bulk bookings", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}

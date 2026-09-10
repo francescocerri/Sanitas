@@ -105,6 +105,20 @@ definitions:
       template_id:
         type: string
     type: object
+  internal_httpapi.createBulkBookingItem:
+    properties:
+      date:
+        type: string
+      template_id:
+        type: string
+    type: object
+  internal_httpapi.createBulkBookingRequest:
+    properties:
+      bookings:
+        items:
+          $ref: '#/definitions/internal_httpapi.createBulkBookingItem'
+        type: array
+    type: object
   internal_httpapi.createDirectBookingRequest:
     properties:
       date:
@@ -238,6 +252,44 @@ paths:
       security:
       - BearerAuth: []
       summary: Approve or reject a pending booking (requires the shifts:write permission)
+      tags:
+      - shift-bookings
+  /v1/shift-bookings/bulk:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Non-empty list of template id + date (YYYY-MM-DD) pairs, no duplicates
+        in: body
+        name: bookings
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.createBulkBookingRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            items:
+              $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking'
+            type: array
+        "400":
+          description: Invalid payload, empty/duplicate list, or the Nth item has
+            a past/malformed date, inactive template, or weekday mismatch
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:request'
+        "404":
+          description: The Nth item's template was not found
+        "409":
+          description: The Nth item's slot is already confirmed, or the caller already
+            has a pending/confirmed booking for it
+      security:
+      - BearerAuth: []
+      summary: Request bookings for multiple open slots in one all-or-nothing call
+        (requires the shifts:request permission)
       tags:
       - shift-bookings
   /v1/shift-bookings/direct:

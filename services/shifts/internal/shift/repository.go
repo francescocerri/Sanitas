@@ -155,6 +155,32 @@ func (r *Repository) CreateConfirmedBooking(ctx context.Context, b Booking, deci
 	return b, nil
 }
 
+// CreateBookingsAtomic inserts every booking in bookings inside a single DB
+// transaction — the caller has already validated each one individually
+// (see handleCreateBulkBooking), this only guarantees the multi-row insert
+// itself is all-or-nothing: if any row fails to insert, every row already
+// inserted in this call rolls back too.
+func (r *Repository) CreateBookingsAtomic(ctx context.Context, bookings []Booking) ([]Booking, error) {
+	created := make([]Booking, 0, len(bookings))
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, b := range bookings {
+			b.ID = ""
+			b.Status = ""
+			b.DecidedBy = nil
+			b.DecidedAt = nil
+			if err := tx.Create(&b).Error; err != nil {
+				return err
+			}
+			created = append(created, b)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("shift: create bookings atomic: %w", err)
+	}
+	return created, nil
+}
+
 func (r *Repository) GetBooking(ctx context.Context, id string) (Booking, error) {
 	var b Booking
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&b).Error
