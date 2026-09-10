@@ -22,6 +22,12 @@ var ErrNotFound = errors.New("not found")
 // apart from "exists, but this decision no longer applies" (409).
 var ErrBookingNotPending = errors.New("booking is not pending")
 
+// ErrUnknownVolunteer is returned by CreateConfirmedBooking when
+// volunteer_id doesn't reference a real registry.users row — translated
+// from gorm.ErrForeignKeyViolated (available because TranslateError is set
+// in cmd/server/main.go) so the caller gets a clean 400, not a raw DB error.
+var ErrUnknownVolunteer = errors.New("unknown volunteer")
+
 type Repository struct {
 	db *gorm.DB
 }
@@ -125,6 +131,26 @@ func (r *Repository) CreateBooking(ctx context.Context, b Booking) (Booking, err
 	b.DecidedAt = nil
 	if err := r.db.WithContext(ctx).Create(&b).Error; err != nil {
 		return Booking{}, fmt.Errorf("shift: create booking: %w", err)
+	}
+	return b, nil
+}
+
+// CreateConfirmedBooking is CreateBooking's counterpart for a shift
+// manager's direct booking: no pending step, the booking is already
+// decided at creation time. Doesn't reuse CreateBooking (which always
+// forces status back to pending) — different, purpose-built contract
+// instead of one method branching on a flag.
+func (r *Repository) CreateConfirmedBooking(ctx context.Context, b Booking, decidedBy string) (Booking, error) {
+	b.ID = ""
+	b.Status = BookingStatusConfirmed
+	b.DecidedBy = &decidedBy
+	now := time.Now()
+	b.DecidedAt = &now
+	if err := r.db.WithContext(ctx).Create(&b).Error; err != nil {
+		if errors.Is(err, gorm.ErrForeignKeyViolated) {
+			return Booking{}, ErrUnknownVolunteer
+		}
+		return Booking{}, fmt.Errorf("shift: create confirmed booking: %w", err)
 	}
 	return b, nil
 }

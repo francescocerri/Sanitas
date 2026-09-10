@@ -539,3 +539,49 @@ func TestRepository_DecideBooking_Cancelled(t *testing.T) {
 		t.Fatalf("expected ErrBookingNotPending, got %v", err)
 	}
 }
+
+func TestRepository_CreateConfirmedBooking(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+
+	created, err := repo.CreateConfirmedBooking(ctx, Booking{
+		TemplateID:  tpl.ID,
+		VolunteerID: testVolunteerID,
+		Date:        thursday,
+		StartTime:   tpl.StartTime,
+		EndTime:     tpl.EndTime,
+	}, testVolunteerID)
+	if err != nil {
+		t.Fatalf("CreateConfirmedBooking: %v", err)
+	}
+	if created.ID == "" {
+		t.Fatal("expected a non-empty id")
+	}
+	if created.Status != BookingStatusConfirmed {
+		t.Fatalf("expected status confirmed, got %s", created.Status)
+	}
+	if created.DecidedBy == nil || *created.DecidedBy != testVolunteerID {
+		t.Fatalf("expected decided_by to be set, got %+v", created.DecidedBy)
+	}
+	if created.DecidedAt == nil {
+		t.Fatal("expected decided_at to be set")
+	}
+}
+
+func TestRepository_CreateConfirmedBooking_RejectsUnknownVolunteer(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+
+	_, err := repo.CreateConfirmedBooking(ctx, Booking{
+		TemplateID:  tpl.ID,
+		VolunteerID: "00000000-0000-0000-0000-000000000000",
+		Date:        thursday,
+		StartTime:   tpl.StartTime,
+		EndTime:     tpl.EndTime,
+	}, testVolunteerID)
+	if !errors.Is(err, ErrUnknownVolunteer) {
+		t.Fatalf("expected ErrUnknownVolunteer, got %v", err)
+	}
+}

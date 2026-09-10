@@ -84,6 +84,59 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/shift-bookings/direct": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shift-bookings"
+                ],
+                "summary": "Book a slot directly for a chosen volunteer, already confirmed (requires the shifts:write permission)",
+                "parameters": [
+                    {
+                        "description": "Template id, volunteer id, and date (YYYY-MM-DD)",
+                        "name": "booking",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_httpapi.createDirectBookingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload, empty/unknown volunteer_id, past date, inactive template, or weekday mismatch"
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:write"
+                    },
+                    "404": {
+                        "description": "Template not found"
+                    },
+                    "409": {
+                        "description": "Slot already confirmed, or the chosen volunteer already has a pending/confirmed booking for it"
+                    }
+                }
+            }
+        },
         "/v1/shift-bookings/pending-count": {
             "get": {
                 "security": [
@@ -487,6 +540,20 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "template_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_httpapi.createDirectBookingRequest": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "template_id": {
+                    "type": "string"
+                },
+                "volunteer_id": {
                     "type": "string"
                 }
             }
