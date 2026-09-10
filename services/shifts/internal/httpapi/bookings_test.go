@@ -57,6 +57,31 @@ func createTestTemplate(t *testing.T, server *Server, configureToken string) shi
 	return tpl
 }
 
+// createTestBooking requests a booking via the real HTTP endpoint for the
+// given template, on the next date matching its weekday — used by tests
+// that need a pending booking to decide on, not testing creation itself.
+func createTestBooking(t *testing.T, server *Server, volunteerToken string, tpl shift.ShiftTemplate) shift.Booking {
+	t.Helper()
+	d := time.Now().UTC().AddDate(0, 0, 14)
+	for int(d.Weekday()) != tpl.Weekday {
+		d = d.AddDate(0, 0, 1)
+	}
+	body, _ := json.Marshal(createBookingRequest{TemplateID: tpl.ID, Date: d.Format(dateLayout)})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+volunteerToken)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("createTestBooking: expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var booking shift.Booking
+	if err := json.Unmarshal(rec.Body.Bytes(), &booking); err != nil {
+		t.Fatalf("createTestBooking: decode: %v", err)
+	}
+	return booking
+}
+
 func TestCreateBooking_RequiresRequestPermission(t *testing.T) {
 	server, issuer := newTestServerWithIssuer(t)
 	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
@@ -259,5 +284,135 @@ func TestPendingBookingsCount_ReturnsCount(t *testing.T) {
 	}
 	if got.PendingCount != 1 {
 		t.Fatalf("expected pending_count=1, got %d", got.PendingCount)
+	}
+}
+
+func TestDecideBooking_RequiresWritePermission(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+	booking := createTestBooking(t, server, issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest}), tpl)
+
+	body, _ := json.Marshal(decideBookingRequest{Status: "confirmed"})
+	req := httptest.NewRequest(http.MethodPatch, "/v1/shift-bookings/"+booking.ID, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsRead}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDecideBooking_RejectsInvalidStatus(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+	booking := createTestBooking(t, server, issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest}), tpl)
+	writeToken := issuer.token(t, []string{permShiftsWrite})
+
+	for _, status := range []string{"pending", "cancelled", "", "Confirmed"} {
+		t.Run(status, func(t *testing.T) {
+			body, _ := json.Marshal(decideBookingRequest{Status: status})
+			req := httptest.NewRequest(http.MethodPatch, "/v1/shift-bookings/"+booking.ID, bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+writeToken)
+			rec := httptest.NewRecorder()
+			server.Routes().ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestDecideBooking_NotFound(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+
+	body, _ := json.Marshal(decideBookingRequest{Status: "confirmed"})
+	req := httptest.NewRequest(http.MethodPatch, "/v1/shift-bookings/00000000-0000-0000-0000-000000000000", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// tokenFor, not token: decided_by is a uuid column, "test-user" (the
+	// default subject) isn't a valid one — see TestDecideBooking_Confirm.
+	req.Header.Set("Authorization", "Bearer "+issuer.tokenFor(t, testVolunteerID, []string{permShiftsWrite}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDecideBooking_Confirm(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+	booking := createTestBooking(t, server, issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest}), tpl)
+	managerToken := issuer.tokenFor(t, testVolunteerID, []string{permShiftsWrite})
+
+	body, _ := json.Marshal(decideBookingRequest{Status: "confirmed"})
+	req := httptest.NewRequest(http.MethodPatch, "/v1/shift-bookings/"+booking.ID, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+managerToken)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var decided shift.Booking
+	if err := json.Unmarshal(rec.Body.Bytes(), &decided); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if decided.Status != shift.BookingStatusConfirmed {
+		t.Fatalf("expected status confirmed, got %s", decided.Status)
+	}
+	if decided.DecidedBy == nil || *decided.DecidedBy != testVolunteerID {
+		t.Fatalf("expected decided_by to come from the token subject, got %+v", decided.DecidedBy)
+	}
+}
+
+func TestDecideBooking_Reject(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+	booking := createTestBooking(t, server, issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest}), tpl)
+
+	body, _ := json.Marshal(decideBookingRequest{Status: "rejected"})
+	req := httptest.NewRequest(http.MethodPatch, "/v1/shift-bookings/"+booking.ID, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issuer.tokenFor(t, testVolunteerID, []string{permShiftsWrite}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var decided shift.Booking
+	if err := json.Unmarshal(rec.Body.Bytes(), &decided); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if decided.Status != shift.BookingStatusRejected {
+		t.Fatalf("expected status rejected, got %s", decided.Status)
+	}
+}
+
+func TestDecideBooking_RejectsDoubleDecision(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+	booking := createTestBooking(t, server, issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest}), tpl)
+	writeToken := issuer.tokenFor(t, testVolunteerID, []string{permShiftsWrite})
+
+	firstBody, _ := json.Marshal(decideBookingRequest{Status: "confirmed"})
+	firstReq := httptest.NewRequest(http.MethodPatch, "/v1/shift-bookings/"+booking.ID, bytes.NewReader(firstBody))
+	firstReq.Header.Set("Content-Type", "application/json")
+	firstReq.Header.Set("Authorization", "Bearer "+writeToken)
+	firstRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(firstRec, firstReq)
+	if firstRec.Code != http.StatusOK {
+		t.Fatalf("first decision: expected 200, got %d: %s", firstRec.Code, firstRec.Body.String())
+	}
+
+	secondBody, _ := json.Marshal(decideBookingRequest{Status: "rejected"})
+	secondReq := httptest.NewRequest(http.MethodPatch, "/v1/shift-bookings/"+booking.ID, bytes.NewReader(secondBody))
+	secondReq.Header.Set("Content-Type", "application/json")
+	secondReq.Header.Set("Authorization", "Bearer "+writeToken)
+	secondRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(secondRec, secondReq)
+	if secondRec.Code != http.StatusConflict {
+		t.Fatalf("second decision: expected 409, got %d: %s", secondRec.Code, secondRec.Body.String())
 	}
 }

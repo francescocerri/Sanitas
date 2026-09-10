@@ -16,6 +16,12 @@ import (
 // separate error per type.
 var ErrNotFound = errors.New("not found")
 
+// ErrBookingNotPending is returned by DecideBooking when the booking exists
+// but is no longer pending — already decided by someone else, or cancelled.
+// Distinct from ErrNotFound so the caller can tell "doesn't exist" (404)
+// apart from "exists, but this decision no longer applies" (409).
+var ErrBookingNotPending = errors.New("booking is not pending")
+
 type Repository struct {
 	db *gorm.DB
 }
@@ -261,4 +267,32 @@ func (r *Repository) CountPendingBookings(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("shift: count pending bookings: %w", err)
 	}
 	return int(n), nil
+}
+
+// DecideBooking approves or rejects a pending booking — status must be
+// BookingStatusConfirmed or BookingStatusRejected (the caller validates
+// that before reaching here). The WHERE clause requires status='pending'
+// so the transition itself is atomic: two concurrent decisions on the same
+// booking can't both succeed, whichever loses the race gets
+// ErrBookingNotPending below instead of silently overwriting the other.
+func (r *Repository) DecideBooking(ctx context.Context, id string, status BookingStatus, decidedBy string) (Booking, error) {
+	result := r.db.WithContext(ctx).Model(&Booking{}).
+		Where("id = ? AND status = ?", id, BookingStatusPending).
+		Updates(map[string]any{
+			"status":     status,
+			"decided_by": decidedBy,
+			"decided_at": time.Now(),
+		})
+	if result.Error != nil {
+		return Booking{}, fmt.Errorf("shift: decide booking: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		// RowsAffected == 0 means either the id doesn't exist, or it does
+		// but isn't pending anymore — GetBooking tells these apart.
+		if _, err := r.GetBooking(ctx, id); err != nil {
+			return Booking{}, err
+		}
+		return Booking{}, ErrBookingNotPending
+	}
+	return r.GetBooking(ctx, id)
 }
