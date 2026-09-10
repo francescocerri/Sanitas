@@ -48,13 +48,17 @@ func Migrate(db *gorm.DB) error {
 		END $$;`).Error; err != nil {
 		return err
 	}
-	// Only one confirmed booking per template+date: multiple pending
-	// requests for the same slot stay allowed until one is confirmed
+	// Only one confirmed booking per template+date+role: multiple pending
+	// requests for the same slot+role stay allowed until one is confirmed
 	// (deciding which others to reject at that point is application logic,
-	// not the schema's job) — CREATE UNIQUE INDEX supports IF NOT EXISTS
-	// natively, no need for the DO $$ trick used above for the two ALTER
-	// TABLEs.
+	// not the schema's job). Was (template_id, date) before roles existed
+	// (see docs/adr/0025-modello-dati-turni.md "Aggiornamento") — drop and
+	// recreate rather than an ALTER, no real deployment has ever carried
+	// data under the old shape.
+	if err := db.Exec(`DROP INDEX IF EXISTS idx_bookings_confirmed_slot`).Error; err != nil {
+		return err
+	}
 	return db.Exec(`
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_confirmed_slot
-			ON bookings (template_id, date) WHERE status = 'confirmed'`).Error
+			ON bookings (template_id, date, role) WHERE status = 'confirmed'`).Error
 }

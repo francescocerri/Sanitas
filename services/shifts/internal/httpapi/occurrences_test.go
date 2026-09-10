@@ -10,6 +10,20 @@ import (
 	"github.com/francescocerri/sanitas/services/shifts/internal/shift"
 )
 
+// roleCoverage finds the RoleCoverage for role within occ.Roles — same
+// helper as the shift package's own occurrence_test.go, needed here
+// because the HTTP response shape is the same nested structure.
+func roleCoverage(t *testing.T, occ shift.Occurrence, role shift.BookingRole) shift.RoleCoverage {
+	t.Helper()
+	for _, rc := range occ.Roles {
+		if rc.Role == role {
+			return rc
+		}
+	}
+	t.Fatalf("occurrence %+v has no coverage for role %s", occ, role)
+	return shift.RoleCoverage{}
+}
+
 func TestListOccurrences_RequiresReadPermission(t *testing.T) {
 	server, issuer := newTestServerWithIssuer(t)
 
@@ -80,11 +94,17 @@ func TestListOccurrences_ReturnsCoverageForRange(t *testing.T) {
 	if len(occurrences) != 1 {
 		t.Fatalf("expected 1 occurrence, got %d: %+v", len(occurrences), occurrences)
 	}
-	if occurrences[0].TemplateID != created.ID || occurrences[0].Status != shift.OccurrenceStatusFree {
+	if occurrences[0].TemplateID != created.ID || len(occurrences[0].Roles) != len(shift.AllBookingRoles) {
 		t.Fatalf("unexpected occurrence: %+v", occurrences[0])
 	}
-	if occurrences[0].MyBookingStatus != nil {
-		t.Fatalf("expected my_booking_status nil for a free slot, got %+v", occurrences[0].MyBookingStatus)
+	for _, role := range shift.AllBookingRoles {
+		rc := roleCoverage(t, occurrences[0], role)
+		if rc.Status != shift.OccurrenceStatusFree {
+			t.Fatalf("expected role %s free, got %+v", role, rc)
+		}
+		if rc.MyBookingStatus != nil {
+			t.Fatalf("expected my_booking_status nil for a free role, got %+v", rc)
+		}
 	}
 }
 
@@ -94,7 +114,7 @@ func TestListOccurrences_MyBookingStatusReflectsCaller(t *testing.T) {
 	tpl := createTestTemplate(t, server, configureToken)
 	volunteerToken := issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest, permShiftsRead})
 
-	bookingBody, _ := json.Marshal(createBookingRequest{TemplateID: tpl.ID, Date: futureThursday(t).Format(dateLayout)})
+	bookingBody, _ := json.Marshal(createBookingRequest{TemplateID: tpl.ID, Date: futureThursday(t).Format(dateLayout), Role: string(shift.BookingRoleDriver)})
 	bookingReq := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings", bytes.NewReader(bookingBody))
 	bookingReq.Header.Set("Content-Type", "application/json")
 	bookingReq.Header.Set("Authorization", "Bearer "+volunteerToken)
@@ -116,8 +136,16 @@ func TestListOccurrences_MyBookingStatusReflectsCaller(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &occurrences); err != nil {
 		t.Fatalf("decode occurrences response: %v", err)
 	}
-	if len(occurrences) != 1 || occurrences[0].MyBookingStatus == nil || *occurrences[0].MyBookingStatus != shift.BookingStatusPending {
-		t.Fatalf("expected my_booking_status=pending for the requesting volunteer, got %+v", occurrences)
+	if len(occurrences) != 1 {
+		t.Fatalf("expected 1 occurrence, got %+v", occurrences)
+	}
+	driverRC := roleCoverage(t, occurrences[0], shift.BookingRoleDriver)
+	if driverRC.MyBookingStatus == nil || *driverRC.MyBookingStatus != shift.BookingStatusPending {
+		t.Fatalf("expected my_booking_status=pending for the requesting volunteer's driver role, got %+v", driverRC)
+	}
+	leaderRC := roleCoverage(t, occurrences[0], shift.BookingRoleLeader)
+	if leaderRC.MyBookingStatus != nil {
+		t.Fatalf("expected my_booking_status nil for a role the caller didn't request, got %+v", leaderRC)
 	}
 
 	otherReq := httptest.NewRequest(http.MethodGet, "/v1/shift-occurrences?from="+date+"&to="+date, nil)
@@ -128,7 +156,8 @@ func TestListOccurrences_MyBookingStatusReflectsCaller(t *testing.T) {
 	if err := json.Unmarshal(otherRec.Body.Bytes(), &otherOccurrences); err != nil {
 		t.Fatalf("decode occurrences response: %v", err)
 	}
-	if len(otherOccurrences) != 1 || otherOccurrences[0].MyBookingStatus != nil {
+	otherDriverRC := roleCoverage(t, otherOccurrences[0], shift.BookingRoleDriver)
+	if len(otherOccurrences) != 1 || otherDriverRC.MyBookingStatus != nil {
 		t.Fatalf("expected my_booking_status nil for a different caller, got %+v", otherOccurrences)
 	}
 }

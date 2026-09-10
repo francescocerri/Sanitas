@@ -2,7 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import 'date_math.dart';
-import 'occurrence_row.dart';
+import 'occurrence_card.dart';
 import 'occurrences_async_builder.dart';
 import 'shift_models.dart';
 import 'shifts_filter.dart';
@@ -21,7 +21,7 @@ class DayView extends StatefulWidget {
   final ShiftsFilter filter;
   final Set<String> selection;
   final bool selectable;
-  final void Function(ShiftOccurrence occurrence) onToggle;
+  final void Function(ShiftOccurrence occurrence, ShiftRole role) onToggle;
 
   @override
   State<DayView> createState() => _DayViewState();
@@ -74,11 +74,11 @@ class _DayViewState extends State<DayView> {
             return Column(
               children: [
                 for (final occurrence in items)
-                  OccurrenceRow(
+                  OccurrenceCard(
                     occurrence: occurrence,
                     selectable: widget.selectable,
-                    selected: widget.selection.contains(occurrence.key),
-                    onSelectedChanged: (_) => widget.onToggle(occurrence),
+                    selection: widget.selection,
+                    onToggle: widget.onToggle,
                   ),
               ],
             );

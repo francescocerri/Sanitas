@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 
 import 'shift_models.dart';
 
-/// Colore per la "categoria visiva" di un'occorrenza — sempre
+/// Colore per la "categoria visiva" di una figura — sempre
 /// `myBookingStatus` se presente (è una MIA prenotazione, indipendentemente
-/// da chi altro ha richiesto lo stesso slot), altrimenti lo stato
+/// da chi altro ha richiesto la stessa figura), altrimenti lo stato
 /// aggregato. Sia "mia in attesa" che "mia confermata" usano il colore del
-/// comitato (per distinguerle da chiunque altro): [occurrenceIsOutlineOnly]
+/// comitato (per distinguerle da chiunque altro): [roleIsOutlineOnly]
 /// dice a chi disegna il pallino se riempirlo (confermata) o solo
 /// bordarlo (in attesa) — altrimenti le due sarebbero visivamente
 /// identiche, cosa segnalata esplicitamente come confusa.
@@ -17,12 +17,12 @@ import 'shift_models.dart';
 /// `core/theme/committee_theme.dart`): sono un linguaggio semantico
 /// generico (libero=verde, in attesa=ambra), non un vincolo di brand, quindi
 /// restano costanti Material qui invece di finire nel tema per-comitato.
-Color occurrenceColor(BuildContext context, ShiftOccurrence occurrence) =>
-    statusColor(context, occurrence.status, occurrence.myBookingStatus);
+Color roleColor(BuildContext context, RoleCoverage coverage) =>
+    statusColor(context, coverage.status, coverage.myBookingStatus);
 
-/// Stessa logica di [occurrenceColor], ma sui soli stati invece che su
-/// un'occorrenza intera — usata anche dalla legenda della schermata, che
-/// non ha (né le serve) una vera `ShiftOccurrence` per ogni voce.
+/// Stessa logica di [roleColor], ma sui soli stati invece che su una
+/// `RoleCoverage` intera — usata anche dalla legenda della schermata, che
+/// non ha (né le serve) una vera figura per ogni voce.
 Color statusColor(
   BuildContext context,
   ShiftOccurrenceStatus status,
@@ -45,11 +45,11 @@ Color statusColor(
 /// pallino/marcatore lo rende un anello vuoto invece che pieno, così "in
 /// attesa" (contorno) e "confermato" (pieno) restano distinguibili anche
 /// quando condividono lo stesso colore primario.
-bool occurrenceIsOutlineOnly(ShiftOccurrence occurrence) =>
-    occurrence.myBookingStatus == MyBookingStatus.pending;
+bool roleIsOutlineOnly(RoleCoverage coverage) =>
+    coverage.myBookingStatus == MyBookingStatus.pending;
 
-String occurrenceStatusLabel(ShiftOccurrence occurrence) {
-  switch (occurrence.myBookingStatus) {
+String roleStatusLabel(RoleCoverage coverage) {
+  switch (coverage.myBookingStatus) {
     case MyBookingStatus.pending:
       return 'shifts.status_mine_pending'.tr();
     case MyBookingStatus.confirmed:
@@ -57,7 +57,7 @@ String occurrenceStatusLabel(ShiftOccurrence occurrence) {
     case null:
       break;
   }
-  switch (occurrence.status) {
+  switch (coverage.status) {
     case ShiftOccurrenceStatus.free:
       return 'shifts.status_free'.tr();
     case ShiftOccurrenceStatus.pending:
@@ -66,3 +66,75 @@ String occurrenceStatusLabel(ShiftOccurrence occurrence) {
       return 'shifts.status_confirmed'.tr();
   }
 }
+
+String roleLabel(ShiftRole role) {
+  switch (role) {
+    case ShiftRole.driver:
+      return 'shifts.role_driver'.tr();
+    case ShiftRole.leader:
+      return 'shifts.role_leader'.tr();
+    case ShiftRole.rescuer:
+      return 'shifts.role_rescuer'.tr();
+    case ShiftRole.observer:
+      return 'shifts.role_observer'.tr();
+  }
+}
+
+IconData roleIcon(ShiftRole role) {
+  switch (role) {
+    case ShiftRole.driver:
+      return Icons.airport_shuttle_outlined;
+    case ShiftRole.leader:
+      return Icons.flag_outlined;
+    case ShiftRole.rescuer:
+      return Icons.medical_services_outlined;
+    case ShiftRole.observer:
+      return Icons.visibility_outlined;
+  }
+}
+
+/// Il mio stato aggregato su un'intera occorrenza: confermato se ho una
+/// figura confermata (a prescindere dalle altre), altrimenti in attesa se
+/// ne ho una in attesa, altrimenti nessuno — un volontario ha al più una
+/// figura per occorrenza (vedi ADR-0025 "Aggiornamento"), quindi al più uno
+/// di questi due casi si applica mai.
+MyBookingStatus? myAggregateStatus(ShiftOccurrence occurrence) {
+  for (final rc in occurrence.roles) {
+    if (rc.myBookingStatus == MyBookingStatus.confirmed) {
+      return MyBookingStatus.confirmed;
+    }
+  }
+  for (final rc in occurrence.roles) {
+    if (rc.myBookingStatus == MyBookingStatus.pending) {
+      return MyBookingStatus.pending;
+    }
+  }
+  return null;
+}
+
+/// Colore del singolo pallino aggregato per turno usato dalla vista Mese
+/// (un pallino per turno, non uno per figura — il dettaglio per figura
+/// resta nella card espansa). Priorità: una mia figura confermata o in
+/// attesa vince su tutto; altrimenti almeno una figura ancora libera
+/// (verde) vince su "tutte occupate ma non tutte confermate" (ambra);
+/// tutte e 4 confermate è l'unico caso "completo" (grigio).
+Color occurrenceCardColor(BuildContext context, ShiftOccurrence occurrence) {
+  if (myAggregateStatus(occurrence) != null) {
+    return Theme.of(context).colorScheme.primary;
+  }
+  if (occurrence.roles.any((rc) => rc.status == ShiftOccurrenceStatus.free)) {
+    return Colors.green.shade600;
+  }
+  if (occurrence.roles.any(
+    (rc) => rc.status == ShiftOccurrenceStatus.pending,
+  )) {
+    return Colors.amber.shade700;
+  }
+  return Theme.of(context).colorScheme.onSurfaceVariant;
+}
+
+/// true solo quando l'aggregato è "mia richiesta in attesa" — stesso
+/// trattamento anello-vs-pieno di [roleIsOutlineOnly], applicato al
+/// pallino per turno invece che a quello per figura.
+bool occurrenceCardOutline(ShiftOccurrence occurrence) =>
+    myAggregateStatus(occurrence) == MyBookingStatus.pending;

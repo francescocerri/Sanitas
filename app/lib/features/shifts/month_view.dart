@@ -3,17 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import 'date_math.dart';
-import 'occurrence_row.dart';
+import 'occurrence_card.dart';
 import 'occurrences_async_builder.dart';
 import 'shift_models.dart';
 import 'shift_status_style.dart';
 import 'shifts_filter.dart';
 
 /// Vista Mese: griglia calendario (pacchetto `table_calendar`, vedi
-/// `docs/backlog.md`) con un pallino colorato per stato sotto ogni giorno
-/// con turni; toccare un giorno apre sotto il pannello con le sue
-/// occorrenze — stesso `OccurrenceRow` delle altre viste, senza una
-/// seconda chiamata di rete (riusa la lista già scaricata per il mese).
+/// `docs/backlog.md`) con un pallino colorato per turno sotto ogni giorno
+/// con turni (un pallino aggregato, non uno per figura — vedi
+/// `occurrenceCardColor`); toccare un giorno apre sotto il pannello con le
+/// sue occorrenze — stessa `OccurrenceCard` espandibile delle altre viste,
+/// senza una seconda chiamata di rete (riusa la lista già scaricata per il
+/// mese).
 class MonthView extends StatefulWidget {
   const MonthView({
     super.key,
@@ -26,7 +28,7 @@ class MonthView extends StatefulWidget {
   final ShiftsFilter filter;
   final Set<String> selection;
   final bool selectable;
-  final void Function(ShiftOccurrence occurrence) onToggle;
+  final void Function(ShiftOccurrence occurrence, ShiftRole role) onToggle;
 
   @override
   State<MonthView> createState() => _MonthViewState();
@@ -128,16 +130,22 @@ class _MonthViewState extends State<MonthView> {
                           width: 6,
                           height: 6,
                           margin: const EdgeInsets.symmetric(horizontal: 1),
-                          decoration: occurrenceIsOutlineOnly(occurrence)
+                          decoration: occurrenceCardOutline(occurrence)
                               ? BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: occurrenceColor(context, occurrence),
+                                    color: occurrenceCardColor(
+                                      context,
+                                      occurrence,
+                                    ),
                                     width: 1.2,
                                   ),
                                 )
                               : BoxDecoration(
-                                  color: occurrenceColor(context, occurrence),
+                                  color: occurrenceCardColor(
+                                    context,
+                                    occurrence,
+                                  ),
                                   shape: BoxShape.circle,
                                 ),
                         ),
@@ -168,11 +176,11 @@ class _MonthViewState extends State<MonthView> {
                 )
               else
                 for (final occurrence in selectedItems)
-                  OccurrenceRow(
+                  OccurrenceCard(
                     occurrence: occurrence,
                     selectable: widget.selectable,
-                    selected: widget.selection.contains(occurrence.key),
-                    onSelectedChanged: (_) => widget.onToggle(occurrence),
+                    selection: widget.selection,
+                    onToggle: widget.onToggle,
                   ),
             ],
           ],

@@ -218,17 +218,25 @@ type occurrenceKey struct {
 	date       string // time.Time isn't a valid map key across different locations/monotonic readings; the DATE-only value formatted as YYYY-MM-DD is.
 }
 
+// roleKey identifies one of the 4 bookable positions within an occurrence.
+type roleKey struct {
+	occurrenceKey
+	role BookingRole
+}
+
 // ListOccurrences generates every occurrence of an active template within
-// [from, to] (both inclusive) and attaches its coverage status by looking
-// up bookings in the same range — see docs/backlog.md "Gestione turni",
-// voce 3. Occurrences are never stored: a day/slot combination only exists
-// as the join of a template's weekday against the calendar.
+// [from, to] (both inclusive) and attaches, for each of its 4 roles, the
+// coverage status computed from bookings in the same range — see
+// docs/backlog.md "Gestione turni", voce 3, and the "Aggiornamento" section
+// of docs/adr/0025-modello-dati-turni.md for the role dimension.
+// Occurrences are never stored: a day/slot combination only exists as the
+// join of a template's weekday against the calendar.
 //
-// Status precedence when multiple bookings exist for the same slot+date
+// Status precedence when multiple bookings exist for the same slot+date+role
 // (e.g. several pending requests before one is confirmed): confirmed beats
 // pending beats free. rejected/cancelled bookings never affect status.
 //
-// callerID additionally populates MyBookingStatus on each occurrence where
+// callerID additionally populates MyBookingStatus on each role where
 // callerID itself has a pending/confirmed booking — the caller is always
 // authenticated (this repository method backs an endpoint behind
 // shifts:read), so this is never empty in practice.
@@ -242,13 +250,16 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, ca
 		return nil, err
 	}
 
-	statusByKey := make(map[occurrenceKey]OccurrenceStatus, len(bookings))
-	mineByKey := make(map[occurrenceKey]BookingStatus, len(bookings))
+	statusByKey := make(map[roleKey]OccurrenceStatus, len(bookings))
+	mineByKey := make(map[roleKey]BookingStatus, len(bookings))
 	for _, b := range bookings {
 		if b.Status != BookingStatusPending && b.Status != BookingStatusConfirmed {
 			continue
 		}
-		key := occurrenceKey{templateID: b.TemplateID, date: b.Date.Format("2006-01-02")}
+		key := roleKey{
+			occurrenceKey: occurrenceKey{templateID: b.TemplateID, date: b.Date.Format("2006-01-02")},
+			role:          b.Role,
+		}
 		status := OccurrenceStatusPending
 		if b.Status == BookingStatusConfirmed {
 			status = OccurrenceStatusConfirmed
@@ -271,37 +282,41 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, ca
 			if t.Weekday != weekday {
 				continue
 			}
-			key := occurrenceKey{templateID: t.ID, date: d.Format("2006-01-02")}
-			status := OccurrenceStatusFree
-			if s, ok := statusByKey[key]; ok {
-				status = s
-			}
-			var myStatus *BookingStatus
-			if s, ok := mineByKey[key]; ok {
-				myStatus = &s
+			base := occurrenceKey{templateID: t.ID, date: d.Format("2006-01-02")}
+			roles := make([]RoleCoverage, 0, len(AllBookingRoles))
+			for _, role := range AllBookingRoles {
+				key := roleKey{occurrenceKey: base, role: role}
+				status := OccurrenceStatusFree
+				if s, ok := statusByKey[key]; ok {
+					status = s
+				}
+				var myStatus *BookingStatus
+				if s, ok := mineByKey[key]; ok {
+					myStatus = &s
+				}
+				roles = append(roles, RoleCoverage{Role: role, Status: status, MyBookingStatus: myStatus})
 			}
 			occurrences = append(occurrences, Occurrence{
-				TemplateID:      t.ID,
-				Date:            d,
-				Weekday:         weekday,
-				StartTime:       t.StartTime,
-				EndTime:         t.EndTime,
-				Label:           t.Label,
-				Status:          status,
-				MyBookingStatus: myStatus,
+				TemplateID: t.ID,
+				Date:       d,
+				Weekday:    weekday,
+				StartTime:  t.StartTime,
+				EndTime:    t.EndTime,
+				Label:      t.Label,
+				Roles:      roles,
 			})
 		}
 	}
 	return occurrences, nil
 }
 
-// HasConfirmedBooking reports whether a template+date slot is already
+// HasConfirmedBooking reports whether a template+date+role slot is already
 // occupied by a confirmed booking — the availability check a new request
 // must pass (see handleCreateBooking).
-func (r *Repository) HasConfirmedBooking(ctx context.Context, templateID string, date time.Time) (bool, error) {
+func (r *Repository) HasConfirmedBooking(ctx context.Context, templateID string, date time.Time, role BookingRole) (bool, error) {
 	var n int64
 	err := r.db.WithContext(ctx).Model(&Booking{}).
-		Where("template_id = ? AND date = ? AND status = ?", templateID, date, BookingStatusConfirmed).
+		Where("template_id = ? AND date = ? AND role = ? AND status = ?", templateID, date, role, BookingStatusConfirmed).
 		Count(&n).Error
 	if err != nil {
 		return false, fmt.Errorf("shift: has confirmed booking: %w", err)
@@ -310,8 +325,12 @@ func (r *Repository) HasConfirmedBooking(ctx context.Context, templateID string,
 }
 
 // HasBookingForVolunteer reports whether volunteerID already has a
-// pending or confirmed booking for this template+date — rejected/cancelled
-// ones don't count, a volunteer can always request again after either.
+// pending or confirmed booking for this template+date, in ANY role —
+// deliberately not filtered by role: one person holds at most one role per
+// occurrence (see docs/adr/0025-modello-dati-turni.md "Aggiornamento"), so
+// this is what stops a volunteer from booking a second role on a slot
+// they're already part of. rejected/cancelled ones don't count, a
+// volunteer can always request again after either.
 func (r *Repository) HasBookingForVolunteer(ctx context.Context, templateID string, date time.Time, volunteerID string) (bool, error) {
 	var n int64
 	err := r.db.WithContext(ctx).Model(&Booking{}).

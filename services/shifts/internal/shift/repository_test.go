@@ -214,6 +214,7 @@ func TestRepository_CreateAndGetBooking(t *testing.T) {
 	created, err := repo.CreateBooking(ctx, Booking{
 		TemplateID:  tpl.ID,
 		VolunteerID: testVolunteerID,
+		Role:        BookingRoleDriver,
 		Date:        time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC),
 		StartTime:   tpl.StartTime,
 		EndTime:     tpl.EndTime,
@@ -226,6 +227,9 @@ func TestRepository_CreateAndGetBooking(t *testing.T) {
 	}
 	if created.Status != BookingStatusPending {
 		t.Fatalf("CreateBooking: expected default status %q, got %q", BookingStatusPending, created.Status)
+	}
+	if created.Role != BookingRoleDriver {
+		t.Fatalf("CreateBooking: expected role to be preserved, got %q", created.Role)
 	}
 	if created.DecidedBy != nil || created.DecidedAt != nil {
 		t.Fatalf("CreateBooking: expected no decider yet, got %+v", created)
@@ -254,11 +258,11 @@ func TestRepository_ListBookingsOrdersByDateAndStartTime(t *testing.T) {
 	ctx := context.Background()
 	tpl := newTestTemplate(t, repo)
 
-	later, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), StartTime: "14:00", EndTime: "18:00"})
+	later, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), StartTime: "14:00", EndTime: "18:00"})
 	if err != nil {
 		t.Fatalf("CreateBooking later: %v", err)
 	}
-	earlier, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), StartTime: "08:00", EndTime: "12:00"})
+	earlier, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), StartTime: "08:00", EndTime: "12:00"})
 	if err != nil {
 		t.Fatalf("CreateBooking earlier: %v", err)
 	}
@@ -286,6 +290,7 @@ func TestRepository_CreateBookingRejectsUnknownVolunteerID(t *testing.T) {
 	_, err := repo.CreateBooking(ctx, Booking{
 		TemplateID:  tpl.ID,
 		VolunteerID: "00000000-0000-0000-0000-000000000000",
+		Role:        BookingRoleDriver,
 		Date:        time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC),
 		StartTime:   "08:00",
 		EndTime:     "14:00",
@@ -302,6 +307,7 @@ func TestRepository_CreateBookingRejectsUnknownTemplateID(t *testing.T) {
 	_, err := repo.CreateBooking(context.Background(), Booking{
 		TemplateID:  "00000000-0000-0000-0000-000000000000",
 		VolunteerID: testVolunteerID,
+		Role:        BookingRoleDriver,
 		Date:        time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC),
 		StartTime:   "08:00",
 		EndTime:     "14:00",
@@ -313,32 +319,59 @@ func TestRepository_CreateBookingRejectsUnknownTemplateID(t *testing.T) {
 
 // The partial unique index (idx_bookings_confirmed_slot, see Migrate) only
 // constrains confirmed bookings: two pending requests for the same
-// template+date are both allowed (a manager picks one later), but two
-// confirmed ones for the same slot are not.
-func TestRepository_OnlyOneConfirmedBookingPerSlot(t *testing.T) {
+// template+date+role are both allowed (a manager picks one later), but two
+// confirmed ones for the same slot+role are not.
+func TestRepository_OnlyOneConfirmedBookingPerSlotAndRole(t *testing.T) {
 	repo := newTestRepository(t)
 	ctx := context.Background()
 	tpl := newTestTemplate(t, repo)
 	date := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
 
-	firstPending, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	firstPending, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
 	if err != nil {
 		t.Fatalf("CreateBooking first pending: %v", err)
 	}
-	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
-		t.Fatalf("expected a second pending request for the same slot to be allowed, got: %v", err)
+	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
+		t.Fatalf("expected a second pending request for the same slot+role to be allowed, got: %v", err)
 	}
 
 	if err := testDB.Model(&Booking{}).Where("id = ?", firstPending.ID).Update("status", BookingStatusConfirmed).Error; err != nil {
 		t.Fatalf("confirm first booking: %v", err)
 	}
 
-	second, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	second, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
 	if err != nil {
 		t.Fatalf("CreateBooking second (still pending): %v", err)
 	}
 	if err := testDB.Model(&Booking{}).Where("id = ?", second.ID).Update("status", BookingStatusConfirmed).Error; err == nil {
-		t.Fatal("expected confirming a second booking for the same template+date to fail")
+		t.Fatal("expected confirming a second booking for the same template+date+role to fail")
+	}
+}
+
+// Confirming one role must not affect a different role on the same
+// template+date — the whole point of scoping the unique index by role
+// (see docs/adr/0025-modello-dati-turni.md "Aggiornamento").
+func TestRepository_ConfirmingOneRoleDoesNotBlockAnother(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+	date := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+
+	driver, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	if err != nil {
+		t.Fatalf("CreateBooking driver: %v", err)
+	}
+	if err := testDB.Model(&Booking{}).Where("id = ?", driver.ID).Update("status", BookingStatusConfirmed).Error; err != nil {
+		t.Fatalf("confirm driver booking: %v", err)
+	}
+
+	other := newTestVolunteer(t)
+	leader, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: other, Role: BookingRoleLeader, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	if err != nil {
+		t.Fatalf("CreateBooking leader: %v", err)
+	}
+	if err := testDB.Model(&Booking{}).Where("id = ?", leader.ID).Update("status", BookingStatusConfirmed).Error; err != nil {
+		t.Fatalf("expected confirming a different role on the same slot to succeed, got: %v", err)
 	}
 }
 
@@ -348,7 +381,7 @@ func TestRepository_HasConfirmedBooking(t *testing.T) {
 	tpl := newTestTemplate(t, repo)
 	date := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
 
-	has, err := repo.HasConfirmedBooking(ctx, tpl.ID, date)
+	has, err := repo.HasConfirmedBooking(ctx, tpl.ID, date, BookingRoleDriver)
 	if err != nil {
 		t.Fatalf("HasConfirmedBooking: %v", err)
 	}
@@ -356,11 +389,11 @@ func TestRepository_HasConfirmedBooking(t *testing.T) {
 		t.Fatal("expected no confirmed booking yet")
 	}
 
-	pending, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	pending, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
 	if err != nil {
 		t.Fatalf("CreateBooking: %v", err)
 	}
-	has, err = repo.HasConfirmedBooking(ctx, tpl.ID, date)
+	has, err = repo.HasConfirmedBooking(ctx, tpl.ID, date, BookingRoleDriver)
 	if err != nil {
 		t.Fatalf("HasConfirmedBooking: %v", err)
 	}
@@ -371,12 +404,21 @@ func TestRepository_HasConfirmedBooking(t *testing.T) {
 	if err := testDB.Model(&Booking{}).Where("id = ?", pending.ID).Update("status", BookingStatusConfirmed).Error; err != nil {
 		t.Fatalf("confirm booking: %v", err)
 	}
-	has, err = repo.HasConfirmedBooking(ctx, tpl.ID, date)
+	has, err = repo.HasConfirmedBooking(ctx, tpl.ID, date, BookingRoleDriver)
 	if err != nil {
 		t.Fatalf("HasConfirmedBooking: %v", err)
 	}
 	if !has {
 		t.Fatal("expected a confirmed booking now")
+	}
+
+	// A different role on the same template+date must not be affected.
+	has, err = repo.HasConfirmedBooking(ctx, tpl.ID, date, BookingRoleLeader)
+	if err != nil {
+		t.Fatalf("HasConfirmedBooking (leader): %v", err)
+	}
+	if has {
+		t.Fatal("expected the leader role to be unaffected by the driver's confirmed booking")
 	}
 }
 
@@ -394,7 +436,7 @@ func TestRepository_HasBookingForVolunteer(t *testing.T) {
 		t.Fatal("expected no booking yet")
 	}
 
-	booking, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	booking, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
 	if err != nil {
 		t.Fatalf("CreateBooking: %v", err)
 	}
@@ -419,6 +461,30 @@ func TestRepository_HasBookingForVolunteer(t *testing.T) {
 	}
 }
 
+// HasBookingForVolunteer is deliberately NOT scoped by role: a volunteer
+// who already holds one role on a template+date must show up as "has a
+// booking" regardless of which OTHER role is being checked — one person
+// holds at most one role per occurrence (see docs/adr/0025-modello-dati-turni.md
+// "Aggiornamento").
+func TestRepository_HasBookingForVolunteer_IgnoresRole(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+	date := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+
+	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
+		t.Fatalf("CreateBooking (driver): %v", err)
+	}
+
+	has, err := repo.HasBookingForVolunteer(ctx, tpl.ID, date, testVolunteerID)
+	if err != nil {
+		t.Fatalf("HasBookingForVolunteer: %v", err)
+	}
+	if !has {
+		t.Fatal("expected the volunteer's driver booking to block them regardless of which role is being requested next")
+	}
+}
+
 func TestRepository_CountPendingBookings(t *testing.T) {
 	repo := newTestRepository(t)
 	ctx := context.Background()
@@ -433,14 +499,14 @@ func TestRepository_CountPendingBookings(t *testing.T) {
 		t.Fatalf("expected 0, got %d", n)
 	}
 
-	confirmed, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	confirmed, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
 	if err != nil {
 		t.Fatalf("CreateBooking: %v", err)
 	}
 	if err := testDB.Model(&Booking{}).Where("id = ?", confirmed.ID).Update("status", BookingStatusConfirmed).Error; err != nil {
 		t.Fatalf("confirm booking: %v", err)
 	}
-	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date.AddDate(0, 0, 7), StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
+	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: date.AddDate(0, 0, 7), StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
 		t.Fatalf("CreateBooking pending: %v", err)
 	}
 
@@ -457,7 +523,7 @@ func TestRepository_DecideBooking_Confirm(t *testing.T) {
 	repo := newTestRepository(t)
 	ctx := context.Background()
 	tpl := newTestTemplate(t, repo)
-	booking, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	booking, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
 	if err != nil {
 		t.Fatalf("CreateBooking: %v", err)
 	}
@@ -481,7 +547,7 @@ func TestRepository_DecideBooking_Reject(t *testing.T) {
 	repo := newTestRepository(t)
 	ctx := context.Background()
 	tpl := newTestTemplate(t, repo)
-	booking, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	booking, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
 	if err != nil {
 		t.Fatalf("CreateBooking: %v", err)
 	}
@@ -508,7 +574,7 @@ func TestRepository_DecideBooking_AlreadyDecided(t *testing.T) {
 	repo := newTestRepository(t)
 	ctx := context.Background()
 	tpl := newTestTemplate(t, repo)
-	booking, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	booking, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
 	if err != nil {
 		t.Fatalf("CreateBooking: %v", err)
 	}
@@ -526,7 +592,7 @@ func TestRepository_DecideBooking_Cancelled(t *testing.T) {
 	repo := newTestRepository(t)
 	ctx := context.Background()
 	tpl := newTestTemplate(t, repo)
-	booking, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	booking, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
 	if err != nil {
 		t.Fatalf("CreateBooking: %v", err)
 	}
@@ -548,6 +614,7 @@ func TestRepository_CreateConfirmedBooking(t *testing.T) {
 	created, err := repo.CreateConfirmedBooking(ctx, Booking{
 		TemplateID:  tpl.ID,
 		VolunteerID: testVolunteerID,
+		Role:        BookingRoleDriver,
 		Date:        thursday,
 		StartTime:   tpl.StartTime,
 		EndTime:     tpl.EndTime,
@@ -577,6 +644,7 @@ func TestRepository_CreateConfirmedBooking_RejectsUnknownVolunteer(t *testing.T)
 	_, err := repo.CreateConfirmedBooking(ctx, Booking{
 		TemplateID:  tpl.ID,
 		VolunteerID: "00000000-0000-0000-0000-000000000000",
+		Role:        BookingRoleDriver,
 		Date:        thursday,
 		StartTime:   tpl.StartTime,
 		EndTime:     tpl.EndTime,
@@ -592,9 +660,9 @@ func TestRepository_CreateBookingsAtomic_CreatesAll(t *testing.T) {
 	tpl := newTestTemplate(t, repo)
 
 	created, err := repo.CreateBookingsAtomic(ctx, []Booking{
-		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime},
-		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday.AddDate(0, 0, 7), StartTime: tpl.StartTime, EndTime: tpl.EndTime},
-		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday.AddDate(0, 0, 14), StartTime: tpl.StartTime, EndTime: tpl.EndTime},
+		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime},
+		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday.AddDate(0, 0, 7), StartTime: tpl.StartTime, EndTime: tpl.EndTime},
+		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday.AddDate(0, 0, 14), StartTime: tpl.StartTime, EndTime: tpl.EndTime},
 	})
 	if err != nil {
 		t.Fatalf("CreateBookingsAtomic: %v", err)
@@ -626,9 +694,9 @@ func TestRepository_CreateBookingsAtomic_RollsBackOnError(t *testing.T) {
 	tpl := newTestTemplate(t, repo)
 
 	_, err := repo.CreateBookingsAtomic(ctx, []Booking{
-		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime},
-		{TemplateID: tpl.ID, VolunteerID: "00000000-0000-0000-0000-000000000000", Date: thursday.AddDate(0, 0, 7), StartTime: tpl.StartTime, EndTime: tpl.EndTime},
-		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday.AddDate(0, 0, 14), StartTime: tpl.StartTime, EndTime: tpl.EndTime},
+		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime},
+		{TemplateID: tpl.ID, VolunteerID: "00000000-0000-0000-0000-000000000000", Role: BookingRoleDriver, Date: thursday.AddDate(0, 0, 7), StartTime: tpl.StartTime, EndTime: tpl.EndTime},
+		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday.AddDate(0, 0, 14), StartTime: tpl.StartTime, EndTime: tpl.EndTime},
 	})
 	if err == nil {
 		t.Fatal("expected an error from the unknown volunteer_id in the middle of the list")
