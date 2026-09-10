@@ -114,6 +114,66 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/shift-bookings/{id}": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shift-bookings"
+                ],
+                "summary": "Approve or reject a pending booking (requires the shifts:write permission)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Booking id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "status: confirmed or rejected",
+                        "name": "decision",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_httpapi.decideBookingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload, or status is not confirmed/rejected"
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:write"
+                    },
+                    "404": {
+                        "description": "Booking not found"
+                    },
+                    "409": {
+                        "description": "Booking is no longer pending"
+                    }
+                }
+            }
+        },
         "/v1/shift-occurrences": {
             "get": {
                 "security": [
@@ -445,6 +505,14 @@ const docTemplate = `{
                 },
                 "weekday": {
                     "type": "integer"
+                }
+            }
+        },
+        "internal_httpapi.decideBookingRequest": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string"
                 }
             }
         },

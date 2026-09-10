@@ -116,6 +116,11 @@ definitions:
       weekday:
         type: integer
     type: object
+  internal_httpapi.decideBookingRequest:
+    properties:
+      status:
+        type: string
+    type: object
   internal_httpapi.pendingBookingsCountResponse:
     properties:
       pending_count:
@@ -186,6 +191,44 @@ paths:
       security:
       - BearerAuth: []
       summary: Request a booking for an open slot (requires the shifts:request permission)
+      tags:
+      - shift-bookings
+  /v1/shift-bookings/{id}:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Booking id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 'status: confirmed or rejected'
+        in: body
+        name: decision
+        required: true
+        schema:
+          $ref: '#/definitions/internal_httpapi.decideBookingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking'
+        "400":
+          description: Invalid payload, or status is not confirmed/rejected
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:write'
+        "404":
+          description: Booking not found
+        "409":
+          description: Booking is no longer pending
+      security:
+      - BearerAuth: []
+      summary: Approve or reject a pending booking (requires the shifts:write permission)
       tags:
       - shift-bookings
   /v1/shift-bookings/pending-count:

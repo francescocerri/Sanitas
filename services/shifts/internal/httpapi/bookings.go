@@ -102,6 +102,60 @@ func (s *Server) handleCreateBooking(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, created)
 }
 
+type decideBookingRequest struct {
+	Status string `json:"status"`
+}
+
+// @Summary	Approve or reject a pending booking (requires the shifts:write permission)
+// @Tags		shift-bookings
+// @Accept		json
+// @Produce	json
+// @Security	BearerAuth
+// @Param		id		path		string					true	"Booking id (UUID)"
+// @Param		decision	body		decideBookingRequest	true	"status: confirmed or rejected"
+// @Success	200		{object}	shift.Booking
+// @Failure	400		"Invalid payload, or status is not confirmed/rejected"
+// @Failure	401		"Authentication required"
+// @Failure	403		"Missing required permission: shifts:write"
+// @Failure	404		"Booking not found"
+// @Failure	409		"Booking is no longer pending"
+// @Router		/v1/shift-bookings/{id} [patch]
+func (s *Server) handleDecideBooking(w http.ResponseWriter, r *http.Request) {
+	var req decideBookingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+	var status shift.BookingStatus
+	switch req.Status {
+	case string(shift.BookingStatusConfirmed):
+		status = shift.BookingStatusConfirmed
+	case string(shift.BookingStatusRejected):
+		status = shift.BookingStatusRejected
+	default:
+		writeError(w, http.StatusBadRequest, `status must be "confirmed" or "rejected"`)
+		return
+	}
+
+	id := r.PathValue("id")
+	decidedBy := claimsFromContext(r).Subject
+	decided, err := s.repo.DecideBooking(r.Context(), id, status, decidedBy)
+	if err != nil {
+		if errors.Is(err, shift.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "booking not found")
+			return
+		}
+		if errors.Is(err, shift.ErrBookingNotPending) {
+			writeError(w, http.StatusConflict, "booking is no longer pending")
+			return
+		}
+		s.logger.Error("decide booking", "error", err, "id", id)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, decided)
+}
+
 type pendingBookingsCountResponse struct {
 	PendingCount int `json:"pending_count"`
 }
