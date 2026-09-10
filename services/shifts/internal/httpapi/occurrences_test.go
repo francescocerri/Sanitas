@@ -83,4 +83,52 @@ func TestListOccurrences_ReturnsCoverageForRange(t *testing.T) {
 	if occurrences[0].TemplateID != created.ID || occurrences[0].Status != shift.OccurrenceStatusFree {
 		t.Fatalf("unexpected occurrence: %+v", occurrences[0])
 	}
+	if occurrences[0].MyBookingStatus != nil {
+		t.Fatalf("expected my_booking_status nil for a free slot, got %+v", occurrences[0].MyBookingStatus)
+	}
+}
+
+func TestListOccurrences_MyBookingStatusReflectsCaller(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	configureToken := issuer.token(t, []string{permShiftsConfigure})
+	tpl := createTestTemplate(t, server, configureToken)
+	volunteerToken := issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest, permShiftsRead})
+
+	bookingBody, _ := json.Marshal(createBookingRequest{TemplateID: tpl.ID, Date: futureThursday(t).Format(dateLayout)})
+	bookingReq := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings", bytes.NewReader(bookingBody))
+	bookingReq.Header.Set("Content-Type", "application/json")
+	bookingReq.Header.Set("Authorization", "Bearer "+volunteerToken)
+	bookingRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(bookingRec, bookingReq)
+	if bookingRec.Code != http.StatusCreated {
+		t.Fatalf("setup booking: expected 201, got %d: %s", bookingRec.Code, bookingRec.Body.String())
+	}
+
+	date := futureThursday(t).Format(dateLayout)
+	req := httptest.NewRequest(http.MethodGet, "/v1/shift-occurrences?from="+date+"&to="+date, nil)
+	req.Header.Set("Authorization", "Bearer "+volunteerToken)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var occurrences []shift.Occurrence
+	if err := json.Unmarshal(rec.Body.Bytes(), &occurrences); err != nil {
+		t.Fatalf("decode occurrences response: %v", err)
+	}
+	if len(occurrences) != 1 || occurrences[0].MyBookingStatus == nil || *occurrences[0].MyBookingStatus != shift.BookingStatusPending {
+		t.Fatalf("expected my_booking_status=pending for the requesting volunteer, got %+v", occurrences)
+	}
+
+	otherReq := httptest.NewRequest(http.MethodGet, "/v1/shift-occurrences?from="+date+"&to="+date, nil)
+	otherReq.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsRead}))
+	otherRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(otherRec, otherReq)
+	var otherOccurrences []shift.Occurrence
+	if err := json.Unmarshal(otherRec.Body.Bytes(), &otherOccurrences); err != nil {
+		t.Fatalf("decode occurrences response: %v", err)
+	}
+	if len(otherOccurrences) != 1 || otherOccurrences[0].MyBookingStatus != nil {
+		t.Fatalf("expected my_booking_status nil for a different caller, got %+v", otherOccurrences)
+	}
 }

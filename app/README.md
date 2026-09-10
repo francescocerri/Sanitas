@@ -1,6 +1,6 @@
 # app — Sanitas (Flutter)
 
-Frontend Flutter/Dart di Sanitas: un solo codebase per web, iOS e Android (vedi [ADR-0022](../docs/adr/0022-frontend-flutter.md)). Perimetro attuale: login, profilo self-service, cambio password, attivazione account da link di invito e creazione utenti per chi dispone di `users:manage`.
+Frontend Flutter/Dart di Sanitas: un solo codebase per web, iOS e Android (vedi [ADR-0022](../docs/adr/0022-frontend-flutter.md)). Perimetro attuale: login, profilo self-service, cambio password, attivazione account da link di invito, creazione utenti per chi dispone di `users:manage`, e la schermata Turni del volontario.
 
 ## Setup una tantum
 
@@ -16,7 +16,7 @@ flutter pub get
 ./scripts/sync_committee_config.sh   # legge COMMITTEE_CONFIG_DIR, default ../config/pavullo
 ```
 
-**URL delle API**: copia `env.example.json` in `env.json` (ignorato da git) e aggiorna `REGISTRY_API_URL` se il backend non gira sulla porta di default (`http://localhost:8090`, coerente con `REGISTRY_HOST_PORT` in `deploy/docker-compose.yml`):
+**URL delle API**: copia `env.example.json` in `env.json` (ignorato da git) e aggiorna `REGISTRY_API_URL`/`SHIFTS_API_URL` se i backend non girano sulle porte di default (`http://localhost:8090`/`http://localhost:8080`, coerenti con `REGISTRY_HOST_PORT`/`SHIFTS_HOST_PORT` in `deploy/docker-compose.yml`):
 
 ```bash
 cp env.example.json env.json
@@ -24,13 +24,13 @@ cp env.example.json env.json
 
 ## Eseguire in locale
 
-Con `services/registry` già in esecuzione (vedi il suo README, o `docker compose up registry` dalla cartella `deploy/`):
+Con `services/registry` e `services/shifts` già in esecuzione (vedi i rispettivi README, o `docker compose up registry shifts` dalla cartella `deploy/`):
 
 ```bash
 flutter run -d chrome --web-port=5173 --web-hostname=localhost --dart-define-from-file=env.json
 ```
 
-`--web-port`/`--web-hostname` fissano l'indirizzo su cui gira il web server di sviluppo (`http://localhost:5173`): senza, Flutter ne sceglie uno casuale ad ogni avvio, costringendo ad aggiornare `CORS_ALLOWED_ORIGIN` lato `registry` (e qualunque bookmark) ogni volta. `5173` è lo stesso valore già usato come default in `services/registry/.env.example` — nessuna configurazione aggiuntiva necessaria in locale.
+`--web-port`/`--web-hostname` fissano l'indirizzo su cui gira il web server di sviluppo (`http://localhost:5173`): senza, Flutter ne sceglie uno casuale ad ogni avvio, costringendo ad aggiornare `CORS_ALLOWED_ORIGIN` lato `registry`/`shifts` (e qualunque bookmark) ogni volta. `5173` è lo stesso valore già usato come default in entrambi i servizi — nessuna configurazione aggiuntiva necessaria in locale.
 
 Per iOS/Android, sostituire `-d chrome --web-port=5173 --web-hostname=localhost` con il device/simulatore desiderato (`flutter devices` per l'elenco) — quei due flag sono specifici del target web.
 

@@ -141,5 +141,28 @@
     "save": "Save",
     "saved": "Roles updated.",
     "user_not_found": "User not found."
+  },
+  "shifts": {
+    "title": "Shifts",
+    "view_day": "Day",
+    "view_week": "Week",
+    "view_month": "Month",
+    "view_list": "List",
+    "filter_all": "All",
+    "filter_free": "Open",
+    "filter_mine": "Mine",
+    "status_free": "Open",
+    "status_pending": "Pending",
+    "status_confirmed": "Full",
+    "status_mine_pending": "Your request is pending",
+    "status_mine_confirmed": "Confirmed for you",
+    "mine_badge_pending": "Pending",
+    "mine_badge_confirmed": "Confirmed",
+    "empty": "No shifts in this period.",
+    "selection_count_one": "1 shift selected",
+    "selection_count_other": "{count} shifts selected",
+    "submit_request": "Send request",
+    "request_sent": "Request sent.",
+    "request_failed": "Couldn't complete the request. Try again."
   }
 }

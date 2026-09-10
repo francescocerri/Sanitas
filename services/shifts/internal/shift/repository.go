@@ -22,6 +22,12 @@ var ErrNotFound = errors.New("not found")
 // apart from "exists, but this decision no longer applies" (409).
 var ErrBookingNotPending = errors.New("booking is not pending")
 
+// ErrUnknownVolunteer is returned by CreateConfirmedBooking when
+// volunteer_id doesn't reference a real registry.users row — translated
+// from gorm.ErrForeignKeyViolated (available because TranslateError is set
+// in cmd/server/main.go) so the caller gets a clean 400, not a raw DB error.
+var ErrUnknownVolunteer = errors.New("unknown volunteer")
+
 type Repository struct {
 	db *gorm.DB
 }
@@ -129,6 +135,52 @@ func (r *Repository) CreateBooking(ctx context.Context, b Booking) (Booking, err
 	return b, nil
 }
 
+// CreateConfirmedBooking is CreateBooking's counterpart for a shift
+// manager's direct booking: no pending step, the booking is already
+// decided at creation time. Doesn't reuse CreateBooking (which always
+// forces status back to pending) — different, purpose-built contract
+// instead of one method branching on a flag.
+func (r *Repository) CreateConfirmedBooking(ctx context.Context, b Booking, decidedBy string) (Booking, error) {
+	b.ID = ""
+	b.Status = BookingStatusConfirmed
+	b.DecidedBy = &decidedBy
+	now := time.Now()
+	b.DecidedAt = &now
+	if err := r.db.WithContext(ctx).Create(&b).Error; err != nil {
+		if errors.Is(err, gorm.ErrForeignKeyViolated) {
+			return Booking{}, ErrUnknownVolunteer
+		}
+		return Booking{}, fmt.Errorf("shift: create confirmed booking: %w", err)
+	}
+	return b, nil
+}
+
+// CreateBookingsAtomic inserts every booking in bookings inside a single DB
+// transaction — the caller has already validated each one individually
+// (see handleCreateBulkBooking), this only guarantees the multi-row insert
+// itself is all-or-nothing: if any row fails to insert, every row already
+// inserted in this call rolls back too.
+func (r *Repository) CreateBookingsAtomic(ctx context.Context, bookings []Booking) ([]Booking, error) {
+	created := make([]Booking, 0, len(bookings))
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, b := range bookings {
+			b.ID = ""
+			b.Status = ""
+			b.DecidedBy = nil
+			b.DecidedAt = nil
+			if err := tx.Create(&b).Error; err != nil {
+				return err
+			}
+			created = append(created, b)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("shift: create bookings atomic: %w", err)
+	}
+	return created, nil
+}
+
 func (r *Repository) GetBooking(ctx context.Context, id string) (Booking, error) {
 	var b Booking
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&b).Error
@@ -175,7 +227,12 @@ type occurrenceKey struct {
 // Status precedence when multiple bookings exist for the same slot+date
 // (e.g. several pending requests before one is confirmed): confirmed beats
 // pending beats free. rejected/cancelled bookings never affect status.
-func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time) ([]Occurrence, error) {
+//
+// callerID additionally populates MyBookingStatus on each occurrence where
+// callerID itself has a pending/confirmed booking — the caller is always
+// authenticated (this repository method backs an endpoint behind
+// shifts:read), so this is never empty in practice.
+func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, callerID string) ([]Occurrence, error) {
 	templates, err := r.ListActiveTemplates(ctx)
 	if err != nil {
 		return nil, err
@@ -186,6 +243,7 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time) ([
 	}
 
 	statusByKey := make(map[occurrenceKey]OccurrenceStatus, len(bookings))
+	mineByKey := make(map[occurrenceKey]BookingStatus, len(bookings))
 	for _, b := range bookings {
 		if b.Status != BookingStatusPending && b.Status != BookingStatusConfirmed {
 			continue
@@ -197,6 +255,9 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time) ([
 		}
 		if status == OccurrenceStatusConfirmed || statusByKey[key] != OccurrenceStatusConfirmed {
 			statusByKey[key] = status
+		}
+		if b.VolunteerID == callerID {
+			mineByKey[key] = b.Status
 		}
 	}
 
@@ -215,14 +276,19 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time) ([
 			if s, ok := statusByKey[key]; ok {
 				status = s
 			}
+			var myStatus *BookingStatus
+			if s, ok := mineByKey[key]; ok {
+				myStatus = &s
+			}
 			occurrences = append(occurrences, Occurrence{
-				TemplateID: t.ID,
-				Date:       d,
-				Weekday:    weekday,
-				StartTime:  t.StartTime,
-				EndTime:    t.EndTime,
-				Label:      t.Label,
-				Status:     status,
+				TemplateID:      t.ID,
+				Date:            d,
+				Weekday:         weekday,
+				StartTime:       t.StartTime,
+				EndTime:         t.EndTime,
+				Label:           t.Label,
+				Status:          status,
+				MyBookingStatus: myStatus,
 			})
 		}
 	}

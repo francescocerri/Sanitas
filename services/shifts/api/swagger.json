@@ -76,6 +76,115 @@
                 }
             }
         },
+        "/v1/shift-bookings/bulk": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shift-bookings"
+                ],
+                "summary": "Request bookings for multiple open slots in one all-or-nothing call (requires the shifts:request permission)",
+                "parameters": [
+                    {
+                        "description": "Non-empty list of template id + date (YYYY-MM-DD) pairs, no duplicates",
+                        "name": "bookings",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_httpapi.createBulkBookingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload, empty/duplicate list, or the Nth item has a past/malformed date, inactive template, or weekday mismatch"
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:request"
+                    },
+                    "404": {
+                        "description": "The Nth item's template was not found"
+                    },
+                    "409": {
+                        "description": "The Nth item's slot is already confirmed, or the caller already has a pending/confirmed booking for it"
+                    }
+                }
+            }
+        },
+        "/v1/shift-bookings/direct": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shift-bookings"
+                ],
+                "summary": "Book a slot directly for a chosen volunteer, already confirmed (requires the shifts:write permission)",
+                "parameters": [
+                    {
+                        "description": "Template id, volunteer id, and date (YYYY-MM-DD)",
+                        "name": "booking",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_httpapi.createDirectBookingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid payload, empty/unknown volunteer_id, past date, inactive template, or weekday mismatch"
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:write"
+                    },
+                    "404": {
+                        "description": "Template not found"
+                    },
+                    "409": {
+                        "description": "Slot already confirmed, or the chosen volunteer already has a pending/confirmed booking for it"
+                    }
+                }
+            }
+        },
         "/v1/shift-bookings/pending-count": {
             "get": {
                 "security": [
@@ -418,6 +527,14 @@
                 "label": {
                     "type": "string"
                 },
+                "my_booking_status": {
+                    "description": "MyBookingStatus is nil unless the caller has a pending/confirmed\nbooking of their own on this occurrence — distinct from Status\n(the aggregate coverage across every volunteer) so a client can\nrender \"this one is yours\" regardless of who else has requested it.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingStatus"
+                        }
+                    ]
+                },
                 "start_time": {
                     "type": "string"
                 },
@@ -479,6 +596,42 @@
                     "type": "string"
                 },
                 "template_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_httpapi.createBulkBookingItem": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "template_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_httpapi.createBulkBookingRequest": {
+            "type": "object",
+            "properties": {
+                "bookings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_httpapi.createBulkBookingItem"
+                    }
+                }
+            }
+        },
+        "internal_httpapi.createDirectBookingRequest": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "template_id": {
+                    "type": "string"
+                },
+                "volunteer_id": {
                     "type": "string"
                 }
             }

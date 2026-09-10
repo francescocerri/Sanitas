@@ -416,3 +416,399 @@ func TestDecideBooking_RejectsDoubleDecision(t *testing.T) {
 		t.Fatalf("second decision: expected 409, got %d: %s", secondRec.Code, secondRec.Body.String())
 	}
 }
+
+func TestCreateDirectBooking_RequiresWritePermission(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+
+	body, _ := json.Marshal(createDirectBookingRequest{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: futureThursday(t).Format(dateLayout)})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/direct", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsRead}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without shifts:write, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateDirectBooking_RejectsEmptyVolunteerID(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+
+	body, _ := json.Marshal(createDirectBookingRequest{TemplateID: tpl.ID, VolunteerID: "", Date: futureThursday(t).Format(dateLayout)})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/direct", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsWrite}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateDirectBooking_RejectsPastDate(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+
+	body, _ := json.Marshal(createDirectBookingRequest{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: "2020-01-02"}) // a Thursday, but in the past
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/direct", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsWrite}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateDirectBooking_RejectsMalformedDate(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+
+	body, _ := json.Marshal(createDirectBookingRequest{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: "not-a-date"})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/direct", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsWrite}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateDirectBooking_RejectsWeekdayMismatch(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure})) // Thursday
+
+	notThursday := futureThursday(t).AddDate(0, 0, 1) // Friday
+	body, _ := json.Marshal(createDirectBookingRequest{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: notThursday.Format(dateLayout)})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/direct", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsWrite}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateDirectBooking_RejectsInactiveTemplate(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	configureToken := issuer.token(t, []string{permShiftsConfigure})
+	tpl := createTestTemplate(t, server, configureToken)
+
+	updateBody, _ := json.Marshal(updateTemplateRequest{Weekday: tpl.Weekday, StartTime: tpl.StartTime, EndTime: tpl.EndTime, Label: tpl.Label, Active: false})
+	updateReq := httptest.NewRequest(http.MethodPatch, "/v1/shift-templates/"+tpl.ID, bytes.NewReader(updateBody))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateReq.Header.Set("Authorization", "Bearer "+configureToken)
+	updateRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(updateRec, updateReq)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("deactivate template: expected 200, got %d: %s", updateRec.Code, updateRec.Body.String())
+	}
+
+	body, _ := json.Marshal(createDirectBookingRequest{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: futureThursday(t).Format(dateLayout)})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/direct", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsWrite}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateDirectBooking_RejectsUnknownTemplate(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+
+	body, _ := json.Marshal(createDirectBookingRequest{TemplateID: "00000000-0000-0000-0000-000000000000", VolunteerID: testVolunteerID, Date: futureThursday(t).Format(dateLayout)})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/direct", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsWrite}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateDirectBooking_RejectsUnknownVolunteer(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+
+	body, _ := json.Marshal(createDirectBookingRequest{TemplateID: tpl.ID, VolunteerID: "00000000-0000-0000-0000-000000000000", Date: futureThursday(t).Format(dateLayout)})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/direct", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// tokenFor, not token: decided_by is a uuid column, "test-user" (the
+	// default subject) isn't a valid one — see TestDecideBooking_Confirm.
+	req.Header.Set("Authorization", "Bearer "+issuer.tokenFor(t, testVolunteerID, []string{permShiftsWrite}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateDirectBooking_RejectsWhenSlotAlreadyConfirmed(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+	writeToken := issuer.tokenFor(t, testVolunteerID, []string{permShiftsWrite})
+	date := futureThursday(t).Format(dateLayout)
+
+	firstBody, _ := json.Marshal(createDirectBookingRequest{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date})
+	firstReq := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/direct", bytes.NewReader(firstBody))
+	firstReq.Header.Set("Content-Type", "application/json")
+	firstReq.Header.Set("Authorization", "Bearer "+writeToken)
+	firstRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(firstRec, firstReq)
+	if firstRec.Code != http.StatusCreated {
+		t.Fatalf("setup booking: expected 201, got %d: %s", firstRec.Code, firstRec.Body.String())
+	}
+
+	secondBody, _ := json.Marshal(createDirectBookingRequest{TemplateID: tpl.ID, VolunteerID: newRegistryUser(t), Date: date})
+	secondReq := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/direct", bytes.NewReader(secondBody))
+	secondReq.Header.Set("Content-Type", "application/json")
+	secondReq.Header.Set("Authorization", "Bearer "+writeToken)
+	secondRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(secondRec, secondReq)
+	if secondRec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", secondRec.Code, secondRec.Body.String())
+	}
+}
+
+func TestCreateDirectBooking_RejectsWhenChosenVolunteerAlreadyBooked(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+	writeToken := issuer.tokenFor(t, testVolunteerID, []string{permShiftsWrite})
+	date := futureThursday(t).Format(dateLayout)
+
+	for i, wantCode := range []int{http.StatusCreated, http.StatusConflict} {
+		body, _ := json.Marshal(createDirectBookingRequest{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: date})
+		req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/direct", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+writeToken)
+		rec := httptest.NewRecorder()
+		server.Routes().ServeHTTP(rec, req)
+		if rec.Code != wantCode {
+			t.Fatalf("attempt %d: expected %d, got %d: %s", i+1, wantCode, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestCreateDirectBooking_Success(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+	managerToken := issuer.tokenFor(t, testVolunteerID, []string{permShiftsWrite})
+	chosenVolunteer := newRegistryUser(t)
+
+	body, _ := json.Marshal(createDirectBookingRequest{TemplateID: tpl.ID, VolunteerID: chosenVolunteer, Date: futureThursday(t).Format(dateLayout)})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/direct", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+managerToken)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var created shift.Booking
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if created.VolunteerID != chosenVolunteer {
+		t.Fatalf("expected volunteer_id to be the chosen volunteer (%s), got %s", chosenVolunteer, created.VolunteerID)
+	}
+	if created.Status != shift.BookingStatusConfirmed {
+		t.Fatalf("expected status confirmed, got %s", created.Status)
+	}
+	if created.DecidedBy == nil || *created.DecidedBy != testVolunteerID {
+		t.Fatalf("expected decided_by to come from the manager token subject (%s), not the body, got %+v", testVolunteerID, created.DecidedBy)
+	}
+}
+
+// countBookingsForTemplate is used by the bulk-booking tests to confirm
+// that a rejected batch leaves nothing behind — no partial creation.
+func countBookingsForTemplate(t *testing.T, templateID string) int64 {
+	t.Helper()
+	var n int64
+	if err := testDB.Model(&shift.Booking{}).Where("template_id = ?", templateID).Count(&n).Error; err != nil {
+		t.Fatalf("count bookings: %v", err)
+	}
+	return n
+}
+
+func TestCreateBulkBooking_RequiresRequestPermission(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+
+	body, _ := json.Marshal(createBulkBookingRequest{Bookings: []createBulkBookingItem{
+		{TemplateID: tpl.ID, Date: futureThursday(t).Format(dateLayout)},
+	}})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/bulk", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsRead}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without shifts:request, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateBulkBooking_RejectsEmptyList(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+
+	body, _ := json.Marshal(createBulkBookingRequest{Bookings: []createBulkBookingItem{}})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/bulk", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsRequest}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateBulkBooking_RejectsDuplicatePairInPayload(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+	date := futureThursday(t).Format(dateLayout)
+
+	body, _ := json.Marshal(createBulkBookingRequest{Bookings: []createBulkBookingItem{
+		{TemplateID: tpl.ID, Date: date},
+		{TemplateID: tpl.ID, Date: date},
+	}})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/bulk", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsRequest}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if countBookingsForTemplate(t, tpl.ID) != 0 {
+		t.Fatal("expected no booking to be created")
+	}
+}
+
+func TestCreateBulkBooking_RejectsPastDateWithoutPartialCreation(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+
+	body, _ := json.Marshal(createBulkBookingRequest{Bookings: []createBulkBookingItem{
+		{TemplateID: tpl.ID, Date: futureThursday(t).Format(dateLayout)},
+		{TemplateID: tpl.ID, Date: "2020-01-02"}, // valid item first, then a past date
+	}})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/bulk", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// tokenFor, not token: the first (valid) item reaches a volunteer_id
+	// query, and "test-user" (the default subject) isn't a valid uuid — see
+	// TestDecideBooking_Confirm.
+	req.Header.Set("Authorization", "Bearer "+issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if countBookingsForTemplate(t, tpl.ID) != 0 {
+		t.Fatal("expected no booking to be created, including the earlier valid item")
+	}
+}
+
+func TestCreateBulkBooking_RejectsUnknownTemplateWithoutPartialCreation(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+
+	body, _ := json.Marshal(createBulkBookingRequest{Bookings: []createBulkBookingItem{
+		{TemplateID: tpl.ID, Date: futureThursday(t).Format(dateLayout)},
+		{TemplateID: "00000000-0000-0000-0000-000000000000", Date: futureThursday(t).AddDate(0, 0, 7).Format(dateLayout)},
+	}})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/bulk", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// tokenFor, not token: the first (valid) item reaches a volunteer_id
+	// query, and "test-user" (the default subject) isn't a valid uuid — see
+	// TestDecideBooking_Confirm.
+	req.Header.Set("Authorization", "Bearer "+issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if countBookingsForTemplate(t, tpl.ID) != 0 {
+		t.Fatal("expected no booking to be created, including the earlier valid item")
+	}
+}
+
+func TestCreateBulkBooking_RejectsWhenSlotAlreadyConfirmedWithoutPartialCreation(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+	volunteerToken := issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest})
+	confirmedDate := futureThursday(t)
+
+	confirmBody, _ := json.Marshal(createBookingRequest{TemplateID: tpl.ID, Date: confirmedDate.Format(dateLayout)})
+	confirmReq := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings", bytes.NewReader(confirmBody))
+	confirmReq.Header.Set("Content-Type", "application/json")
+	confirmReq.Header.Set("Authorization", "Bearer "+issuer.tokenFor(t, newRegistryUser(t), []string{permShiftsRequest}))
+	confirmRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(confirmRec, confirmReq)
+	var existing shift.Booking
+	if err := json.Unmarshal(confirmRec.Body.Bytes(), &existing); err != nil {
+		t.Fatalf("decode setup booking: %v", err)
+	}
+	if err := testDB.Model(&shift.Booking{}).Where("id = ?", existing.ID).Update("status", shift.BookingStatusConfirmed).Error; err != nil {
+		t.Fatalf("confirm setup booking: %v", err)
+	}
+
+	body, _ := json.Marshal(createBulkBookingRequest{Bookings: []createBulkBookingItem{
+		{TemplateID: tpl.ID, Date: confirmedDate.AddDate(0, 0, 7).Format(dateLayout)},
+		{TemplateID: tpl.ID, Date: confirmedDate.Format(dateLayout)}, // already confirmed for someone else
+	}})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/bulk", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+volunteerToken)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+	// Only the one setup booking (already confirmed) should exist — the
+	// batch's first, otherwise-valid item must not have been created.
+	if countBookingsForTemplate(t, tpl.ID) != 1 {
+		t.Fatalf("expected only the pre-existing confirmed booking, got %d rows", countBookingsForTemplate(t, tpl.ID))
+	}
+}
+
+func TestCreateBulkBooking_Success(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+	volunteerToken := issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest})
+	date := futureThursday(t)
+
+	body, _ := json.Marshal(createBulkBookingRequest{Bookings: []createBulkBookingItem{
+		{TemplateID: tpl.ID, Date: date.Format(dateLayout)},
+		{TemplateID: tpl.ID, Date: date.AddDate(0, 0, 7).Format(dateLayout)},
+		{TemplateID: tpl.ID, Date: date.AddDate(0, 0, 14).Format(dateLayout)},
+	}})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings/bulk", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+volunteerToken)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var created []shift.Booking
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(created) != 3 {
+		t.Fatalf("expected 3 bookings, got %d", len(created))
+	}
+	for i, b := range created {
+		if b.VolunteerID != testVolunteerID {
+			t.Fatalf("booking %d: expected volunteer_id from the token subject, got %s", i, b.VolunteerID)
+		}
+		if b.Status != shift.BookingStatusPending {
+			t.Fatalf("booking %d: expected status pending, got %s", i, b.Status)
+		}
+	}
+}

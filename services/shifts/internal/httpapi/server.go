@@ -44,8 +44,6 @@ func NewServer(repo *shift.Repository, authClient *authclient.Client, allowedOri
 // annotations, each @Router spells out its real full path instead).
 const v1 = "/v1"
 
-// Direct-book (no approval needed) returns in a later "Gestione turni"
-// backlog item (6) — see docs/adr/0025-modello-dati-turni.md.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
@@ -54,6 +52,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PATCH "+v1+"/shift-templates/{id}", s.requirePermission(permShiftsConfigure, s.handleUpdateTemplate))
 	mux.HandleFunc("GET "+v1+"/shift-occurrences", s.requirePermission(permShiftsRead, s.handleListOccurrences))
 	mux.HandleFunc("POST "+v1+"/shift-bookings", s.requirePermission(permShiftsRequest, s.handleCreateBooking))
+	mux.HandleFunc("POST "+v1+"/shift-bookings/bulk", s.requirePermission(permShiftsRequest, s.handleCreateBulkBooking))
+	mux.HandleFunc("POST "+v1+"/shift-bookings/direct", s.requirePermission(permShiftsWrite, s.handleCreateDirectBooking))
 	mux.HandleFunc("PATCH "+v1+"/shift-bookings/{id}", s.requirePermission(permShiftsWrite, s.handleDecideBooking))
 	mux.HandleFunc("GET "+v1+"/shift-bookings/pending-count", s.requirePermission(permShiftsWrite, s.handlePendingBookingsCount))
 	mux.Handle("GET /docs/", docsHandler())
@@ -108,15 +108,17 @@ func claimsFromContext(r *http.Request) *authclient.Claims {
 	return claims
 }
 
-// CORS is deliberately minimal (one configurable origin, GET/POST only): the
-// only client today is the web/ frontend, and there is no cookie/credential
-// use yet that would require a stricter policy.
+// CORS is deliberately minimal (one configurable origin, no cookie/credential
+// use). Authorization must be allowed: every endpoint but /healthz requires
+// a Bearer token (see requireAuth), so a browser sends it on every real
+// request and the preflight fails without it — same as registry's own
+// withCORS. PATCH is required too (shift-templates/{id}, shift-bookings/{id}).
 func (s *Server) withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.allowedOrigin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", s.allowedOrigin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

@@ -539,3 +539,106 @@ func TestRepository_DecideBooking_Cancelled(t *testing.T) {
 		t.Fatalf("expected ErrBookingNotPending, got %v", err)
 	}
 }
+
+func TestRepository_CreateConfirmedBooking(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+
+	created, err := repo.CreateConfirmedBooking(ctx, Booking{
+		TemplateID:  tpl.ID,
+		VolunteerID: testVolunteerID,
+		Date:        thursday,
+		StartTime:   tpl.StartTime,
+		EndTime:     tpl.EndTime,
+	}, testVolunteerID)
+	if err != nil {
+		t.Fatalf("CreateConfirmedBooking: %v", err)
+	}
+	if created.ID == "" {
+		t.Fatal("expected a non-empty id")
+	}
+	if created.Status != BookingStatusConfirmed {
+		t.Fatalf("expected status confirmed, got %s", created.Status)
+	}
+	if created.DecidedBy == nil || *created.DecidedBy != testVolunteerID {
+		t.Fatalf("expected decided_by to be set, got %+v", created.DecidedBy)
+	}
+	if created.DecidedAt == nil {
+		t.Fatal("expected decided_at to be set")
+	}
+}
+
+func TestRepository_CreateConfirmedBooking_RejectsUnknownVolunteer(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+
+	_, err := repo.CreateConfirmedBooking(ctx, Booking{
+		TemplateID:  tpl.ID,
+		VolunteerID: "00000000-0000-0000-0000-000000000000",
+		Date:        thursday,
+		StartTime:   tpl.StartTime,
+		EndTime:     tpl.EndTime,
+	}, testVolunteerID)
+	if !errors.Is(err, ErrUnknownVolunteer) {
+		t.Fatalf("expected ErrUnknownVolunteer, got %v", err)
+	}
+}
+
+func TestRepository_CreateBookingsAtomic_CreatesAll(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+
+	created, err := repo.CreateBookingsAtomic(ctx, []Booking{
+		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime},
+		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday.AddDate(0, 0, 7), StartTime: tpl.StartTime, EndTime: tpl.EndTime},
+		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday.AddDate(0, 0, 14), StartTime: tpl.StartTime, EndTime: tpl.EndTime},
+	})
+	if err != nil {
+		t.Fatalf("CreateBookingsAtomic: %v", err)
+	}
+	if len(created) != 3 {
+		t.Fatalf("expected 3 created bookings, got %d", len(created))
+	}
+	for i, b := range created {
+		if b.ID == "" {
+			t.Fatalf("booking %d: expected a non-empty id", i)
+		}
+		if b.Status != BookingStatusPending {
+			t.Fatalf("booking %d: expected status pending, got %s", i, b.Status)
+		}
+	}
+
+	var count int64
+	if err := testDB.Model(&Booking{}).Where("template_id = ?", tpl.ID).Count(&count).Error; err != nil {
+		t.Fatalf("count bookings: %v", err)
+	}
+	if count != 3 {
+		t.Fatalf("expected 3 rows persisted, got %d", count)
+	}
+}
+
+func TestRepository_CreateBookingsAtomic_RollsBackOnError(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+
+	_, err := repo.CreateBookingsAtomic(ctx, []Booking{
+		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime},
+		{TemplateID: tpl.ID, VolunteerID: "00000000-0000-0000-0000-000000000000", Date: thursday.AddDate(0, 0, 7), StartTime: tpl.StartTime, EndTime: tpl.EndTime},
+		{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday.AddDate(0, 0, 14), StartTime: tpl.StartTime, EndTime: tpl.EndTime},
+	})
+	if err == nil {
+		t.Fatal("expected an error from the unknown volunteer_id in the middle of the list")
+	}
+
+	var count int64
+	if err := testDB.Model(&Booking{}).Where("template_id = ?", tpl.ID).Count(&count).Error; err != nil {
+		t.Fatalf("count bookings: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected the whole batch to roll back, got %d rows persisted", count)
+	}
+}

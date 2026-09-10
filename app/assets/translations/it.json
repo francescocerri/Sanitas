@@ -141,5 +141,28 @@
     "save": "Salva",
     "saved": "Ruoli aggiornati.",
     "user_not_found": "Utente non trovato."
+  },
+  "shifts": {
+    "title": "Turni",
+    "view_day": "Giorno",
+    "view_week": "Settimana",
+    "view_month": "Mese",
+    "view_list": "Lista",
+    "filter_all": "Tutti",
+    "filter_free": "Liberi",
+    "filter_mine": "Miei",
+    "status_free": "Libero",
+    "status_pending": "In attesa",
+    "status_confirmed": "Completo",
+    "status_mine_pending": "Tua richiesta in attesa",
+    "status_mine_confirmed": "Confermato per te",
+    "mine_badge_pending": "In attesa",
+    "mine_badge_confirmed": "Confermato",
+    "empty": "Nessun turno in questo periodo.",
+    "selection_count_one": "1 turno selezionato",
+    "selection_count_other": "{count} turni selezionati",
+    "submit_request": "Invia richiesta",
+    "request_sent": "Richiesta inviata.",
+    "request_failed": "Non è stato possibile completare la richiesta. Riprova."
   }
 }

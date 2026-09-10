@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -164,6 +165,30 @@ func TestHealthz(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+// TestCORS_AllowsAuthorizationHeaderAndPatch guards against a real bug that
+// shipped for a while: withCORS allowed only Content-Type (not
+// Authorization) and only GET/POST (not PATCH), which silently breaks every
+// authenticated browser call — every endpoint but /healthz requires a
+// Bearer token, and PATCH is used by shift-templates/{id} and
+// shift-bookings/{id} — even though curl/server-to-server calls (and every
+// existing test, none of which go through a real browser's CORS enforcement)
+// kept working fine.
+func TestCORS_AllowsAuthorizationHeaderAndPatch(t *testing.T) {
+	server := newTestServer(t)
+	req := httptest.NewRequest(http.MethodOptions, "/v1/shift-bookings/some-id", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "Authorization") {
+		t.Fatalf("expected Access-Control-Allow-Headers to include Authorization, got %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, "PATCH") {
+		t.Fatalf("expected Access-Control-Allow-Methods to include PATCH, got %q", got)
 	}
 }
 

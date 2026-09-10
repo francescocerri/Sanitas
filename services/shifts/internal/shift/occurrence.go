@@ -25,4 +25,9 @@ type Occurrence struct {
 	EndTime    string           `json:"end_time"`
 	Label      string           `json:"label"`
 	Status     OccurrenceStatus `json:"status"`
+	// MyBookingStatus is nil unless the caller has a pending/confirmed
+	// booking of their own on this occurrence — distinct from Status
+	// (the aggregate coverage across every volunteer) so a client can
+	// render "this one is yours" regardless of who else has requested it.
+	MyBookingStatus *BookingStatus `json:"my_booking_status,omitempty"`
 }
