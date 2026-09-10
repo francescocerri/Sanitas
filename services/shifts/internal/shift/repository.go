@@ -227,7 +227,12 @@ type occurrenceKey struct {
 // Status precedence when multiple bookings exist for the same slot+date
 // (e.g. several pending requests before one is confirmed): confirmed beats
 // pending beats free. rejected/cancelled bookings never affect status.
-func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time) ([]Occurrence, error) {
+//
+// callerID additionally populates MyBookingStatus on each occurrence where
+// callerID itself has a pending/confirmed booking — the caller is always
+// authenticated (this repository method backs an endpoint behind
+// shifts:read), so this is never empty in practice.
+func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, callerID string) ([]Occurrence, error) {
 	templates, err := r.ListActiveTemplates(ctx)
 	if err != nil {
 		return nil, err
@@ -238,6 +243,7 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time) ([
 	}
 
 	statusByKey := make(map[occurrenceKey]OccurrenceStatus, len(bookings))
+	mineByKey := make(map[occurrenceKey]BookingStatus, len(bookings))
 	for _, b := range bookings {
 		if b.Status != BookingStatusPending && b.Status != BookingStatusConfirmed {
 			continue
@@ -249,6 +255,9 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time) ([
 		}
 		if status == OccurrenceStatusConfirmed || statusByKey[key] != OccurrenceStatusConfirmed {
 			statusByKey[key] = status
+		}
+		if b.VolunteerID == callerID {
+			mineByKey[key] = b.Status
 		}
 	}
 
@@ -267,14 +276,19 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time) ([
 			if s, ok := statusByKey[key]; ok {
 				status = s
 			}
+			var myStatus *BookingStatus
+			if s, ok := mineByKey[key]; ok {
+				myStatus = &s
+			}
 			occurrences = append(occurrences, Occurrence{
-				TemplateID: t.ID,
-				Date:       d,
-				Weekday:    weekday,
-				StartTime:  t.StartTime,
-				EndTime:    t.EndTime,
-				Label:      t.Label,
-				Status:     status,
+				TemplateID:      t.ID,
+				Date:            d,
+				Weekday:         weekday,
+				StartTime:       t.StartTime,
+				EndTime:         t.EndTime,
+				Label:           t.Label,
+				Status:          status,
+				MyBookingStatus: myStatus,
 			})
 		}
 	}

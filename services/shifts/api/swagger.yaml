@@ -46,6 +46,14 @@ definitions:
         type: string
       label:
         type: string
+      my_booking_status:
+        allOf:
+        - $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingStatus'
+        description: |-
+          MyBookingStatus is nil unless the caller has a pending/confirmed
+          booking of their own on this occurrence — distinct from Status
+          (the aggregate coverage across every volunteer) so a client can
+          render "this one is yours" regardless of who else has requested it.
       start_time:
         type: string
       status:

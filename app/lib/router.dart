@@ -12,6 +12,7 @@ import 'features/login/login_screen.dart';
 import 'features/manage_users/manage_users_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/reset_password/reset_password_screen.dart';
+import 'features/shifts/shifts_screen.dart';
 import 'features/splash/splash_screen.dart';
 
 /// Sostituisce il taglio netto di default fra una schermata e l'altra con
@@ -81,6 +82,10 @@ final routerProvider = Provider<GoRouter>((ref) {
               !(authState.claims?.hasPermission('users:manage') ?? false)) {
             return '/home';
           }
+          if (location == '/shifts' &&
+              !(authState.claims?.hasPermission('shifts:read') ?? false)) {
+            return '/home';
+          }
           // Dopo il login si atterra sulla home (un punto di partenza da
           // cui raggiungere le varie aree dell'app), non più dritti sul
           // profilo — quello resta una delle destinazioni raggiungibili
@@ -103,6 +108,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/users',
         pageBuilder: (context, state) =>
             _fadeTransitionPage(const ManageUsersScreen()),
+      ),
+      GoRoute(
+        path: '/shifts',
+        pageBuilder: (context, state) =>
+            _fadeTransitionPage(const ShiftsScreen()),
       ),
       GoRoute(
         path: '/',

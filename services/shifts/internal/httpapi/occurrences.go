@@ -48,7 +48,8 @@ func (s *Server) handleListOccurrences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	occurrences, err := s.repo.ListOccurrences(r.Context(), from, to)
+	callerID := claimsFromContext(r).Subject
+	occurrences, err := s.repo.ListOccurrences(r.Context(), from, to, callerID)
 	if err != nil {
 		s.logger.Error("list shift occurrences", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/widgets/theme_toggle_button.dart';
 import '../create_user/create_user_screen.dart' show canManageUsersProvider;
+import '../shifts/shifts_providers.dart' show canViewShiftsProvider;
 
 /// Schermata su cui si atterra dopo il login (vedi `router.dart`): un
 /// punto di partenza unico da cui raggiungere le varie aree dell'app,
@@ -38,6 +39,7 @@ class HomeScreen extends ConsumerWidget {
     final colorScheme = theme.colorScheme;
     final username = ref.watch(authControllerProvider).claims?.username ?? '';
     final canManageUsers = ref.watch(canManageUsersProvider);
+    final canViewShifts = ref.watch(canViewShiftsProvider);
 
     final activeCards = [
       _HomeCard(
@@ -63,15 +65,16 @@ class HomeScreen extends ConsumerWidget {
         subtitle: 'home.manage_users_subtitle'.tr(),
         onTap: () => context.go('/users'),
       ),
+      if (canViewShifts)
+        _HomeCard(
+          icon: Icons.calendar_month_outlined,
+          title: 'home.shifts_title'.tr(),
+          subtitle: 'home.shifts_subtitle'.tr(),
+          onTap: () => context.go('/shifts'),
+        ),
     ];
 
     final comingSoonCards = [
-      _HomeCard(
-        icon: Icons.calendar_month_outlined,
-        title: 'home.shifts_title'.tr(),
-        subtitle: 'home.shifts_subtitle'.tr(),
-        badge: 'home.coming_soon_badge'.tr(),
-      ),
       _HomeCard(
         icon: Icons.local_shipping_outlined,
         title: 'home.fleet_title'.tr(),

@@ -108,15 +108,17 @@ func claimsFromContext(r *http.Request) *authclient.Claims {
 	return claims
 }
 
-// CORS is deliberately minimal (one configurable origin, GET/POST only): the
-// only client today is the web/ frontend, and there is no cookie/credential
-// use yet that would require a stricter policy.
+// CORS is deliberately minimal (one configurable origin, no cookie/credential
+// use). Authorization must be allowed: every endpoint but /healthz requires
+// a Bearer token (see requireAuth), so a browser sends it on every real
+// request and the preflight fails without it — same as registry's own
+// withCORS. PATCH is required too (shift-templates/{id}, shift-bookings/{id}).
 func (s *Server) withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.allowedOrigin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", s.allowedOrigin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

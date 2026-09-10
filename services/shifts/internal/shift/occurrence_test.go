@@ -15,7 +15,7 @@ func TestListOccurrences_FreeWhenNoBookings(t *testing.T) {
 	ctx := context.Background()
 	tpl := newTestTemplate(t, repo)
 
-	got, err := repo.ListOccurrences(ctx, thursday, thursday)
+	got, err := repo.ListOccurrences(ctx, thursday, thursday, testVolunteerID)
 	if err != nil {
 		t.Fatalf("ListOccurrences: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestListOccurrences_PendingWhenBookingPending(t *testing.T) {
 		t.Fatalf("CreateBooking: %v", err)
 	}
 
-	got, err := repo.ListOccurrences(ctx, thursday, thursday)
+	got, err := repo.ListOccurrences(ctx, thursday, thursday, testVolunteerID)
 	if err != nil {
 		t.Fatalf("ListOccurrences: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestListOccurrences_ConfirmedWinsOverPending(t *testing.T) {
 		t.Fatalf("confirm booking: %v", err)
 	}
 
-	got, err := repo.ListOccurrences(ctx, thursday, thursday)
+	got, err := repo.ListOccurrences(ctx, thursday, thursday, testVolunteerID)
 	if err != nil {
 		t.Fatalf("ListOccurrences: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestListOccurrences_ExcludesInactiveTemplates(t *testing.T) {
 		t.Fatalf("UpdateTemplate (deactivate): %v", err)
 	}
 
-	got, err := repo.ListOccurrences(ctx, thursday, thursday)
+	got, err := repo.ListOccurrences(ctx, thursday, thursday, testVolunteerID)
 	if err != nil {
 		t.Fatalf("ListOccurrences: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestListOccurrences_OnlyMatchingWeekday(t *testing.T) {
 		t.Fatalf("CreateTemplate: %v", err)
 	}
 
-	got, err := repo.ListOccurrences(ctx, thursday, thursday.AddDate(0, 0, 3))
+	got, err := repo.ListOccurrences(ctx, thursday, thursday.AddDate(0, 0, 3), testVolunteerID)
 	if err != nil {
 		t.Fatalf("ListOccurrences: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestListOccurrences_EmptyWhenNoTemplateMatchesRange(t *testing.T) {
 
 	// A single Friday: no Thursday template matches.
 	friday := thursday.AddDate(0, 0, 1)
-	got, err := repo.ListOccurrences(ctx, friday, friday)
+	got, err := repo.ListOccurrences(ctx, friday, friday, testVolunteerID)
 	if err != nil {
 		t.Fatalf("ListOccurrences: %v", err)
 	}
@@ -127,5 +127,48 @@ func TestListOccurrences_EmptyWhenNoTemplateMatchesRange(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("expected no occurrences, got %+v", got)
+	}
+}
+
+// newTestVolunteer seeds a second registry.users row — occurrence_test.go's
+// own equivalent of httpapi's newRegistryUser, needed here to tell "my
+// booking" apart from "someone else's" on the same occurrence.
+func newTestVolunteer(t *testing.T) string {
+	t.Helper()
+	var id string
+	if err := testDB.Raw(`INSERT INTO registry.users DEFAULT VALUES RETURNING id`).Scan(&id).Error; err != nil {
+		t.Fatalf("seed second registry user: %v", err)
+	}
+	return id
+}
+
+func TestListOccurrences_MyBookingStatusOnlyForCaller(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+	other := newTestVolunteer(t)
+
+	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: other, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
+		t.Fatalf("CreateBooking (other volunteer): %v", err)
+	}
+
+	gotAsOther, err := repo.ListOccurrences(ctx, thursday, thursday, other)
+	if err != nil {
+		t.Fatalf("ListOccurrences (as other): %v", err)
+	}
+	if len(gotAsOther) != 1 || gotAsOther[0].MyBookingStatus == nil || *gotAsOther[0].MyBookingStatus != BookingStatusPending {
+		t.Fatalf("expected my_booking_status=pending for the booking's own volunteer, got %+v", gotAsOther)
+	}
+
+	gotAsCaller, err := repo.ListOccurrences(ctx, thursday, thursday, testVolunteerID)
+	if err != nil {
+		t.Fatalf("ListOccurrences (as testVolunteerID): %v", err)
+	}
+	if len(gotAsCaller) != 1 || gotAsCaller[0].MyBookingStatus != nil {
+		t.Fatalf("expected my_booking_status=nil for a caller with no booking on this occurrence, got %+v", gotAsCaller)
+	}
+	// The aggregate status is unaffected by whose booking it is.
+	if gotAsCaller[0].Status != OccurrenceStatusPending {
+		t.Fatalf("expected aggregate status pending regardless of caller, got %s", gotAsCaller[0].Status)
 	}
 }
