@@ -10,6 +10,20 @@ import (
 // tests: a Thursday, pairing with the Thursday template created there.
 var thursday = time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
 
+// roleCoverage finds the RoleCoverage for role within occ.Roles (always
+// exactly 4 entries, one per AllBookingRoles) — fails the test instead of
+// panicking on a shape bug, since every occurrence must carry all 4.
+func roleCoverage(t *testing.T, occ Occurrence, role BookingRole) RoleCoverage {
+	t.Helper()
+	for _, rc := range occ.Roles {
+		if rc.Role == role {
+			return rc
+		}
+	}
+	t.Fatalf("occurrence %+v has no coverage for role %s", occ, role)
+	return RoleCoverage{}
+}
+
 func TestListOccurrences_FreeWhenNoBookings(t *testing.T) {
 	repo := newTestRepository(t)
 	ctx := context.Background()
@@ -22,8 +36,13 @@ func TestListOccurrences_FreeWhenNoBookings(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected 1 occurrence, got %d: %+v", len(got), got)
 	}
-	if got[0].TemplateID != tpl.ID || got[0].Status != OccurrenceStatusFree {
+	if got[0].TemplateID != tpl.ID || len(got[0].Roles) != len(AllBookingRoles) {
 		t.Fatalf("unexpected occurrence: %+v", got[0])
+	}
+	for _, role := range AllBookingRoles {
+		if rc := roleCoverage(t, got[0], role); rc.Status != OccurrenceStatusFree {
+			t.Fatalf("expected role %s free, got %+v", role, rc)
+		}
 	}
 }
 
@@ -32,7 +51,7 @@ func TestListOccurrences_PendingWhenBookingPending(t *testing.T) {
 	ctx := context.Background()
 	tpl := newTestTemplate(t, repo)
 
-	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
+	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
 		t.Fatalf("CreateBooking: %v", err)
 	}
 
@@ -40,8 +59,14 @@ func TestListOccurrences_PendingWhenBookingPending(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListOccurrences: %v", err)
 	}
-	if len(got) != 1 || got[0].Status != OccurrenceStatusPending {
-		t.Fatalf("expected a single pending occurrence, got %+v", got)
+	if len(got) != 1 {
+		t.Fatalf("expected a single occurrence, got %+v", got)
+	}
+	if rc := roleCoverage(t, got[0], BookingRoleDriver); rc.Status != OccurrenceStatusPending {
+		t.Fatalf("expected driver pending, got %+v", rc)
+	}
+	if rc := roleCoverage(t, got[0], BookingRoleLeader); rc.Status != OccurrenceStatusFree {
+		t.Fatalf("expected leader unaffected (free), got %+v", rc)
 	}
 }
 
@@ -50,10 +75,10 @@ func TestListOccurrences_ConfirmedWinsOverPending(t *testing.T) {
 	ctx := context.Background()
 	tpl := newTestTemplate(t, repo)
 
-	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
+	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
 		t.Fatalf("CreateBooking pending: %v", err)
 	}
-	confirmed, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	confirmed, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
 	if err != nil {
 		t.Fatalf("CreateBooking to confirm: %v", err)
 	}
@@ -65,8 +90,46 @@ func TestListOccurrences_ConfirmedWinsOverPending(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListOccurrences: %v", err)
 	}
-	if len(got) != 1 || got[0].Status != OccurrenceStatusConfirmed {
-		t.Fatalf("expected confirmed to win over pending, got %+v", got)
+	if len(got) != 1 {
+		t.Fatalf("expected a single occurrence, got %+v", got)
+	}
+	if rc := roleCoverage(t, got[0], BookingRoleDriver); rc.Status != OccurrenceStatusConfirmed {
+		t.Fatalf("expected confirmed to win over pending, got %+v", rc)
+	}
+}
+
+func TestListOccurrences_RolesAreIndependent(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+	other := newTestVolunteer(t)
+
+	driverBooking, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	if err != nil {
+		t.Fatalf("CreateBooking driver: %v", err)
+	}
+	if err := testDB.Model(&Booking{}).Where("id = ?", driverBooking.ID).Update("status", BookingStatusConfirmed).Error; err != nil {
+		t.Fatalf("confirm driver booking: %v", err)
+	}
+	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: other, Role: BookingRoleLeader, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
+		t.Fatalf("CreateBooking leader: %v", err)
+	}
+
+	got, err := repo.ListOccurrences(ctx, thursday, thursday, testVolunteerID)
+	if err != nil {
+		t.Fatalf("ListOccurrences: %v", err)
+	}
+	if rc := roleCoverage(t, got[0], BookingRoleDriver); rc.Status != OccurrenceStatusConfirmed {
+		t.Fatalf("expected driver confirmed, got %+v", rc)
+	}
+	if rc := roleCoverage(t, got[0], BookingRoleLeader); rc.Status != OccurrenceStatusPending {
+		t.Fatalf("expected leader pending, got %+v", rc)
+	}
+	if rc := roleCoverage(t, got[0], BookingRoleRescuer); rc.Status != OccurrenceStatusFree {
+		t.Fatalf("expected rescuer still free, got %+v", rc)
+	}
+	if rc := roleCoverage(t, got[0], BookingRoleObserver); rc.Status != OccurrenceStatusFree {
+		t.Fatalf("expected observer still free, got %+v", rc)
 	}
 }
 
@@ -148,7 +211,7 @@ func TestListOccurrences_MyBookingStatusOnlyForCaller(t *testing.T) {
 	tpl := newTestTemplate(t, repo)
 	other := newTestVolunteer(t)
 
-	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: other, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
+	if _, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: other, Role: BookingRoleDriver, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime}); err != nil {
 		t.Fatalf("CreateBooking (other volunteer): %v", err)
 	}
 
@@ -156,19 +219,21 @@ func TestListOccurrences_MyBookingStatusOnlyForCaller(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListOccurrences (as other): %v", err)
 	}
-	if len(gotAsOther) != 1 || gotAsOther[0].MyBookingStatus == nil || *gotAsOther[0].MyBookingStatus != BookingStatusPending {
-		t.Fatalf("expected my_booking_status=pending for the booking's own volunteer, got %+v", gotAsOther)
+	rcOther := roleCoverage(t, gotAsOther[0], BookingRoleDriver)
+	if rcOther.MyBookingStatus == nil || *rcOther.MyBookingStatus != BookingStatusPending {
+		t.Fatalf("expected my_booking_status=pending for the booking's own volunteer, got %+v", rcOther)
 	}
 
 	gotAsCaller, err := repo.ListOccurrences(ctx, thursday, thursday, testVolunteerID)
 	if err != nil {
 		t.Fatalf("ListOccurrences (as testVolunteerID): %v", err)
 	}
-	if len(gotAsCaller) != 1 || gotAsCaller[0].MyBookingStatus != nil {
-		t.Fatalf("expected my_booking_status=nil for a caller with no booking on this occurrence, got %+v", gotAsCaller)
+	rcCaller := roleCoverage(t, gotAsCaller[0], BookingRoleDriver)
+	if rcCaller.MyBookingStatus != nil {
+		t.Fatalf("expected my_booking_status=nil for a caller with no booking on this occurrence, got %+v", rcCaller)
 	}
 	// The aggregate status is unaffected by whose booking it is.
-	if gotAsCaller[0].Status != OccurrenceStatusPending {
-		t.Fatalf("expected aggregate status pending regardless of caller, got %s", gotAsCaller[0].Status)
+	if rcCaller.Status != OccurrenceStatusPending {
+		t.Fatalf("expected aggregate status pending regardless of caller, got %s", rcCaller.Status)
 	}
 }

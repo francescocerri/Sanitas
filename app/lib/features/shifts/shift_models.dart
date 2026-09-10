@@ -1,4 +1,4 @@
-/// Stato di copertura aggregato di un'occorrenza (vedi
+/// Stato di copertura aggregato di una figura su un'occorrenza (vedi
 /// `shift.OccurrenceStatus` in `services/shifts/internal/shift/occurrence.go`):
 /// libero, in attesa (qualcuno ha richiesto ma nessuno è stato confermato) o
 /// confermato. `pending` NON blocca la prenotazione da parte di altri
@@ -16,8 +16,8 @@ ShiftOccurrenceStatus _parseOccurrenceStatus(String raw) {
   }
 }
 
-/// Stato della PROPRIA prenotazione su un'occorrenza (se esiste) — diverso
-/// dallo stato aggregato: un'occorrenza può essere "in attesa" perché
+/// Stato della PROPRIA prenotazione su una figura (se esiste) — diverso
+/// dallo stato aggregato: una figura può essere "in attesa" perché
 /// qualcun altro l'ha richiesta, mentre la mia eventuale richiesta ha un suo
 /// stato indipendente (vedi `my_booking_status` nel backend).
 enum MyBookingStatus { pending, confirmed }
@@ -33,10 +33,65 @@ MyBookingStatus? _parseMyBookingStatus(String? raw) {
   }
 }
 
+/// Le 4 figure che compongono un turno (vedi ADR-0025 "Aggiornamento") — un
+/// enum fisso, non configurabile per comitato: composizione di un
+/// equipaggio CRI, non una scelta specifica di Pavullo. Nomi delle
+/// costanti in inglese, stessi valori esatti usati dal backend
+/// (`ShiftRole.driver.name == "driver"`, ecc.), niente mappa di
+/// conversione manuale da mantenere in sync.
+enum ShiftRole { driver, leader, rescuer, observer }
+
+ShiftRole? _parseRole(String raw) {
+  for (final role in ShiftRole.values) {
+    if (role.name == raw) return role;
+  }
+  return null;
+}
+
+/// Una selezione dell'utente: una figura specifica su un'occorrenza
+/// specifica — quello che la barra di selezione accumula e che
+/// `requestBulkBookings` spedisce (vedi `shifts_providers.dart`).
+typedef BookingSelection = ({ShiftOccurrence occurrence, ShiftRole role});
+
+/// Copertura di una singola figura su un'occorrenza — quattro di queste
+/// compongono `ShiftOccurrence.roles`, sempre nello stesso ordine di
+/// `ShiftRole.values` (stesso ordine canonico del backend).
+class RoleCoverage {
+  const RoleCoverage({
+    required this.role,
+    required this.status,
+    required this.myBookingStatus,
+  });
+
+  final ShiftRole role;
+  final ShiftOccurrenceStatus status;
+  final MyBookingStatus? myBookingStatus;
+
+  /// Prenotabile da un nuovo volontario: libera, oppure già in attesa ma
+  /// non ancora confermata (più richieste pending possono coesistere sulla
+  /// stessa figura) — mai se il chiamante ha già una propria richiesta lì.
+  bool get isBookable =>
+      myBookingStatus == null && status != ShiftOccurrenceStatus.confirmed;
+
+  factory RoleCoverage.fromJson(Map<String, dynamic> json) {
+    final role = _parseRole(json['role'] as String);
+    if (role == null) {
+      throw FormatException('unknown role in response: ${json['role']}');
+    }
+    return RoleCoverage(
+      role: role,
+      status: _parseOccurrenceStatus(json['status'] as String),
+      myBookingStatus: _parseMyBookingStatus(
+        json['my_booking_status'] as String?,
+      ),
+    );
+  }
+}
+
 /// Un'occorrenza calendario così come la restituisce
 /// `GET /v1/shift-occurrences` — un turno-template su un giorno concreto,
-/// con lo stato di copertura già calcolato dal backend. Mai persistita:
-/// generata al volo, vedi `shift.Occurrence` sul backend.
+/// con la copertura delle sue 4 figure già calcolata dal backend. Mai
+/// persistita: generata al volo, vedi `shift.Occurrence` sul backend.
 class ShiftOccurrence {
   const ShiftOccurrence({
     required this.templateId,
@@ -45,8 +100,7 @@ class ShiftOccurrence {
     required this.startTime,
     required this.endTime,
     required this.label,
-    required this.status,
-    required this.myBookingStatus,
+    required this.roles,
   });
 
   final String templateId;
@@ -60,18 +114,20 @@ class ShiftOccurrence {
   final String startTime;
   final String endTime;
   final String label;
-  final ShiftOccurrenceStatus status;
-  final MyBookingStatus? myBookingStatus;
 
-  /// Prenotabile da un nuovo volontario: libero, oppure già in attesa ma
-  /// non ancora confermato (più richieste pending possono coesistere sullo
-  /// stesso slot) — mai se il chiamante ha già una propria richiesta lì.
-  bool get isBookable =>
-      myBookingStatus == null && status != ShiftOccurrenceStatus.confirmed;
+  /// Sempre esattamente 4 elementi, uno per `ShiftRole`, nello stesso
+  /// ordine di `ShiftRole.values`.
+  final List<RoleCoverage> roles;
 
-  /// Chiave univoca template+data, usata per la selezione multipla e per
-  /// distinguere occorrenze dello stesso template su giorni diversi.
-  String get key => '$templateId|${date.toIso8601String().split('T').first}';
+  /// Solo la parte data, formato `YYYY-MM-DD` — usata sia per la chiave di
+  /// selezione sia per il payload della richiesta bulk.
+  String get dateKey => date.toIso8601String().split('T').first;
+
+  /// Chiave univoca template+data+figura, usata per la selezione multipla.
+  String keyFor(ShiftRole role) => '$templateId|$dateKey|${role.name}';
+
+  RoleCoverage coverageFor(ShiftRole role) =>
+      roles.firstWhere((rc) => rc.role == role);
 
   factory ShiftOccurrence.fromJson(Map<String, dynamic> json) {
     return ShiftOccurrence(
@@ -81,10 +137,9 @@ class ShiftOccurrence {
       startTime: json['start_time'] as String,
       endTime: json['end_time'] as String,
       label: json['label'] as String,
-      status: _parseOccurrenceStatus(json['status'] as String),
-      myBookingStatus: _parseMyBookingStatus(
-        json['my_booking_status'] as String?,
-      ),
+      roles: (json['roles'] as List<dynamic>)
+          .map((r) => RoleCoverage.fromJson(r as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

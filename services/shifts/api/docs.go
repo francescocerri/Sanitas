@@ -47,10 +47,10 @@ const docTemplate = `{
                 "tags": [
                     "shift-bookings"
                 ],
-                "summary": "Request a booking for an open slot (requires the shifts:request permission)",
+                "summary": "Request a booking for an open role slot (requires the shifts:request permission)",
                 "parameters": [
                     {
-                        "description": "Template id and date (YYYY-MM-DD)",
+                        "description": "Template id, date (YYYY-MM-DD), and role (driver/leader/rescuer/observer)",
                         "name": "booking",
                         "in": "body",
                         "required": true,
@@ -67,7 +67,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid payload, past date, inactive template, or weekday mismatch"
+                        "description": "Invalid payload, unknown role, past date, inactive template, or weekday mismatch"
                     },
                     "401": {
                         "description": "Authentication required"
@@ -79,7 +79,7 @@ const docTemplate = `{
                         "description": "Template not found"
                     },
                     "409": {
-                        "description": "Slot already confirmed, or the caller already has a pending/confirmed booking for it"
+                        "description": "That role is already confirmed, or the caller already has a pending/confirmed booking (any role) for this slot"
                     }
                 }
             }
@@ -100,10 +100,10 @@ const docTemplate = `{
                 "tags": [
                     "shift-bookings"
                 ],
-                "summary": "Request bookings for multiple open slots in one all-or-nothing call (requires the shifts:request permission)",
+                "summary": "Request bookings for multiple open role slots in one all-or-nothing call (requires the shifts:request permission)",
                 "parameters": [
                     {
-                        "description": "Non-empty list of template id + date (YYYY-MM-DD) pairs, no duplicates",
+                        "description": "Non-empty list of template id + date (YYYY-MM-DD) + role, no duplicates",
                         "name": "bookings",
                         "in": "body",
                         "required": true,
@@ -123,7 +123,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid payload, empty/duplicate list, or the Nth item has a past/malformed date, inactive template, or weekday mismatch"
+                        "description": "Invalid payload, empty/duplicate list, or the Nth item has a past/malformed date, unknown role, inactive template, or weekday mismatch"
                     },
                     "401": {
                         "description": "Authentication required"
@@ -135,7 +135,7 @@ const docTemplate = `{
                         "description": "The Nth item's template was not found"
                     },
                     "409": {
-                        "description": "The Nth item's slot is already confirmed, or the caller already has a pending/confirmed booking for it"
+                        "description": "The Nth item's role is already confirmed, or the caller already has a pending/confirmed booking (any role) for that slot"
                     }
                 }
             }
@@ -156,10 +156,10 @@ const docTemplate = `{
                 "tags": [
                     "shift-bookings"
                 ],
-                "summary": "Book a slot directly for a chosen volunteer, already confirmed (requires the shifts:write permission)",
+                "summary": "Book a role slot directly for a chosen volunteer, already confirmed (requires the shifts:write permission)",
                 "parameters": [
                     {
-                        "description": "Template id, volunteer id, and date (YYYY-MM-DD)",
+                        "description": "Template id, volunteer id, date (YYYY-MM-DD), and role (driver/leader/rescuer/observer)",
                         "name": "booking",
                         "in": "body",
                         "required": true,
@@ -176,7 +176,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid payload, empty/unknown volunteer_id, past date, inactive template, or weekday mismatch"
+                        "description": "Invalid payload, empty/unknown volunteer_id, unknown role, past date, inactive template, or weekday mismatch"
                     },
                     "401": {
                         "description": "Authentication required"
@@ -188,7 +188,7 @@ const docTemplate = `{
                         "description": "Template not found"
                     },
                     "409": {
-                        "description": "Slot already confirmed, or the chosen volunteer already has a pending/confirmed booking for it"
+                        "description": "That role is already confirmed, or the chosen volunteer already has a pending/confirmed booking (any role) for this slot"
                     }
                 }
             }
@@ -494,6 +494,14 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "role": {
+                    "description": "Role has no DB default: always explicit, like VolunteerID — a\nbooking always names which of the 4 positions it's for, see\nBookingRole.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingRole"
+                        }
+                    ]
+                },
                 "start_time": {
                     "type": "string"
                 },
@@ -507,6 +515,21 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingRole": {
+            "type": "string",
+            "enum": [
+                "driver",
+                "leader",
+                "rescuer",
+                "observer"
+            ],
+            "x-enum-varnames": [
+                "BookingRoleDriver",
+                "BookingRoleLeader",
+                "BookingRoleRescuer",
+                "BookingRoleObserver"
+            ]
         },
         "github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingStatus": {
             "type": "string",
@@ -535,19 +558,14 @@ const docTemplate = `{
                 "label": {
                     "type": "string"
                 },
-                "my_booking_status": {
-                    "description": "MyBookingStatus is nil unless the caller has a pending/confirmed\nbooking of their own on this occurrence — distinct from Status\n(the aggregate coverage across every volunteer) so a client can\nrender \"this one is yours\" regardless of who else has requested it.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingStatus"
-                        }
-                    ]
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.RoleCoverage"
+                    }
                 },
                 "start_time": {
                     "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.OccurrenceStatus"
                 },
                 "template_id": {
                     "type": "string"
@@ -569,6 +587,20 @@ const docTemplate = `{
                 "OccurrenceStatusPending",
                 "OccurrenceStatusConfirmed"
             ]
+        },
+        "github_com_francescocerri_sanitas_services_shifts_internal_shift.RoleCoverage": {
+            "type": "object",
+            "properties": {
+                "my_booking_status": {
+                    "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingStatus"
+                },
+                "role": {
+                    "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingRole"
+                },
+                "status": {
+                    "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.OccurrenceStatus"
+                }
+            }
         },
         "github_com_francescocerri_sanitas_services_shifts_internal_shift.ShiftTemplate": {
             "type": "object",
@@ -603,6 +635,9 @@ const docTemplate = `{
                 "date": {
                     "type": "string"
                 },
+                "role": {
+                    "type": "string"
+                },
                 "template_id": {
                     "type": "string"
                 }
@@ -612,6 +647,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "date": {
+                    "type": "string"
+                },
+                "role": {
                     "type": "string"
                 },
                 "template_id": {
@@ -634,6 +672,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "date": {
+                    "type": "string"
+                },
+                "role": {
                     "type": "string"
                 },
                 "template_id": {

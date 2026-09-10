@@ -38,10 +38,21 @@ class _Auth extends AuthController {
   );
 }
 
-/// Un backend `shifts` finto che restituisce sempre un'occorrenza sulla
+Map<String, dynamic> _role(
+  String role,
+  String status, {
+  String? myBookingStatus,
+}) => {'role': role, 'status': status, 'my_booking_status': ?myBookingStatus};
+
+/// Un backend `shifts` finto che restituisce sempre 3 occorrenze sulla
 /// data `from` richiesta (per ogni vista, qualunque sia il range che
 /// interroga) — così i test non dipendono dal giorno della settimana in
 /// cui girano: non serve calcolare un vero giovedì/sabato futuro.
+///
+/// - tpl-free: tutte e 4 le figure libere.
+/// - tpl-confirmed: tutte e 4 confermate (da un altro volontario) — turno
+///   al completo, nessuna checkbox né badge da nessuna parte.
+/// - tpl-mine: autista confermato per il chiamante, le altre 3 libere.
 Dio _fakeShiftsDio(List<RequestOptions> requests) {
   final dio = Dio();
   dio.interceptors.add(
@@ -62,7 +73,12 @@ Dio _fakeShiftsDio(List<RequestOptions> requests) {
                   'start_time': '20:00',
                   'end_time': '08:00',
                   'label': 'Turno Serale',
-                  'status': 'free',
+                  'roles': [
+                    _role('driver', 'free'),
+                    _role('leader', 'free'),
+                    _role('rescuer', 'free'),
+                    _role('observer', 'free'),
+                  ],
                 },
                 {
                   'template_id': 'tpl-confirmed',
@@ -71,7 +87,12 @@ Dio _fakeShiftsDio(List<RequestOptions> requests) {
                   'start_time': '08:00',
                   'end_time': '14:00',
                   'label': 'Turno Mattina',
-                  'status': 'confirmed',
+                  'roles': [
+                    _role('driver', 'confirmed'),
+                    _role('leader', 'confirmed'),
+                    _role('rescuer', 'confirmed'),
+                    _role('observer', 'confirmed'),
+                  ],
                 },
                 {
                   'template_id': 'tpl-mine',
@@ -80,8 +101,12 @@ Dio _fakeShiftsDio(List<RequestOptions> requests) {
                   'start_time': '14:00',
                   'end_time': '20:00',
                   'label': 'Turno Pomeriggio',
-                  'status': 'pending',
-                  'my_booking_status': 'pending',
+                  'roles': [
+                    _role('driver', 'confirmed', myBookingStatus: 'confirmed'),
+                    _role('leader', 'free'),
+                    _role('rescuer', 'free'),
+                    _role('observer', 'free'),
+                  ],
                 },
               ],
             ),
@@ -165,16 +190,19 @@ void main() {
 
     await tester.tap(find.text('Lista'));
     await tester.pumpAndSettle();
+    // Espande la card completamente libera: senza shifts:request non deve
+    // comparire nessuna checkbox, nemmeno lì.
+    await tester.tap(find.text('Turno Serale'));
+    await tester.pumpAndSettle();
 
-    expect(find.text('Turno Serale'), findsOneWidget);
     expect(find.byType(Checkbox), findsNothing);
     expect(find.text('Invia richiesta'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
-    'shows a badge (not a checkbox) for the volunteer\'s own booking, '
-    'and none for an already-confirmed slot',
+    'shows a badge (not a checkbox) for the volunteer\'s own confirmed '
+    'role, and neither for a role confirmed by someone else',
     (tester) async {
       final requests = <RequestOptions>[];
       await mount(
@@ -185,18 +213,29 @@ void main() {
 
       await tester.tap(find.text('Lista'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Turno Pomeriggio')); // tpl-mine
+      await tester.pumpAndSettle();
 
-      // 1 sola checkbox: solo lo slot libero è prenotabile, non quello
-      // confermato (da un altro volontario) né quello già mio (mock:
-      // tpl-mine ha my_booking_status=pending, quindi badge "In attesa" —
-      // 2 occorrenze attese: quella nella legenda e quella nel badge).
-      expect(find.byType(Checkbox), findsOneWidget);
-      expect(find.text('In attesa'), findsNWidgets(2));
+      // Il badge "Confermato" compare 2 volte per tpl-mine: nel riepilogo
+      // della card (sempre visibile) e sulla riga della figura autista
+      // (visibile solo da espansa) — la legenda usa un testo diverso
+      // ("Confermato per te"), niente collisione.
+      expect(find.text('Confermato'), findsNWidgets(2));
+      // Le altre 3 figure di tpl-mine sono libere e prenotabili.
+      expect(find.byType(Checkbox), findsNWidgets(3));
+
+      await tester.tap(find.text('Turno Mattina')); // tpl-confirmed
+      await tester.pumpAndSettle();
+
+      // tpl-confirmed è tutto confermato da altri: nessuna checkbox in
+      // più, nessun badge "Confermato" in più (non è mio).
+      expect(find.byType(Checkbox), findsNWidgets(3));
+      expect(find.text('Confermato'), findsNWidgets(2));
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('selecting a free slot and submitting calls the bulk endpoint', (
+  testWidgets('selecting a free role and submitting calls the bulk endpoint', (
     tester,
   ) async {
     final requests = <RequestOptions>[];
@@ -208,11 +247,14 @@ void main() {
 
     await tester.tap(find.text('Lista'));
     await tester.pumpAndSettle();
-
-    await tester.tap(find.byType(Checkbox));
+    await tester.tap(find.text('Turno Serale')); // tpl-free, expand
     await tester.pumpAndSettle();
 
-    expect(find.text('1 turno selezionato'), findsOneWidget);
+    // Il primo checkbox è quello dell'autista (primo in ShiftRole.values).
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 posizione selezionata'), findsOneWidget);
     expect(find.text('Invia richiesta'), findsOneWidget);
 
     await tester.tap(find.text('Invia richiesta'));
@@ -225,9 +267,51 @@ void main() {
     final bookings = body['bookings'] as List<dynamic>;
     expect(bookings, hasLength(1));
     expect((bookings.first as Map)['template_id'], 'tpl-free');
+    expect((bookings.first as Map)['role'], 'driver');
 
     expect(find.text('Richiesta inviata.'), findsOneWidget);
     expect(find.text('Invia richiesta'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('selecting one role locks the other roles on the same slot '
+      '(a volunteer can only hold one role per occurrence)', (tester) async {
+    final requests = <RequestOptions>[];
+    await mount(
+      tester,
+      _fakeShiftsDio(requests),
+      permissions: const ['shifts:read', 'shifts:request'],
+    );
+
+    await tester.tap(find.text('Lista'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Turno Serale')); // tpl-free, expand
+    await tester.pumpAndSettle();
+
+    final before = tester.widgetList<Checkbox>(find.byType(Checkbox)).toList();
+    expect(before, hasLength(4));
+    expect(before.every((c) => c.onChanged != null), isTrue);
+
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pumpAndSettle();
+
+    final afterSelect = tester
+        .widgetList<Checkbox>(find.byType(Checkbox))
+        .toList();
+    expect(afterSelect, hasLength(4));
+    // Quella appena selezionata resta interattiva (per poterla
+    // deselezionare); le altre 3 sulla stessa occorrenza sono bloccate.
+    expect(afterSelect.first.onChanged, isNotNull);
+    expect(afterSelect.skip(1).every((c) => c.onChanged == null), isTrue);
+
+    // Deselezionandola si sblocca di nuovo tutto.
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pumpAndSettle();
+    final afterDeselect = tester
+        .widgetList<Checkbox>(find.byType(Checkbox))
+        .toList();
+    expect(afterDeselect.every((c) => c.onChanged != null), isTrue);
+
     expect(tester.takeException(), isNull);
   });
 }

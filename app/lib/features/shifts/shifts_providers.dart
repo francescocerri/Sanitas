@@ -65,12 +65,13 @@ final occurrencesProvider = FutureProvider.autoDispose
       }
     });
 
-/// `POST /v1/shift-bookings/bulk` — crea tutte le prenotazioni scelte in
-/// un'unica richiesta atomica (vedi `docs/backlog.md` "Gestione turni",
-/// voce 7): o vengono create tutte, o nessuna.
+/// `POST /v1/shift-bookings/bulk` — crea tutte le prenotazioni scelte
+/// (occorrenza+figura, vedi ADR-0025 "Aggiornamento") in un'unica
+/// richiesta atomica (vedi `docs/backlog.md` "Gestione turni", voce 7): o
+/// vengono create tutte, o nessuna.
 Future<void> requestBulkBookings(
   WidgetRef ref,
-  List<ShiftOccurrence> selection,
+  List<BookingSelection> selection,
 ) async {
   try {
     await ref
@@ -80,9 +81,10 @@ Future<void> requestBulkBookings(
           data: {
             'bookings': selection
                 .map(
-                  (o) => {
-                    'template_id': o.templateId,
-                    'date': o.date.toIso8601String().split('T').first,
+                  (s) => {
+                    'template_id': s.occurrence.templateId,
+                    'date': s.occurrence.dateKey,
+                    'role': s.role.name,
                   },
                 )
                 .toList(),

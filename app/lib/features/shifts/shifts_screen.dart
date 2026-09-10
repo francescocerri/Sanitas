@@ -20,10 +20,11 @@ enum ShiftsView { day, week, month, list }
 /// Schermata Turni del volontario (`docs/backlog.md`, "Turni" del
 /// frontend, voce 10): 4 viste (Giorno/Settimana/Mese/Lista, design
 /// approvato via mockup), filtro Tutti/Liberi/Miei, selezione multipla di
-/// slot che alimenta `POST /v1/shift-bookings/bulk`. In sola lettura per chi
-/// non ha `shifts:request` (niente checkbox/barra di selezione, vedi
-/// `canRequestShiftsProvider`) — la rotta stessa resta protetta da
-/// `shifts:read` (vedi `router.dart`).
+/// figure (autista/leader/soccorritore/osservatore, vedi ADR-0025
+/// "Aggiornamento") che alimenta `POST /v1/shift-bookings/bulk`. In sola
+/// lettura per chi non ha `shifts:request` (niente checkbox/barra di
+/// selezione, vedi `canRequestShiftsProvider`) — la rotta stessa resta
+/// protetta da `shifts:read` (vedi `router.dart`).
 class ShiftsScreen extends ConsumerStatefulWidget {
   const ShiftsScreen({super.key});
 
@@ -34,15 +35,20 @@ class ShiftsScreen extends ConsumerStatefulWidget {
 class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
   ShiftsView _view = ShiftsView.month;
   ShiftsFilter _filter = ShiftsFilter.all;
-  final Map<String, ShiftOccurrence> _selected = {};
+
+  // Chiave = ShiftOccurrence.keyFor(role) — una selezione è sempre una
+  // COPPIA occorrenza+figura, non solo un'occorrenza (un turno ha 4 figure
+  // prenotabili indipendentemente, vedi ADR-0025 "Aggiornamento").
+  final Map<String, BookingSelection> _selected = {};
   bool _submitting = false;
 
-  void _toggle(ShiftOccurrence occurrence) {
+  void _toggle(ShiftOccurrence occurrence, ShiftRole role) {
+    final key = occurrence.keyFor(role);
     setState(() {
-      if (_selected.containsKey(occurrence.key)) {
-        _selected.remove(occurrence.key);
+      if (_selected.containsKey(key)) {
+        _selected.remove(key);
       } else {
-        _selected[occurrence.key] = occurrence;
+        _selected[key] = (occurrence: occurrence, role: role);
       }
     });
   }

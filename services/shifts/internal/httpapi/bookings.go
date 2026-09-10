@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/francescocerri/sanitas/services/shifts/internal/shift"
@@ -14,25 +15,31 @@ import (
 type createBookingRequest struct {
 	TemplateID string `json:"template_id"`
 	Date       string `json:"date"`
+	Role       string `json:"role"`
 }
 
-// @Summary	Request a booking for an open slot (requires the shifts:request permission)
+// @Summary	Request a booking for an open role slot (requires the shifts:request permission)
 // @Tags		shift-bookings
 // @Accept		json
 // @Produce	json
 // @Security	BearerAuth
-// @Param		booking	body		createBookingRequest	true	"Template id and date (YYYY-MM-DD)"
+// @Param		booking	body		createBookingRequest	true	"Template id, date (YYYY-MM-DD), and role (driver/leader/rescuer/observer)"
 // @Success	201		{object}	shift.Booking
-// @Failure	400		"Invalid payload, past date, inactive template, or weekday mismatch"
+// @Failure	400		"Invalid payload, unknown role, past date, inactive template, or weekday mismatch"
 // @Failure	401		"Authentication required"
 // @Failure	403		"Missing required permission: shifts:request"
 // @Failure	404		"Template not found"
-// @Failure	409		"Slot already confirmed, or the caller already has a pending/confirmed booking for it"
+// @Failure	409		"That role is already confirmed, or the caller already has a pending/confirmed booking (any role) for this slot"
 // @Router		/v1/shift-bookings [post]
 func (s *Server) handleCreateBooking(w http.ResponseWriter, r *http.Request) {
 	var req createBookingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+	role, verr := parseBookingRole(req.Role)
+	if verr != nil {
+		writeError(w, verr.status, verr.message)
 		return
 	}
 	date, verr := parseAndValidateBookingDate(req.Date)
@@ -47,7 +54,7 @@ func (s *Server) handleCreateBooking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	volunteerID := claimsFromContext(r).Subject
-	if verr := s.checkSlotAvailability(r.Context(), template.ID, date, volunteerID,
+	if verr := s.checkSlotAvailability(r.Context(), template.ID, date, role, volunteerID,
 		"you already have a pending or confirmed booking for this slot"); verr != nil {
 		writeError(w, verr.status, verr.message)
 		return
@@ -56,6 +63,7 @@ func (s *Server) handleCreateBooking(w http.ResponseWriter, r *http.Request) {
 	created, err := s.repo.CreateBooking(r.Context(), shift.Booking{
 		TemplateID:  template.ID,
 		VolunteerID: volunteerID,
+		Role:        role,
 		Date:        date,
 		StartTime:   template.StartTime,
 		EndTime:     template.EndTime,
@@ -95,6 +103,17 @@ func parseAndValidateBookingDate(raw string) (time.Time, *validationError) {
 	return date, nil
 }
 
+// parseBookingRole checks raw is one of the 4 known BookingRole values —
+// shared by handleCreateBooking, handleCreateDirectBooking and
+// handleCreateBulkBooking.
+func parseBookingRole(raw string) (shift.BookingRole, *validationError) {
+	role := shift.BookingRole(raw)
+	if !slices.Contains(shift.AllBookingRoles, role) {
+		return "", &validationError{http.StatusBadRequest, "role must be one of driver, leader, rescuer, observer"}
+	}
+	return role, nil
+}
+
 // getActiveTemplateForDate fetches templateID, checks it's active and that
 // date falls on its weekday — shared by handleCreateBooking,
 // handleCreateDirectBooking and handleCreateBulkBooking.
@@ -117,19 +136,20 @@ func (s *Server) getActiveTemplateForDate(ctx context.Context, templateID string
 }
 
 // checkSlotAvailability rejects a booking attempt that would land on an
-// already-confirmed slot, or duplicate a pending/confirmed booking
-// volunteerID already has for it — shared by handleCreateBooking,
-// handleCreateDirectBooking and handleCreateBulkBooking (different
-// duplicateMessage: "you already have..." for a volunteer's own request vs
-// "the chosen volunteer already has..." for a manager's direct booking).
-func (s *Server) checkSlotAvailability(ctx context.Context, templateID string, date time.Time, volunteerID, duplicateMessage string) *validationError {
-	confirmed, err := s.repo.HasConfirmedBooking(ctx, templateID, date)
+// already-confirmed role, or duplicate a pending/confirmed booking (any
+// role) volunteerID already has on that template+date — shared by
+// handleCreateBooking, handleCreateDirectBooking and
+// handleCreateBulkBooking (different duplicateMessage: "you already
+// have..." for a volunteer's own request vs "the chosen volunteer already
+// has..." for a manager's direct booking).
+func (s *Server) checkSlotAvailability(ctx context.Context, templateID string, date time.Time, role shift.BookingRole, volunteerID, duplicateMessage string) *validationError {
+	confirmed, err := s.repo.HasConfirmedBooking(ctx, templateID, date, role)
 	if err != nil {
 		s.logger.Error("check confirmed booking", "error", err)
 		return &validationError{http.StatusInternalServerError, "internal error"}
 	}
 	if confirmed {
-		return &validationError{http.StatusConflict, "this slot is already confirmed"}
+		return &validationError{http.StatusConflict, "this role is already confirmed"}
 	}
 
 	hasBooking, err := s.repo.HasBookingForVolunteer(ctx, templateID, date, volunteerID)
@@ -147,20 +167,21 @@ type createDirectBookingRequest struct {
 	TemplateID  string `json:"template_id"`
 	VolunteerID string `json:"volunteer_id"`
 	Date        string `json:"date"`
+	Role        string `json:"role"`
 }
 
-// @Summary	Book a slot directly for a chosen volunteer, already confirmed (requires the shifts:write permission)
+// @Summary	Book a role slot directly for a chosen volunteer, already confirmed (requires the shifts:write permission)
 // @Tags		shift-bookings
 // @Accept		json
 // @Produce	json
 // @Security	BearerAuth
-// @Param		booking	body		createDirectBookingRequest	true	"Template id, volunteer id, and date (YYYY-MM-DD)"
+// @Param		booking	body		createDirectBookingRequest	true	"Template id, volunteer id, date (YYYY-MM-DD), and role (driver/leader/rescuer/observer)"
 // @Success	201		{object}	shift.Booking
-// @Failure	400		"Invalid payload, empty/unknown volunteer_id, past date, inactive template, or weekday mismatch"
+// @Failure	400		"Invalid payload, empty/unknown volunteer_id, unknown role, past date, inactive template, or weekday mismatch"
 // @Failure	401		"Authentication required"
 // @Failure	403		"Missing required permission: shifts:write"
 // @Failure	404		"Template not found"
-// @Failure	409		"Slot already confirmed, or the chosen volunteer already has a pending/confirmed booking for it"
+// @Failure	409		"That role is already confirmed, or the chosen volunteer already has a pending/confirmed booking (any role) for this slot"
 // @Router		/v1/shift-bookings/direct [post]
 func (s *Server) handleCreateDirectBooking(w http.ResponseWriter, r *http.Request) {
 	var req createDirectBookingRequest
@@ -170,6 +191,11 @@ func (s *Server) handleCreateDirectBooking(w http.ResponseWriter, r *http.Reques
 	}
 	if req.VolunteerID == "" {
 		writeError(w, http.StatusBadRequest, "volunteer_id is required")
+		return
+	}
+	role, verr := parseBookingRole(req.Role)
+	if verr != nil {
+		writeError(w, verr.status, verr.message)
 		return
 	}
 	date, verr := parseAndValidateBookingDate(req.Date)
@@ -182,7 +208,7 @@ func (s *Server) handleCreateDirectBooking(w http.ResponseWriter, r *http.Reques
 		writeError(w, verr.status, verr.message)
 		return
 	}
-	if verr := s.checkSlotAvailability(r.Context(), template.ID, date, req.VolunteerID,
+	if verr := s.checkSlotAvailability(r.Context(), template.ID, date, role, req.VolunteerID,
 		"the chosen volunteer already has a pending or confirmed booking for this slot"); verr != nil {
 		writeError(w, verr.status, verr.message)
 		return
@@ -192,6 +218,7 @@ func (s *Server) handleCreateDirectBooking(w http.ResponseWriter, r *http.Reques
 	created, err := s.repo.CreateConfirmedBooking(r.Context(), shift.Booking{
 		TemplateID:  template.ID,
 		VolunteerID: req.VolunteerID,
+		Role:        role,
 		Date:        date,
 		StartTime:   template.StartTime,
 		EndTime:     template.EndTime,
@@ -211,24 +238,25 @@ func (s *Server) handleCreateDirectBooking(w http.ResponseWriter, r *http.Reques
 type createBulkBookingItem struct {
 	TemplateID string `json:"template_id"`
 	Date       string `json:"date"`
+	Role       string `json:"role"`
 }
 
 type createBulkBookingRequest struct {
 	Bookings []createBulkBookingItem `json:"bookings"`
 }
 
-// @Summary	Request bookings for multiple open slots in one all-or-nothing call (requires the shifts:request permission)
+// @Summary	Request bookings for multiple open role slots in one all-or-nothing call (requires the shifts:request permission)
 // @Tags		shift-bookings
 // @Accept		json
 // @Produce	json
 // @Security	BearerAuth
-// @Param		bookings	body		createBulkBookingRequest	true	"Non-empty list of template id + date (YYYY-MM-DD) pairs, no duplicates"
+// @Param		bookings	body		createBulkBookingRequest	true	"Non-empty list of template id + date (YYYY-MM-DD) + role, no duplicates"
 // @Success	201			{array}		shift.Booking
-// @Failure	400			"Invalid payload, empty/duplicate list, or the Nth item has a past/malformed date, inactive template, or weekday mismatch"
+// @Failure	400			"Invalid payload, empty/duplicate list, or the Nth item has a past/malformed date, unknown role, inactive template, or weekday mismatch"
 // @Failure	401			"Authentication required"
 // @Failure	403			"Missing required permission: shifts:request"
 // @Failure	404			"The Nth item's template was not found"
-// @Failure	409			"The Nth item's slot is already confirmed, or the caller already has a pending/confirmed booking for it"
+// @Failure	409			"The Nth item's role is already confirmed, or the caller already has a pending/confirmed booking (any role) for that slot"
 // @Router		/v1/shift-bookings/bulk [post]
 func (s *Server) handleCreateBulkBooking(w http.ResponseWriter, r *http.Request) {
 	var req createBulkBookingRequest
@@ -241,15 +269,24 @@ func (s *Server) handleCreateBulkBooking(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// A duplicate (template_id, date) pair within the same request would
-	// otherwise pass per-item validation twice — neither one exists in the
-	// DB yet at check time — and end up inserted twice.
+	// Two items sharing the same (template_id, date) — regardless of role
+	// — must be rejected up front: the caller is a single volunteer, who
+	// can hold at most one role per occurrence (see
+	// docs/adr/0025-modello-dati-turni.md "Aggiornamento"). Per-item
+	// validation below checks each one against the DB, but within this
+	// same request none of the earlier items are persisted yet (the whole
+	// batch is validated first, inserted atomically after — see
+	// CreateBookingsAtomic), so two different roles on the same slot would
+	// otherwise both sail through HasBookingForVolunteer and get created
+	// together. Keying on the pair (not the triple with role) is what
+	// catches that: an exact repeat of the same role is just a special
+	// case of the same slot appearing twice.
 	type slot struct{ templateID, date string }
 	seen := make(map[slot]bool, len(req.Bookings))
 	for _, item := range req.Bookings {
 		key := slot{item.TemplateID, item.Date}
 		if seen[key] {
-			writeError(w, http.StatusBadRequest, "duplicate template_id/date pair in request")
+			writeError(w, http.StatusBadRequest, "duplicate template_id/date in request — you can only hold one role per slot")
 			return
 		}
 		seen[key] = true
@@ -259,6 +296,11 @@ func (s *Server) handleCreateBulkBooking(w http.ResponseWriter, r *http.Request)
 	volunteerID := claimsFromContext(r).Subject
 	toCreate := make([]shift.Booking, 0, len(req.Bookings))
 	for i, item := range req.Bookings {
+		role, verr := parseBookingRole(item.Role)
+		if verr != nil {
+			writeError(w, verr.status, fmt.Sprintf("booking %d: %s", i+1, verr.message))
+			return
+		}
 		date, verr := parseAndValidateBookingDate(item.Date)
 		if verr != nil {
 			writeError(w, verr.status, fmt.Sprintf("booking %d: %s", i+1, verr.message))
@@ -269,7 +311,7 @@ func (s *Server) handleCreateBulkBooking(w http.ResponseWriter, r *http.Request)
 			writeError(w, verr.status, fmt.Sprintf("booking %d: %s", i+1, verr.message))
 			return
 		}
-		if verr := s.checkSlotAvailability(ctx, template.ID, date, volunteerID,
+		if verr := s.checkSlotAvailability(ctx, template.ID, date, role, volunteerID,
 			"you already have a pending or confirmed booking for this slot"); verr != nil {
 			writeError(w, verr.status, fmt.Sprintf("booking %d: %s", i+1, verr.message))
 			return
@@ -277,6 +319,7 @@ func (s *Server) handleCreateBulkBooking(w http.ResponseWriter, r *http.Request)
 		toCreate = append(toCreate, shift.Booking{
 			TemplateID:  template.ID,
 			VolunteerID: volunteerID,
+			Role:        role,
 			Date:        date,
 			StartTime:   template.StartTime,
 			EndTime:     template.EndTime,
