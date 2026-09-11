@@ -39,3 +39,19 @@ Il dominio richiesto: il gestore turni imposta turni ricorrenti (giorno della se
 ## Aggiornamento (voce di backlog 4, "richiesta di prenotazione")
 
 Sopra si era ipotizzato di verificare "chi può richiedere una prenotazione" leggendo `claims.Roles` per il ruolo `emergency_volunteer`, senza un permesso dedicato. Sostituito in fase di implementazione: nuovo permesso `PermShiftsRequest = "shifts:request"`, assegnato solo a `emergency_volunteer` — stesso meccanismo di autorizzazione (permessi, non ruoli) usato ovunque nel sistema, scelta esplicita del comitato per non introdurre un secondo asse di controllo. `shifts` continua quindi a non guardare mai `claims.Roles`.
+
+## Aggiornamento (voce di backlog 10, dimensione "figura")
+
+Emerso solo durante la verifica della schermata Turni del volontario: un turno non è un blocco libero/occupato unico, ma composto da **4 figure indipendenti** — autista, leader (capo equipaggio), soccorritore, osservatore — ciascuna prenotabile a sé, per un massimo di 4 persone per turno. Sia la richiesta del volontario sia la prenotazione diretta del gestore devono quindi specificare **per quale figura**.
+
+Le 4 figure sono un **enum fisso nel codice**, non configurabile per comitato (scelta esplicita, confermata con l'utente): composizione di un equipaggio CRI, un dato di dominio comune, non uno specifico di Pavullo — a differenza dei turni-template (orari/giorni), che restano per-comitato.
+
+`Booking` guadagna `Role BookingRole` (`driver`/`leader`/`rescuer`/`observer`, colonna NOT NULL, nessun default — sempre esplicita come `VolunteerID`). L'indice unico parziale sui confermati passa da `(template_id, date)` a `(template_id, date, role)`: più figure diverse sullo stesso slot possono ora essere confermate indipendentemente. `Occurrence` perde lo `Status`/`MyBookingStatus` a livello radice, guadagna `Roles []RoleCoverage` (sempre 4 elementi, uno per figura) — modifica di risposta non retrocompatibile, accettabile perché il servizio non ha mai avuto dati reali in produzione (stesso ragionamento già seguito per gli `AutoMigrate` precedenti).
+
+**Vincolo di dominio**: una persona tiene al più una figura per occorrenza — non può prenotarsi due volte sullo stesso template+data, indipendentemente dalla figura. Applicato a 3 livelli: `HasBookingForVolunteer` resta deliberatamente senza filtro su `role` (controlla qualunque prenotazione pending/confermata del volontario su quel template+data); il controllo duplicati nel payload bulk è sulla coppia `(template_id, date)`, non sulla tripla con `role` — altrimenti due voci con figure diverse sullo stesso slot nella stessa richiesta bulk passerebbero la validazione singola (ciascuna guarda solo il DB, non le altre voci della stessa richiesta) e verrebbero entrambe inserite, violando il vincolo; lato UI, selezionare una figura su un'occorrenza disabilita (non nasconde) le checkbox delle altre 3 sulla stessa card.
+
+**Bug di classe generica scoperto qui**: un endpoint bulk che "valida tutto contro il DB, poi inserisce tutto in una transazione" non vede gli elementi in-flight della stessa richiesta durante la validazione per-elemento — footgun da tenere a mente per qualunque futuro endpoint bulk in questo codebase.
+
+## Aggiornamento (voce di backlog 11, "al completo" senza l'osservatore)
+
+Emerso durante la verifica della schermata del gestore turni: un turno si considera "al completo" quando le **3 figure operative** — autista, leader, soccorritore — sono confermate; l'osservatore è facoltativo e la sua assenza non impedisce lo stato "completo" (`ShiftOccurrence.isComplete` lato Flutter, `requiredRolesForCompletion = {driver, leader, rescuer}`). Puramente una regola di presentazione lato client (il pallino del calendario mese e il badge della card usano questa soglia al posto di "tutte e 4 confermate"): non tocca lo schema né gli endpoint, `RoleCoverage`/`Occurrence` restano quelli descritti sopra, con tutte e 4 le figure sempre esposte.
