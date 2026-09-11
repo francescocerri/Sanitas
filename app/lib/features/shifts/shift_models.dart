@@ -41,7 +41,9 @@ MyBookingStatus? _parseMyBookingStatus(String? raw) {
 /// conversione manuale da mantenere in sync.
 enum ShiftRole { driver, leader, rescuer, observer }
 
-ShiftRole? _parseRole(String raw) {
+/// Pubblica (non solo per `RoleCoverage.fromJson` qui sotto): riusata anche
+/// da `shifts_providers.dart` per decodificare `PendingBooking.role`.
+ShiftRole? parseShiftRole(String raw) {
   for (final role in ShiftRole.values) {
     if (role.name == raw) return role;
   }
@@ -52,6 +54,17 @@ ShiftRole? _parseRole(String raw) {
 /// specifica — quello che la barra di selezione accumula e che
 /// `requestBulkBookings` spedisce (vedi `shifts_providers.dart`).
 typedef BookingSelection = ({ShiftOccurrence occurrence, ShiftRole role});
+
+/// Le figure la cui conferma basta perché un turno sia "al completo" —
+/// autista, leader e soccorritore. L'osservatore è facoltativo: un turno
+/// con queste 3 confermate è pienamente operativo anche senza osservatore
+/// (vincolo di dominio esplicitato dall'utente, vedi ADR-0025
+/// "Aggiornamento").
+const requiredRolesForCompletion = {
+  ShiftRole.driver,
+  ShiftRole.leader,
+  ShiftRole.rescuer,
+};
 
 /// Copertura di una singola figura su un'occorrenza — quattro di queste
 /// compongono `ShiftOccurrence.roles`, sempre nello stesso ordine di
@@ -74,7 +87,7 @@ class RoleCoverage {
       myBookingStatus == null && status != ShiftOccurrenceStatus.confirmed;
 
   factory RoleCoverage.fromJson(Map<String, dynamic> json) {
-    final role = _parseRole(json['role'] as String);
+    final role = parseShiftRole(json['role'] as String);
     if (role == null) {
       throw FormatException('unknown role in response: ${json['role']}');
     }
@@ -128,6 +141,12 @@ class ShiftOccurrence {
 
   RoleCoverage coverageFor(ShiftRole role) =>
       roles.firstWhere((rc) => rc.role == role);
+
+  /// Vero quando le 3 figure richieste (vedi [requiredRolesForCompletion])
+  /// sono tutte confermate — l'osservatore, libero o meno, non influisce.
+  bool get isComplete => roles
+      .where((rc) => requiredRolesForCompletion.contains(rc.role))
+      .every((rc) => rc.status == ShiftOccurrenceStatus.confirmed);
 
   factory ShiftOccurrence.fromJson(Map<String, dynamic> json) {
     return ShiftOccurrence(

@@ -5,7 +5,8 @@
   "common": {
     "loading": "Loading...",
     "retry": "Retry",
-    "logout": "Log out"
+    "logout": "Log out",
+    "cancel": "Cancel"
   },
   "login": {
     "title": "Log in",
@@ -69,6 +70,8 @@
     "coming_soon_badge": "Coming soon",
     "shifts_title": "Shifts",
     "shifts_subtitle": "Scheduling and availability",
+    "shift_management_title": "Shift management",
+    "shift_management_subtitle": "Coverage, requests and shift templates",
     "fleet_title": "Fleet and warehouse",
     "fleet_subtitle": "Vehicles, supplies and maintenance",
     "emergencies_title": "Emergency services",
@@ -168,6 +171,33 @@
     "selection_count_other": "{count} positions selected",
     "submit_request": "Send request",
     "request_sent": "Request sent.",
-    "request_failed": "Couldn't complete the request. Try again."
+    "request_failed": "Couldn't complete the request. Try again.",
+    "manage_title": "Shift management",
+    "tab_coverage": "Coverage",
+    "tab_requests": "Requests",
+    "tab_templates": "Shift templates",
+    "assign": "Assign",
+    "assign_title": "Assign a volunteer",
+    "assign_success": "Volunteer assigned.",
+    "no_pending_requests": "No pending requests.",
+    "approve": "Approve",
+    "reject": "Reject",
+    "weekday_0": "Sunday",
+    "weekday_1": "Monday",
+    "weekday_2": "Tuesday",
+    "weekday_3": "Wednesday",
+    "weekday_4": "Thursday",
+    "weekday_5": "Friday",
+    "weekday_6": "Saturday",
+    "template_weekday": "Day of the week",
+    "template_start_time": "Start",
+    "template_end_time": "End",
+    "template_time_invalid": "Invalid time format (HH:MM)",
+    "template_label": "Shift name",
+    "template_label_required": "Enter a name",
+    "template_active": "Active",
+    "template_inactive": "Inactive",
+    "template_new": "New shift template",
+    "template_save": "Save"
   }
 }

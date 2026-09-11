@@ -23,12 +23,14 @@ class MonthView extends StatefulWidget {
     required this.selection,
     required this.selectable,
     required this.onToggle,
+    this.onAssign,
   });
 
   final ShiftsFilter filter;
   final Set<String> selection;
   final bool selectable;
   final void Function(ShiftOccurrence occurrence, ShiftRole role) onToggle;
+  final void Function(ShiftOccurrence occurrence, ShiftRole role)? onAssign;
 
   @override
   State<MonthView> createState() => _MonthViewState();
@@ -181,6 +183,7 @@ class _MonthViewState extends State<MonthView> {
                     selectable: widget.selectable,
                     selection: widget.selection,
                     onToggle: widget.onToggle,
+                    onAssign: widget.onAssign,
                   ),
             ],
           ],

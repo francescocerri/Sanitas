@@ -16,12 +16,17 @@ class DayView extends StatefulWidget {
     required this.selection,
     required this.selectable,
     required this.onToggle,
+    this.onAssign,
   });
 
   final ShiftsFilter filter;
   final Set<String> selection;
   final bool selectable;
   final void Function(ShiftOccurrence occurrence, ShiftRole role) onToggle;
+
+  /// Vedi `OccurrenceCard.onAssign` — non-null solo nella vista Copertura
+  /// del gestore turni.
+  final void Function(ShiftOccurrence occurrence, ShiftRole role)? onAssign;
 
   @override
   State<DayView> createState() => _DayViewState();
@@ -79,6 +84,7 @@ class _DayViewState extends State<DayView> {
                     selectable: widget.selectable,
                     selection: widget.selection,
                     onToggle: widget.onToggle,
+                    onAssign: widget.onAssign,
                   ),
               ],
             );

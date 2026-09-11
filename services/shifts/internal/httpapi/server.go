@@ -56,6 +56,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST "+v1+"/shift-bookings/direct", s.requirePermission(permShiftsWrite, s.handleCreateDirectBooking))
 	mux.HandleFunc("PATCH "+v1+"/shift-bookings/{id}", s.requirePermission(permShiftsWrite, s.handleDecideBooking))
 	mux.HandleFunc("GET "+v1+"/shift-bookings/pending-count", s.requirePermission(permShiftsWrite, s.handlePendingBookingsCount))
+	mux.HandleFunc("GET "+v1+"/shift-bookings/pending", s.requirePermission(permShiftsWrite, s.handleListPendingBookings))
 	mux.Handle("GET /docs/", docsHandler())
 	return s.withLogging(s.withCORS(mux))
 }

@@ -115,12 +115,17 @@ MyBookingStatus? myAggregateStatus(ShiftOccurrence occurrence) {
 /// Colore del singolo pallino aggregato per turno usato dalla vista Mese
 /// (un pallino per turno, non uno per figura — il dettaglio per figura
 /// resta nella card espansa). Priorità: una mia figura confermata o in
-/// attesa vince su tutto; altrimenti almeno una figura ancora libera
-/// (verde) vince su "tutte occupate ma non tutte confermate" (ambra);
-/// tutte e 4 confermate è l'unico caso "completo" (grigio).
+/// attesa vince su tutto; altrimenti il turno è "al completo" (grigio, vedi
+/// `ShiftOccurrence.isComplete`) appena autista/leader/soccorritore sono
+/// confermati, indipendentemente dall'osservatore — solo se non è ancora al
+/// completo si guarda se resta almeno una figura libera (verde) o solo
+/// figure in attesa (ambra).
 Color occurrenceCardColor(BuildContext context, ShiftOccurrence occurrence) {
   if (myAggregateStatus(occurrence) != null) {
     return Theme.of(context).colorScheme.primary;
+  }
+  if (occurrence.isComplete) {
+    return Theme.of(context).colorScheme.onSurfaceVariant;
   }
   if (occurrence.roles.any((rc) => rc.status == ShiftOccurrenceStatus.free)) {
     return Colors.green.shade600;

@@ -343,6 +343,25 @@ func (r *Repository) HasBookingForVolunteer(ctx context.Context, templateID stri
 	return n > 0, nil
 }
 
+// ListPendingBookings returns every pending booking, oldest slot first — the
+// shift manager's "Richieste" tab detail list (voce 11 del backlog).
+// Deliberately not scoped to a date range (unlike ListOccurrences): a
+// manager needs to see every outstanding request regardless of which
+// calendar range happens to be on screen. Volunteer name and template label
+// are NOT resolved here — the caller already knows both via
+// registry.GET /v1/users and shifts.GET /v1/shift-templates, so this stays
+// a thin read instead of a cross-schema join.
+func (r *Repository) ListPendingBookings(ctx context.Context) ([]Booking, error) {
+	result := []Booking{}
+	if err := r.db.WithContext(ctx).
+		Where("status = ?", BookingStatusPending).
+		Order("date, start_time").
+		Find(&result).Error; err != nil {
+		return nil, fmt.Errorf("shift: list pending bookings: %w", err)
+	}
+	return result, nil
+}
+
 // CountPendingBookings is the shift manager's in-app badge count — global,
 // not scoped to any date range (unlike ListOccurrences), so it stays
 // accurate regardless of what the calendar happens to be showing.

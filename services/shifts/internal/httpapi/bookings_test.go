@@ -287,6 +287,72 @@ func TestPendingBookingsCount_ReturnsCount(t *testing.T) {
 	}
 }
 
+func TestListPendingBookings_RequiresWritePermission(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/shift-bookings/pending", nil)
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsRead}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestListPendingBookings_ReturnsDetailForEachPendingBooking(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))
+	volunteerToken := issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest})
+	date := futureThursday(t).Format(dateLayout)
+
+	body, _ := json.Marshal(createBookingRequest{TemplateID: tpl.ID, Date: date, Role: "driver"})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+volunteerToken)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("setup booking: expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/shift-bookings/pending", nil)
+	listReq.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsWrite}))
+	listRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+	var got []shift.Booking
+	if err := json.Unmarshal(listRec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 pending booking, got %d", len(got))
+	}
+	if got[0].TemplateID != tpl.ID || got[0].Role != "driver" || got[0].VolunteerID != testVolunteerID {
+		t.Fatalf("unexpected booking detail: %+v", got[0])
+	}
+}
+
+func TestListPendingBookings_EmptyWhenNoneArePending(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/shift-bookings/pending", nil)
+	req.Header.Set("Authorization", "Bearer "+issuer.token(t, []string{permShiftsWrite}))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var got []shift.Booking
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected empty list, got %d", len(got))
+	}
+}
+
 func TestDecideBooking_RequiresWritePermission(t *testing.T) {
 	server, issuer := newTestServerWithIssuer(t)
 	tpl := createTestTemplate(t, server, issuer.token(t, []string{permShiftsConfigure}))

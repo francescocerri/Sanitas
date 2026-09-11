@@ -367,6 +367,27 @@ paths:
         (requires the shifts:write permission)
       tags:
       - shift-bookings
+  /v1/shift-bookings/pending:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking'
+            type: array
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:write'
+      security:
+      - BearerAuth: []
+      summary: List pending booking requests with full detail (requires the shifts:write
+        permission)
+      tags:
+      - shift-bookings
   /v1/shift-bookings/pending-count:
     get:
       produces:

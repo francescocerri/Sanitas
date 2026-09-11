@@ -519,6 +519,51 @@ func TestRepository_CountPendingBookings(t *testing.T) {
 	}
 }
 
+func TestRepository_ListPendingBookings_OnlyPendingStatus(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+	date := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+
+	pending, err := repo.ListPendingBookings(ctx)
+	if err != nil {
+		t.Fatalf("ListPendingBookings: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("expected 0 before any booking exists, got %d", len(pending))
+	}
+
+	confirmed, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleDriver, Date: date, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	if err != nil {
+		t.Fatalf("CreateBooking (confirmed): %v", err)
+	}
+	if err := testDB.Model(&Booking{}).Where("id = ?", confirmed.ID).Update("status", BookingStatusConfirmed).Error; err != nil {
+		t.Fatalf("confirm booking: %v", err)
+	}
+	stillPending, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleLeader, Date: date.AddDate(0, 0, 7), StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	if err != nil {
+		t.Fatalf("CreateBooking (pending): %v", err)
+	}
+	rejected, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: BookingRoleRescuer, Date: date.AddDate(0, 0, 14), StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	if err != nil {
+		t.Fatalf("CreateBooking (rejected): %v", err)
+	}
+	if err := testDB.Model(&Booking{}).Where("id = ?", rejected.ID).Update("status", BookingStatusRejected).Error; err != nil {
+		t.Fatalf("reject booking: %v", err)
+	}
+
+	pending, err = repo.ListPendingBookings(ctx)
+	if err != nil {
+		t.Fatalf("ListPendingBookings: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("expected 1 (only the pending one), got %d", len(pending))
+	}
+	if pending[0].ID != stillPending.ID {
+		t.Fatalf("expected the pending booking %s, got %s", stillPending.ID, pending[0].ID)
+	}
+}
+
 func TestRepository_DecideBooking_Confirm(t *testing.T) {
 	repo := newTestRepository(t)
 	ctx := context.Background()

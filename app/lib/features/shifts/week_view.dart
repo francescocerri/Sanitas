@@ -23,12 +23,14 @@ class WeekView extends StatefulWidget {
     required this.selection,
     required this.selectable,
     required this.onToggle,
+    this.onAssign,
   });
 
   final ShiftsFilter filter;
   final Set<String> selection;
   final bool selectable;
   final void Function(ShiftOccurrence occurrence, ShiftRole role) onToggle;
+  final void Function(ShiftOccurrence occurrence, ShiftRole role)? onAssign;
 
   @override
   State<WeekView> createState() => _WeekViewState();
@@ -84,6 +86,7 @@ class _WeekViewState extends State<WeekView> {
                     selectable: widget.selectable,
                     selection: widget.selection,
                     onToggle: widget.onToggle,
+                    onAssign: widget.onAssign,
                   ),
                 ],
               ],
@@ -102,6 +105,7 @@ class _DayGroup extends StatelessWidget {
     required this.selectable,
     required this.selection,
     required this.onToggle,
+    this.onAssign,
   });
 
   final DateTime day;
@@ -109,6 +113,7 @@ class _DayGroup extends StatelessWidget {
   final bool selectable;
   final Set<String> selection;
   final void Function(ShiftOccurrence occurrence, ShiftRole role) onToggle;
+  final void Function(ShiftOccurrence occurrence, ShiftRole role)? onAssign;
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +149,7 @@ class _DayGroup extends StatelessWidget {
                 selectable: selectable,
                 selection: selection,
                 onToggle: onToggle,
+                onAssign: onAssign,
               ),
         ],
       ),

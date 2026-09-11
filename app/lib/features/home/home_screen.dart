@@ -7,7 +7,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/widgets/theme_toggle_button.dart';
 import '../create_user/create_user_screen.dart' show canManageUsersProvider;
-import '../shifts/shifts_providers.dart' show canViewShiftsProvider;
+import '../shifts/shifts_providers.dart'
+    show canAccessShiftManagementProvider, canViewShiftsProvider;
 
 /// Schermata su cui si atterra dopo il login (vedi `router.dart`): un
 /// punto di partenza unico da cui raggiungere le varie aree dell'app,
@@ -40,6 +41,7 @@ class HomeScreen extends ConsumerWidget {
     final username = ref.watch(authControllerProvider).claims?.username ?? '';
     final canManageUsers = ref.watch(canManageUsersProvider);
     final canViewShifts = ref.watch(canViewShiftsProvider);
+    final canManageShifts = ref.watch(canAccessShiftManagementProvider);
 
     final activeCards = [
       _HomeCard(
@@ -71,6 +73,14 @@ class HomeScreen extends ConsumerWidget {
           title: 'home.shifts_title'.tr(),
           subtitle: 'home.shifts_subtitle'.tr(),
           onTap: () => context.go('/shifts'),
+        ),
+      if (canManageShifts)
+        _HomeCard(
+          icon: Icons.fact_check_outlined,
+          title: 'home.shift_management_title'.tr(),
+          subtitle: 'home.shift_management_subtitle'.tr(),
+          badge: 'home.admin_badge'.tr(),
+          onTap: () => context.go('/shifts/manage'),
         ),
     ];
 

@@ -389,6 +389,24 @@ func (s *Server) handleDecideBooking(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, decided)
 }
 
+// @Summary	List pending booking requests with full detail (requires the shifts:write permission)
+// @Tags		shift-bookings
+// @Produce	json
+// @Security	BearerAuth
+// @Success	200	{array}	shift.Booking
+// @Failure	401	"Authentication required"
+// @Failure	403	"Missing required permission: shifts:write"
+// @Router		/v1/shift-bookings/pending [get]
+func (s *Server) handleListPendingBookings(w http.ResponseWriter, r *http.Request) {
+	pending, err := s.repo.ListPendingBookings(r.Context())
+	if err != nil {
+		s.logger.Error("list pending bookings", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, pending)
+}
+
 type pendingBookingsCountResponse struct {
 	PendingCount int `json:"pending_count"`
 }

@@ -17,6 +17,7 @@ class OccurrenceCard extends StatefulWidget {
     required this.selectable,
     required this.selection,
     required this.onToggle,
+    this.onAssign,
   });
 
   final ShiftOccurrence occurrence;
@@ -31,6 +32,14 @@ class OccurrenceCard extends StatefulWidget {
   /// questa card si limita a controllare le proprie.
   final Set<String> selection;
   final void Function(ShiftOccurrence occurrence, ShiftRole role) onToggle;
+
+  /// Non-null solo nella schermata del gestore turni (`shifts:write`): al
+  /// posto di checkbox/badge, ogni figura non ancora confermata mostra un
+  /// bottone "Assegna" che apre il selettore volontario — un'azione diretta
+  /// e immediata (`POST /v1/shift-bookings/direct`), non una selezione da
+  /// accumulare, quindi ignora `selectable`/`selection`/`onToggle` quando è
+  /// presente.
+  final void Function(ShiftOccurrence occurrence, ShiftRole role)? onAssign;
 
   @override
   State<OccurrenceCard> createState() => _OccurrenceCardState();
@@ -126,6 +135,12 @@ class _OccurrenceCardState extends State<OccurrenceCard> {
                             ? 'shifts.mine_badge_pending'.tr()
                             : mine == MyBookingStatus.confirmed
                             ? 'shifts.mine_badge_confirmed'.tr()
+                            // Al completo appena autista/leader/soccorritore
+                            // sono confermati (vedi `isComplete`), anche se
+                            // l'osservatore resta libero — niente "1/4
+                            // libero" fuorviante in quel caso.
+                            : occurrence.isComplete
+                            ? 'shifts.status_confirmed'.tr()
                             : 'shifts.card_open_count'.tr(
                                 namedArgs: {'count': '$openCount'},
                               ),
@@ -177,6 +192,12 @@ class _OccurrenceCardState extends State<OccurrenceCard> {
                             ),
                             onToggle: () =>
                                 widget.onToggle(occurrence, coverage.role),
+                            onAssign: widget.onAssign == null
+                                ? null
+                                : () => widget.onAssign!(
+                                    occurrence,
+                                    coverage.role,
+                                  ),
                           ),
                       ],
                     ),
@@ -195,6 +216,7 @@ class _RoleRow extends StatelessWidget {
     required this.locked,
     required this.selected,
     required this.onToggle,
+    this.onAssign,
   });
 
   final RoleCoverage coverage;
@@ -209,11 +231,17 @@ class _RoleRow extends StatelessWidget {
   final bool selected;
   final VoidCallback onToggle;
 
+  /// Non-null solo nella schermata del gestore turni — vedi
+  /// `OccurrenceCard.onAssign`.
+  final VoidCallback? onAssign;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final showCheckbox = selectable && coverage.isBookable;
-    final showMineBadge = coverage.myBookingStatus != null;
+    final showAssignButton =
+        onAssign != null && coverage.status != ShiftOccurrenceStatus.confirmed;
+    final showCheckbox = onAssign == null && selectable && coverage.isBookable;
+    final showMineBadge = onAssign == null && coverage.myBookingStatus != null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -261,7 +289,17 @@ class _RoleRow extends StatelessWidget {
               ],
             ),
           ),
-          if (showCheckbox)
+          if (showAssignButton)
+            OutlinedButton(
+              onPressed: onAssign,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                textStyle: theme.textTheme.labelSmall,
+              ),
+              child: Text('shifts.assign'.tr()),
+            )
+          else if (showCheckbox)
             Checkbox(
               value: selected,
               onChanged: (locked && !selected) ? null : (_) => onToggle(),
