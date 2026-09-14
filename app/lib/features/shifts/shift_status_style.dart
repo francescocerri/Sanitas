@@ -145,9 +145,26 @@ OccurrenceAggregateStatus aggregateStatus(ShiftOccurrence occurrence) {
 
 /// Colore del singolo pallino aggregato per turno usato dalla vista Mese
 /// (un pallino per turno, non uno per figura — il dettaglio per figura
-/// resta nella card espansa). Priorità: una mia figura confermata o in
-/// attesa vince su tutto; altrimenti segue [aggregateStatus].
+/// resta nella card espansa). Priorità: [ShiftOccurrence.operationalStatus]
+/// (se presente, l'occorrenza è passata: l'esito oggettivo — si è svolta o
+/// no — conta più di chi ci fosse) vince su tutto; altrimenti una mia
+/// figura confermata o in attesa vince sul resto; altrimenti segue
+/// [aggregateStatus]. "Ridotto" usa un blu dedicato (non fa parte della
+/// palette per-comitato, stesso principio di verde/ambra qui sopra);
+/// "chiuso" riusa il grigio di "completo" — la X viene disegnata sopra da
+/// chi consuma [occurrenceCardClosedMarker], il colore da solo non basta a
+/// distinguerli.
 Color occurrenceCardColor(BuildContext context, ShiftOccurrence occurrence) {
+  final operational = occurrence.operationalStatus;
+  if (operational != null) {
+    switch (operational) {
+      case ShiftOperationalStatus.complete:
+      case ShiftOperationalStatus.closed:
+        return Theme.of(context).colorScheme.onSurfaceVariant;
+      case ShiftOperationalStatus.reduced:
+        return Colors.blue.shade600;
+    }
+  }
   if (myAggregateStatus(occurrence) != null) {
     return Theme.of(context).colorScheme.primary;
   }
@@ -163,9 +180,18 @@ Color occurrenceCardColor(BuildContext context, ShiftOccurrence occurrence) {
 
 /// true solo quando l'aggregato è "mia richiesta in attesa" — stesso
 /// trattamento anello-vs-pieno di [roleIsOutlineOnly], applicato al
-/// pallino per turno invece che a quello per figura.
+/// pallino per turno invece che a quello per figura. Mai true su
+/// un'occorrenza passata (`operationalStatus` non nullo): l'esito
+/// oggettivo prende il posto di "mio" anche qui, niente anello.
 bool occurrenceCardOutline(ShiftOccurrence occurrence) =>
+    occurrence.operationalStatus == null &&
     myAggregateStatus(occurrence) == MyBookingStatus.pending;
+
+/// true solo per un'occorrenza passata risultata "chiusa" (autista o
+/// leader non confermati) — chi disegna il pallino Mese ci sovrappone una
+/// piccola X, il colore da solo (uguale a "completo") non li distingue.
+bool occurrenceCardClosedMarker(ShiftOccurrence occurrence) =>
+    occurrence.operationalStatus == ShiftOperationalStatus.closed;
 
 /// Testo del riepilogo compatto di una card chiusa (tutte le viste: Mese,
 /// Settimana, Giorno, Lista) — stessa priorità di [occurrenceCardColor],
@@ -206,4 +232,65 @@ String occurrenceSummaryLabel(
     case OccurrenceAggregateStatus.free:
       return 'shifts.card_open_count'.tr(namedArgs: {'count': '$openCount'});
   }
+}
+
+/// Sfondo, testo, icona opzionale ed etichetta del badge di riepilogo
+/// della card chiusa (tutte le viste) — un solo punto che decide TUTTO lo
+/// stile del badge, così `occurrence_card.dart` si limita a disegnarlo.
+/// Se `operationalStatus` è presente (occorrenza passata) ha priorità
+/// assoluta, stesso principio di [occurrenceCardColor]: niente più "mio"
+/// né libero/in attesa, solo l'esito oggettivo — "chiuso" è l'unico caso
+/// con un'icona (una X, richiesta esplicitamente dall'utente nel mockup
+/// approvato). Altrimenti ricade sulla stessa logica "mio"/[aggregateStatus]
+/// di sempre via [occurrenceSummaryLabel].
+typedef OccurrenceSummaryBadge = ({
+  Color background,
+  Color foreground,
+  IconData? icon,
+  String label,
+});
+
+OccurrenceSummaryBadge occurrenceSummaryBadge(
+  BuildContext context,
+  ShiftOccurrence occurrence, {
+  required int openCount,
+}) {
+  final theme = Theme.of(context);
+  final operational = occurrence.operationalStatus;
+  if (operational != null) {
+    switch (operational) {
+      case ShiftOperationalStatus.complete:
+        return (
+          background: theme.colorScheme.surfaceContainerHighest,
+          foreground: theme.colorScheme.onSurfaceVariant,
+          icon: null,
+          label: 'shifts.status_confirmed'.tr(),
+        );
+      case ShiftOperationalStatus.reduced:
+        return (
+          background: Colors.blue.shade50,
+          foreground: Colors.blue.shade800,
+          icon: null,
+          label: 'shifts.status_reduced'.tr(),
+        );
+      case ShiftOperationalStatus.closed:
+        return (
+          background: Colors.red.shade50,
+          foreground: Colors.red.shade800,
+          icon: Icons.close_rounded,
+          label: 'shifts.status_closed'.tr(),
+        );
+    }
+  }
+  final mine = myAggregateStatus(occurrence);
+  return (
+    background: mine != null
+        ? theme.colorScheme.primaryContainer
+        : theme.colorScheme.surfaceContainerHighest,
+    foreground: mine != null
+        ? theme.colorScheme.onPrimaryContainer
+        : theme.colorScheme.onSurfaceVariant,
+    icon: null,
+    label: occurrenceSummaryLabel(occurrence, openCount: openCount),
+  );
 }

@@ -15,6 +15,18 @@ Oltre allo stato per figura (libero/in attesa/confermato), ogni turno ha uno **s
 3. **In attesa** (ambra) — non completo, e almeno una delle 3 figure operative ha una richiesta pending. Vince **sempre** su "libero", anche se un'altra figura operativa o l'osservatore sono ancora liberi: una richiesta da decidere non deve mai sparire dietro un pallino verde. Deciso esplicitamente così dopo aver notato che, con 2 figure confermate e 1 in attesa, il turno appariva ancora "libero" sul calendario. Il riepilogo testuale della card (non il pallino, che resta solo un colore) mostra anche quante figure OPERATIVE restano comunque libere ("In attesa · N/3 libero", osservatore sempre escluso dal conteggio) invece del solo "In attesa" — non ha senso nascondere che c'è ancora posto solo perché c'è anche una decisione in sospeso. Stesso conteggio anche quando l'aggregato è "mio" (confermato/in attesa per me): "Confermato · N/3 libero" invece del solo "Confermato", per non nascondere che restano altre figure operative da coprire.
 4. **Libero** (verde) — non completo, nessuna figura operativa in attesa: resta almeno un posto apertamente prenotabile.
 
+### Stato operativo di un turno passato
+
+Lo stato aggregato sopra ha senso solo finché un turno è ancora prenotabile. Una volta che la data è passata, il calendario mostra invece l'**esito operativo** — si è svolto o no, e con quale equipaggio — pensato soprattutto per statistiche future (es. "quanti turni chiusi nell'ultimo mese"), calcolato dal backend (`GET /v1/shift-occurrences`, campo `operational_status`) e non più dal client:
+
+- **Completo** (grigio, invariato) — autista, leader e soccorritore tutti confermati.
+- **Ridotto** (blu) — solo autista e leader confermati (il soccorritore no): equipaggio minimo, il turno si è comunque svolto.
+- **Chiuso** (una X rossa al posto del pallino, badge rosso con icona) — qualunque altra combinazione (manca l'autista o il leader, es. solo leader+soccorritore o solo autista+soccorritore): l'associazione non ha trovato l'equipaggio minimo, il turno **non** si è svolto.
+
+Regola di dominio: autista e leader devono essere **entrambi** confermati perché il turno si sia svolto — il soccorritore distingue solo "completo" da "ridotto", non supplisce mai a un autista o un leader mancante. Questo esito vince sempre su tutto il resto una volta calcolato (anche su "è il mio turno": una figura mia confermata su un turno poi risultato chiuso mostra comunque "Chiuso", non il badge personale) — l'oggettivo "si è svolto o no" conta più di chi c'era. Per un turno di oggi o futuro `operational_status` non esiste ancora (resta `null`/assente): tutto ciò che c'è sopra (libero/in attesa/completo aggregato) resta valido fino a quel momento.
+
+**Limite noto**: l'esito operativo si calcola solo per i turni-template **attualmente attivi** — se un turno-template viene disattivato, anche la sua storia passata sparisce dal calendario insieme a lui. Non affrontato in questa iterazione (vedi ADR-0025), da rivedere quando si costruiranno davvero le statistiche.
+
 ## Chi può fare cosa oggi
 
 - **Chi ha il permesso `shifts:configure` tramite i propri ruoli** (nel Comitato di Pavullo, solo il ruolo "Responsabile turni") può creare un turno-template ricorrente (giorno della settimana + orario, es. "giovedì 20:00–08:00") e modificarne uno esistente, incluso disattivarlo.

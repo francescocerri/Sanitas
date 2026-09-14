@@ -591,6 +591,14 @@ const docTemplate = `{
                 "label": {
                     "type": "string"
                 },
+                "operational_status": {
+                    "description": "OperationalStatus is set only once Date is in the past — see\nOperationalStatus.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.OperationalStatus"
+                        }
+                    ]
+                },
                 "roles": {
                     "type": "array",
                     "items": {
@@ -619,6 +627,19 @@ const docTemplate = `{
                 "OccurrenceStatusFree",
                 "OccurrenceStatusPending",
                 "OccurrenceStatusConfirmed"
+            ]
+        },
+        "github_com_francescocerri_sanitas_services_shifts_internal_shift.OperationalStatus": {
+            "type": "string",
+            "enum": [
+                "complete",
+                "reduced",
+                "closed"
+            ],
+            "x-enum-varnames": [
+                "OperationalStatusComplete",
+                "OperationalStatusReduced",
+                "OperationalStatusClosed"
             ]
         },
         "github_com_francescocerri_sanitas_services_shifts_internal_shift.RoleCoverage": {

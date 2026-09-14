@@ -142,27 +142,40 @@ class _MonthViewState extends State<MonthView> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       for (final occurrence in events.take(3))
-                        Container(
-                          width: 6,
-                          height: 6,
-                          margin: const EdgeInsets.symmetric(horizontal: 1),
-                          decoration: occurrenceCardOutline(occurrence)
-                              ? BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: occurrenceCardColor(
-                                      context,
-                                      occurrence,
-                                    ),
-                                    width: 1.2,
-                                  ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 1),
+                          // Un turno "chiuso" (vedi
+                          // `occurrenceCardClosedMarker`) è una X diretta,
+                          // non un pallino con una X sovrapposta: a 6px un
+                          // cerchio più un'icona sopra risultava illeggibile
+                          // — segnalato esplicitamente dall'utente.
+                          child: occurrenceCardClosedMarker(occurrence)
+                              ? Icon(
+                                  Icons.close_rounded,
+                                  size: 9,
+                                  color: Colors.red.shade700,
                                 )
-                              : BoxDecoration(
-                                  color: occurrenceCardColor(
-                                    context,
-                                    occurrence,
-                                  ),
-                                  shape: BoxShape.circle,
+                              : Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: occurrenceCardOutline(occurrence)
+                                      ? BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: occurrenceCardColor(
+                                              context,
+                                              occurrence,
+                                            ),
+                                            width: 1.2,
+                                          ),
+                                        )
+                                      : BoxDecoration(
+                                          color: occurrenceCardColor(
+                                            context,
+                                            occurrence,
+                                          ),
+                                          shape: BoxShape.circle,
+                                        ),
                                 ),
                         ),
                     ],

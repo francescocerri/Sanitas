@@ -158,6 +158,8 @@
     "status_free": "Libero",
     "status_pending": "In attesa",
     "status_confirmed": "Completo",
+    "status_reduced": "Ridotto",
+    "status_closed": "Chiuso",
     "status_confirmed_by": "Confermato: {name}",
     "status_mine_pending": "Tua richiesta in attesa",
     "status_mine_confirmed": "Confermato per te",

@@ -14,7 +14,10 @@ RoleCoverage _role(
   volunteerId: volunteerId,
 );
 
-ShiftOccurrence _occurrence(List<RoleCoverage> roles) => ShiftOccurrence(
+ShiftOccurrence _occurrence(
+  List<RoleCoverage> roles, {
+  ShiftOperationalStatus? operationalStatus,
+}) => ShiftOccurrence(
   templateId: 'tpl',
   date: DateTime(2026, 1, 1),
   weekday: 4,
@@ -22,6 +25,7 @@ ShiftOccurrence _occurrence(List<RoleCoverage> roles) => ShiftOccurrence(
   endTime: '08:00',
   label: 'Turno',
   roles: roles,
+  operationalStatus: operationalStatus,
 );
 
 void main() {

@@ -280,6 +280,12 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, ca
 		}
 	}
 
+	// Same cutoff as parseAndValidateBookingDate in internal/httpapi
+	// (different package, so replicated rather than shared): today itself
+	// still counts as "not passed yet" — a shift happening tonight hasn't
+	// been decided yet, only a day strictly before today has.
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+
 	// Date-outer, template-inner: templates are already ordered by
 	// (weekday, start_time), so this loop produces occurrences already
 	// sorted by (date, start_time) — no separate sort needed.
@@ -308,14 +314,20 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, ca
 				}
 				roles = append(roles, RoleCoverage{Role: role, Status: status, MyBookingStatus: myStatus, VolunteerID: volunteerID})
 			}
+			var operationalStatus *OperationalStatus
+			if d.Before(today) {
+				s := operationalStatusFor(roles)
+				operationalStatus = &s
+			}
 			occurrences = append(occurrences, Occurrence{
-				TemplateID: t.ID,
-				Date:       d,
-				Weekday:    weekday,
-				StartTime:  t.StartTime,
-				EndTime:    t.EndTime,
-				Label:      t.Label,
-				Roles:      roles,
+				TemplateID:        t.ID,
+				Date:              d,
+				Weekday:           weekday,
+				StartTime:         t.StartTime,
+				EndTime:           t.EndTime,
+				Label:             t.Label,
+				Roles:             roles,
+				OperationalStatus: operationalStatus,
 			})
 		}
 	}

@@ -33,6 +33,28 @@ MyBookingStatus? _parseMyBookingStatus(String? raw) {
   }
 }
 
+/// Esito operativo di un'INTERA occorrenza, non di una singola figura —
+/// diverso da [ShiftOccurrenceStatus]: valorizzato dal backend SOLO quando
+/// la data dell'occorrenza è già passata (vedi
+/// `shift.OperationalStatus`/`operationalStatusFor` in
+/// `services/shifts/internal/shift/occurrence.go`). Finché è null lo stato
+/// libero/in attesa/completo per figura resta l'unico segnale valido —
+/// vedi ADR-0025 "Aggiornamento (stato operativo: completo/ridotto/chiuso)".
+enum ShiftOperationalStatus { complete, reduced, closed }
+
+ShiftOperationalStatus? _parseOperationalStatus(String? raw) {
+  switch (raw) {
+    case 'complete':
+      return ShiftOperationalStatus.complete;
+    case 'reduced':
+      return ShiftOperationalStatus.reduced;
+    case 'closed':
+      return ShiftOperationalStatus.closed;
+    default:
+      return null;
+  }
+}
+
 /// Le 4 figure che compongono un turno (vedi ADR-0025 "Aggiornamento") — un
 /// enum fisso, non configurabile per comitato: composizione di un
 /// equipaggio CRI, non una scelta specifica di Pavullo. Nomi delle
@@ -124,6 +146,7 @@ class ShiftOccurrence {
     required this.endTime,
     required this.label,
     required this.roles,
+    required this.operationalStatus,
   });
 
   final String templateId;
@@ -141,6 +164,10 @@ class ShiftOccurrence {
   /// Sempre esattamente 4 elementi, uno per `ShiftRole`, nello stesso
   /// ordine di `ShiftRole.values`.
   final List<RoleCoverage> roles;
+
+  /// Esito operativo, valorizzato dal backend SOLO se `date` è già
+  /// passata — vedi [ShiftOperationalStatus].
+  final ShiftOperationalStatus? operationalStatus;
 
   /// Solo la parte data, formato `YYYY-MM-DD` — usata sia per la chiave di
   /// selezione sia per il payload della richiesta bulk.
@@ -169,6 +196,9 @@ class ShiftOccurrence {
       roles: (json['roles'] as List<dynamic>)
           .map((r) => RoleCoverage.fromJson(r as Map<String, dynamic>))
           .toList(),
+      operationalStatus: _parseOperationalStatus(
+        json['operational_status'] as String?,
+      ),
     );
   }
 }

@@ -96,7 +96,11 @@ class _OccurrenceCardState extends ConsumerState<OccurrenceCard> {
               rc.status == ShiftOccurrenceStatus.free,
         )
         .length;
-    final mine = myAggregateStatus(occurrence);
+    final badge = occurrenceSummaryBadge(
+      context,
+      occurrence,
+      openCount: openCount,
+    );
     // Il backend rifiuta sempre una prenotazione (richiesta, assegnazione
     // diretta) su una data passata (`parseAndValidateBookingDate`), ma le
     // viste Giorno/Settimana/Mese permettono di navigare liberamente nel
@@ -156,22 +160,24 @@ class _OccurrenceCardState extends ConsumerState<OccurrenceCard> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: mine != null
-                            ? theme.colorScheme.primaryContainer
-                            : theme.colorScheme.surfaceContainerHighest,
+                        color: badge.background,
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: Text(
-                        occurrenceSummaryLabel(
-                          occurrence,
-                          openCount: openCount,
-                        ),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: mine != null
-                              ? theme.colorScheme.onPrimaryContainer
-                              : theme.colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (badge.icon != null) ...[
+                            Icon(badge.icon, size: 14, color: badge.foreground),
+                            const SizedBox(width: 4),
+                          ],
+                          Text(
+                            badge.label,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: badge.foreground,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Icon(

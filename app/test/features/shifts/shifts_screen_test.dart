@@ -377,6 +377,72 @@ void main() {
     },
   );
 
+  testWidgets(
+    'a past occurrence with operational_status "closed" shows "Chiuso" '
+    'with an X icon on the closed-card summary, overriding both the "mine" '
+    'badge (the caller had a confirmed role there) and the ordinary '
+    'libero/in attesa aggregate — the objective outcome wins once the '
+    'shift is over',
+    (tester) async {
+      final requests = <RequestOptions>[];
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requests.add(options);
+            if (options.path == '/v1/shift-occurrences') {
+              final from = options.queryParameters['from'] as String;
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: [
+                    {
+                      'template_id': 'tpl-closed',
+                      'date': '${from}T00:00:00Z',
+                      'weekday': 4,
+                      'start_time': '20:00',
+                      'end_time': '08:00',
+                      'label': 'Turno Passato',
+                      // Chiuso: manca l'autista (solo leader confermato,
+                      // dal chiamante stesso) — deve vincere su "Confermato
+                      // per te".
+                      'operational_status': 'closed',
+                      'roles': [
+                        _role('driver', 'free'),
+                        _role(
+                          'leader',
+                          'confirmed',
+                          myBookingStatus: 'confirmed',
+                        ),
+                        _role('rescuer', 'free'),
+                        _role('observer', 'free'),
+                      ],
+                    },
+                  ],
+                ),
+              );
+              return;
+            }
+            handler.resolve(Response(requestOptions: options, statusCode: 200));
+          },
+        ),
+      );
+      await mount(tester, dio, permissions: const ['shifts:read']);
+
+      await tester.tap(find.text('Lista'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Chiuso'), findsOneWidget);
+      expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+      // "Confermato per te" compare comunque nella legenda (sempre
+      // visibile, indipendente dai dati) — quello che conta è che il
+      // riepilogo della card NON lo usi per questa occorrenza chiusa.
+      expect(find.text('Confermato'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('selecting one role locks the other roles on the same slot '
       '(a volunteer can only hold one role per occurrence)', (tester) async {
     final requests = <RequestOptions>[];

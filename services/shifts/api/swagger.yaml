@@ -65,6 +65,12 @@ definitions:
         type: string
       label:
         type: string
+      operational_status:
+        allOf:
+        - $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.OperationalStatus'
+        description: |-
+          OperationalStatus is set only once Date is in the past — see
+          OperationalStatus.
       roles:
         items:
           $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.RoleCoverage'
@@ -86,6 +92,16 @@ definitions:
     - OccurrenceStatusFree
     - OccurrenceStatusPending
     - OccurrenceStatusConfirmed
+  github_com_francescocerri_sanitas_services_shifts_internal_shift.OperationalStatus:
+    enum:
+    - complete
+    - reduced
+    - closed
+    type: string
+    x-enum-varnames:
+    - OperationalStatusComplete
+    - OperationalStatusReduced
+    - OperationalStatusClosed
   github_com_francescocerri_sanitas_services_shifts_internal_shift.RoleCoverage:
     properties:
       my_booking_status:

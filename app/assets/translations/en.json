@@ -158,6 +158,8 @@
     "status_free": "Open",
     "status_pending": "Pending",
     "status_confirmed": "Full",
+    "status_reduced": "Reduced",
+    "status_closed": "Closed",
     "status_confirmed_by": "Confirmed: {name}",
     "status_mine_pending": "Your request is pending",
     "status_mine_confirmed": "Confirmed for you",

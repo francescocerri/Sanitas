@@ -271,3 +271,105 @@ func TestListOccurrences_MyBookingStatusOnlyForCaller(t *testing.T) {
 		t.Fatalf("expected aggregate status pending regardless of caller, got %s", rcCaller.Status)
 	}
 }
+
+// confirmRole creates an already-confirmed booking for role on tpl/date,
+// via CreateConfirmedBooking directly — repository-level tests bypass the
+// "one role per volunteer per occurrence" check that only the HTTP layer
+// enforces (checkSlotAvailability), so reusing testVolunteerID across
+// roles here is fine: only each role's own Status matters to
+// operationalStatusFor, not who holds it.
+func confirmRole(t *testing.T, repo *Repository, tpl ShiftTemplate, date time.Time, role BookingRole) {
+	t.Helper()
+	if _, err := repo.CreateConfirmedBooking(context.Background(), Booking{
+		TemplateID: tpl.ID, VolunteerID: testVolunteerID, Role: role, Date: date,
+		StartTime: tpl.StartTime, EndTime: tpl.EndTime,
+	}, testVolunteerID); err != nil {
+		t.Fatalf("CreateConfirmedBooking (%s): %v", role, err)
+	}
+}
+
+// nextThursdayAfter finds the next Thursday strictly after from — used to
+// get a genuinely future occurrence date, unlike the fixed thursday
+// fixture above (2026-09-10), which is already in the past by the time
+// these tests run.
+func nextThursdayAfter(from time.Time) time.Time {
+	d := from.AddDate(0, 0, 1)
+	for d.Weekday() != time.Thursday {
+		d = d.AddDate(0, 0, 1)
+	}
+	return d
+}
+
+func TestListOccurrences_OperationalStatusNilForFutureOccurrence(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+	future := nextThursdayAfter(time.Now().UTC())
+
+	confirmRole(t, repo, tpl, future, BookingRoleDriver)
+	confirmRole(t, repo, tpl, future, BookingRoleLeader)
+	confirmRole(t, repo, tpl, future, BookingRoleRescuer)
+
+	got, err := repo.ListOccurrences(ctx, future, future, testVolunteerID)
+	if err != nil {
+		t.Fatalf("ListOccurrences: %v", err)
+	}
+	if got[0].OperationalStatus != nil {
+		t.Fatalf("expected nil operational_status for a future occurrence even fully confirmed, got %v", *got[0].OperationalStatus)
+	}
+}
+
+func TestListOccurrences_OperationalStatusComplete(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+
+	confirmRole(t, repo, tpl, thursday, BookingRoleDriver)
+	confirmRole(t, repo, tpl, thursday, BookingRoleLeader)
+	confirmRole(t, repo, tpl, thursday, BookingRoleRescuer)
+
+	got, err := repo.ListOccurrences(ctx, thursday, thursday, testVolunteerID)
+	if err != nil {
+		t.Fatalf("ListOccurrences: %v", err)
+	}
+	if got[0].OperationalStatus == nil || *got[0].OperationalStatus != OperationalStatusComplete {
+		t.Fatalf("expected operational_status=complete, got %v", got[0].OperationalStatus)
+	}
+}
+
+func TestListOccurrences_OperationalStatusReduced(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+
+	confirmRole(t, repo, tpl, thursday, BookingRoleDriver)
+	confirmRole(t, repo, tpl, thursday, BookingRoleLeader)
+
+	got, err := repo.ListOccurrences(ctx, thursday, thursday, testVolunteerID)
+	if err != nil {
+		t.Fatalf("ListOccurrences: %v", err)
+	}
+	if got[0].OperationalStatus == nil || *got[0].OperationalStatus != OperationalStatusReduced {
+		t.Fatalf("expected operational_status=reduced (driver+leader only), got %v", got[0].OperationalStatus)
+	}
+}
+
+func TestListOccurrences_OperationalStatusClosed_MissingDriver(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+
+	// Leader + rescuer confirmed, driver missing — the exact "closed"
+	// example given by the user: 2 roles confirmed isn't enough on its
+	// own, it must be specifically driver+leader.
+	confirmRole(t, repo, tpl, thursday, BookingRoleLeader)
+	confirmRole(t, repo, tpl, thursday, BookingRoleRescuer)
+
+	got, err := repo.ListOccurrences(ctx, thursday, thursday, testVolunteerID)
+	if err != nil {
+		t.Fatalf("ListOccurrences: %v", err)
+	}
+	if got[0].OperationalStatus == nil || *got[0].OperationalStatus != OperationalStatusClosed {
+		t.Fatalf("expected operational_status=closed (missing driver), got %v", got[0].OperationalStatus)
+	}
+}
