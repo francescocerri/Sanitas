@@ -252,6 +252,13 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, ca
 
 	statusByKey := make(map[roleKey]OccurrenceStatus, len(bookings))
 	mineByKey := make(map[roleKey]BookingStatus, len(bookings))
+	// volunteerByKey only ever holds a CONFIRMED booking's volunteer — a
+	// pending request's identity stays hidden from everyone but the
+	// requester themselves (mineByKey above), see RoleCoverage.VolunteerID.
+	// At most one confirmed booking can exist per key (unique partial
+	// index on (template_id, date, role) WHERE status = 'confirmed'), so
+	// there's never a conflicting write here.
+	volunteerByKey := make(map[roleKey]string, len(bookings))
 	for _, b := range bookings {
 		if b.Status != BookingStatusPending && b.Status != BookingStatusConfirmed {
 			continue
@@ -263,6 +270,7 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, ca
 		status := OccurrenceStatusPending
 		if b.Status == BookingStatusConfirmed {
 			status = OccurrenceStatusConfirmed
+			volunteerByKey[key] = b.VolunteerID
 		}
 		if status == OccurrenceStatusConfirmed || statusByKey[key] != OccurrenceStatusConfirmed {
 			statusByKey[key] = status
@@ -294,7 +302,11 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, ca
 				if s, ok := mineByKey[key]; ok {
 					myStatus = &s
 				}
-				roles = append(roles, RoleCoverage{Role: role, Status: status, MyBookingStatus: myStatus})
+				var volunteerID *string
+				if v, ok := volunteerByKey[key]; ok {
+					volunteerID = &v
+				}
+				roles = append(roles, RoleCoverage{Role: role, Status: status, MyBookingStatus: myStatus, VolunteerID: volunteerID})
 			}
 			occurrences = append(occurrences, Occurrence{
 				TemplateID: t.ID,

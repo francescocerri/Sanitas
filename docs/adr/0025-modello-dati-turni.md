@@ -54,4 +54,33 @@ Le 4 figure sono un **enum fisso nel codice**, non configurabile per comitato (s
 
 ## Aggiornamento (voce di backlog 11, "al completo" senza l'osservatore)
 
-Emerso durante la verifica della schermata del gestore turni: un turno si considera "al completo" quando le **3 figure operative** — autista, leader, soccorritore — sono confermate; l'osservatore è facoltativo e la sua assenza non impedisce lo stato "completo" (`ShiftOccurrence.isComplete` lato Flutter, `requiredRolesForCompletion = {driver, leader, rescuer}`). Puramente una regola di presentazione lato client (il pallino del calendario mese e il badge della card usano questa soglia al posto di "tutte e 4 confermate"): non tocca lo schema né gli endpoint, `RoleCoverage`/`Occurrence` restano quelli descritti sopra, con tutte e 4 le figure sempre esposte.
+Emerso durante la verifica della schermata del gestore turni: un turno si considera "al completo" quando le **3 figure operative** — autista, leader, soccorritore — sono confermate; l'osservatore è facoltativo e la sua assenza non impedisce lo stato "completo" (`ShiftOccurrence.isComplete` lato Flutter, `requiredRolesForCompletion = {driver, leader, rescuer}`). Puramente una regola di presentazione lato client (il pallino del calendario mese e il badge della card usano questa soglia al posto di "tutte e 4 confermate"): non tocca lo schema né gli endpoint, `RoleCoverage`/`Occurrence` restano quelli descritti sopra, con tutte e 4 le figure sempre esposte. Lo stesso `isComplete` guida anche il filtro "Liberi" della schermata del volontario (voce 10): un turno già al completo non compare più lì, nemmeno con l'osservatore ancora libero.
+
+## Aggiornamento (voce di backlog 10, visibilità di chi è confermato)
+
+Richiesto esplicitamente dall'utente durante la verifica: chiunque abbia `shifts:read` (non solo il gestore turni) deve poter vedere il nome del volontario confermato su ciascuna figura — una richiesta ancora in attesa resta invece anonima come oggi, solo con l'indicazione "in attesa", finché non viene decisa.
+
+`RoleCoverage` guadagna `VolunteerID *string` (`omitempty`), popolato in `Repository.ListOccurrences` SOLO quando quella figura ha una prenotazione confermata — mai per una pending, indipendentemente da chi chiama (un volontario non vede il nome di chi ha fatto una richiesta pending diversa dalla propria, nemmeno se il turno poi risulta al completo). Nessun nuovo permesso: la visibilità segue semplicemente `shifts:read`, già richiesto per leggere l'endpoint.
+
+Il servizio `shifts` non conosce username/email (dominio di `registry`): il campo esposto è un id, risolto **lato client** con lo stesso `GET /v1/users` già usato da "Gestisci utenti" e dalla tab Richieste del gestore — `OccurrenceCard` (riusata identica da volontario e gestore) osserva `usersProvider` e mostra il nome se risolvibile, altrimenti ricade sul testo generico "Completo" (mai un id grezzo a schermo).
+
+## Aggiornamento (stato aggregato del turno, non solo per figura)
+
+Bug segnalato dall'utente in verifica: un turno con 3 figure confermate e una in attesa poteva comparire ancora come "libero" sul calendario, perché lo stato aggregato non era calcolato in un unico punto — `occurrenceCardColor` (pallino Mese, in `shift_status_style.dart`) e il badge della card chiusa (calcolato ad-hoc dentro `occurrence_card.dart`, `isComplete`/`openCount`) usavano due logiche indipendenti che potevano divergere, e nessuna delle due segnalava mai esplicitamente "in attesa" a livello di turno.
+
+**Deciso esplicitamente con l'utente**: un'unica funzione (`occurrenceStatus`/equivalente in `shift_status_style.dart`) calcola lo stato aggregato di un'occorrenza, riusata identica da pallino Mese e badge di Settimana/Giorno/Lista/Mese. Priorità, dalla più alta:
+
+1. **Propria figura** (in attesa o confermata) — vince sempre sullo stato reale del turno, anche se lo nasconde agli altri. Scelta esplicita: "è il mio turno" resta il segnale più utile per chi guarda; lo stato oggettivo (completo/in attesa/libero) resta comunque disponibile aprendo la card, niente secondo indicatore separato per ora.
+2. **Completo** — autista/leader/soccorritore tutti confermati (invariato, `isComplete`).
+3. **In attesa** — non completo, e almeno una delle 3 figure operative è in attesa. Vince **sempre** su "libero", anche con un'altra figura operativa o l'osservatore ancora liberi — è la correzione del bug: prima "libero" vinceva se restava anche un solo posto aperto altrove, nascondendo che c'era una decisione da prendere.
+4. **Libero** — nessuno dei casi sopra.
+
+Nessuna modifica allo schema o alla risposta di `GET /v1/shift-occurrences`: puro calcolo di presentazione lato client sugli stessi campi già esposti (`status`/`my_booking_status` per figura), stesso principio già seguito per `isComplete`.
+
+**Rifinitura immediata, stessa sessione**: il riepilogo testuale della card (non il pallino, che resta un colore senza testo) non deve nascondere quante figure restano libere solo perché lo stato aggregato è "in attesa" o "mio" (confermato/in attesa per me) — richiesto esplicitamente dall'utente. Il conteggio ("N/3 libero") compare quindi anche in quei due casi, non solo in `free`, e conta **solo le 3 figure operative** (mai l'osservatore, coerente con `isComplete`/`requiredRolesForCompletion`) — un "3/3 libero" o "1/3 libero" con l'osservatore ancora libero o meno non deve cambiare, richiesto esplicitamente dall'utente. Quando il conteggio operativo è 0 (nessuna figura operativa libera, solo eventualmente l'osservatore) si ricade sul testo semplice ("In attesa"/"Confermato"), niente "0/3 libero".
+
+## Aggiornamento (bug: checkbox/"Assegna" offerti anche su un'occorrenza passata)
+
+Bug segnalato dall'utente in verifica ("un volontario di emergenza non riesce a proporsi per un turno"): navigando indietro nel tempo nelle viste Giorno/Settimana/Mese (che, a differenza di Lista, non sono limitate ai prossimi 30 giorni), un'occorrenza già passata mostrava comunque checkbox/bottone "Assegna" su ogni figura ancora libera. Il backend rifiuta sempre una prenotazione su una data passata (`parseAndValidateBookingDate`, sia per la richiesta del volontario sia per l'assegnazione diretta del gestore), ma nessuna delle due azioni lo controllava lato client prima di offrirsi: selezionare e inviare produceva solo il messaggio generico di fallita richiesta, senza spiegare perché.
+
+`OccurrenceCard` calcola ora `isPast` (data dell'occorrenza prima di oggi, confronto a mezzanotte locale con `dateOnly`, coerente con `date.Before(today)` lato backend) e lo propaga a `_RoleRow`: checkbox e bottone "Assegna" non compaiono mai su un'occorrenza passata, indipendentemente da `isBookable`/permessi. Nessuna modifica al backend (la validazione era già corretta) né allo schema — puro allineamento lato client a un vincolo che esisteva già.

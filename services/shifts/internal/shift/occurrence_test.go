@@ -193,6 +193,40 @@ func TestListOccurrences_EmptyWhenNoTemplateMatchesRange(t *testing.T) {
 	}
 }
 
+func TestListOccurrences_VolunteerIDOnlyExposedWhenConfirmed(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	tpl := newTestTemplate(t, repo)
+	other := newTestVolunteer(t)
+
+	pending, err := repo.CreateBooking(ctx, Booking{TemplateID: tpl.ID, VolunteerID: other, Role: BookingRoleDriver, Date: thursday, StartTime: tpl.StartTime, EndTime: tpl.EndTime})
+	if err != nil {
+		t.Fatalf("CreateBooking (pending): %v", err)
+	}
+
+	got, err := repo.ListOccurrences(ctx, thursday, thursday, testVolunteerID)
+	if err != nil {
+		t.Fatalf("ListOccurrences: %v", err)
+	}
+	rc := roleCoverage(t, got[0], BookingRoleDriver)
+	if rc.VolunteerID != nil {
+		t.Fatalf("expected volunteer_id hidden while pending, got %+v", rc)
+	}
+
+	if err := testDB.Model(&Booking{}).Where("id = ?", pending.ID).Update("status", BookingStatusConfirmed).Error; err != nil {
+		t.Fatalf("confirm booking: %v", err)
+	}
+
+	got, err = repo.ListOccurrences(ctx, thursday, thursday, testVolunteerID)
+	if err != nil {
+		t.Fatalf("ListOccurrences (after confirm): %v", err)
+	}
+	rc = roleCoverage(t, got[0], BookingRoleDriver)
+	if rc.VolunteerID == nil || *rc.VolunteerID != other {
+		t.Fatalf("expected volunteer_id=%s once confirmed (visible to any caller, not just the volunteer themselves), got %+v", other, rc)
+	}
+}
+
 // newTestVolunteer seeds a second registry.users row — occurrence_test.go's
 // own equivalent of httpapi's newRegistryUser, needed here to tell "my
 // booking" apart from "someone else's" on the same occurrence.

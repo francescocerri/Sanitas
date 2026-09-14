@@ -8,6 +8,7 @@ import 'occurrences_async_builder.dart';
 import 'shift_models.dart';
 import 'shift_status_style.dart';
 import 'shifts_filter.dart';
+import 'today_button.dart';
 
 /// Vista Mese: griglia calendario (pacchetto `table_calendar`, vedi
 /// `docs/backlog.md`) con un pallino colorato per turno sotto ogni giorno
@@ -64,6 +65,19 @@ class _MonthViewState extends State<MonthView> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // `TableCalendar` ha già un proprio header con frecce
+            // mese-precedente/successivo e il titolo — nessuno slot per un
+            // terzo bottone lì dentro, quindi "torna a oggi" vive in una
+            // riga sottile sopra, allineata a destra.
+            Align(
+              alignment: Alignment.centerRight,
+              child: TodayButton(
+                onPressed: () => setState(() {
+                  _focusedDay = dateOnly(DateTime.now());
+                  _selectedDay = dateOnly(DateTime.now());
+                }),
+              ),
+            ),
             TableCalendar<ShiftOccurrence>(
               locale: context.locale.toString(),
               firstDay: DateTime.now().subtract(const Duration(days: 365)),

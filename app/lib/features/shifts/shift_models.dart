@@ -74,11 +74,20 @@ class RoleCoverage {
     required this.role,
     required this.status,
     required this.myBookingStatus,
+    required this.volunteerId,
   });
 
   final ShiftRole role;
   final ShiftOccurrenceStatus status;
   final MyBookingStatus? myBookingStatus;
+
+  /// Chi è confermato su questa figura — presente SOLO quando `status` è
+  /// `confirmed` (mai per una richiesta ancora in attesa, la cui identità
+  /// resta nascosta finché non viene decisa): visibile a chiunque abbia
+  /// `shifts:read`, non solo al gestore turni (vedi ADR-0025
+  /// "Aggiornamento"). Un id, non un nome: risolto a uno username tramite
+  /// `usersProvider` da chi lo mostra.
+  final String? volunteerId;
 
   /// Prenotabile da un nuovo volontario: libera, oppure già in attesa ma
   /// non ancora confermata (più richieste pending possono coesistere sulla
@@ -97,6 +106,7 @@ class RoleCoverage {
       myBookingStatus: _parseMyBookingStatus(
         json['my_booking_status'] as String?,
       ),
+      volunteerId: json['volunteer_id'] as String?,
     );
   }
 }

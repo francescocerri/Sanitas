@@ -6,6 +6,7 @@ import 'occurrence_card.dart';
 import 'occurrences_async_builder.dart';
 import 'shift_models.dart';
 import 'shifts_filter.dart';
+import 'today_button.dart';
 
 /// Lunedì della settimana che contiene [d] — stessa convenzione ISO usata
 /// nel mockup approvato (settimana Lun-Dom, non Dom-Sab).
@@ -49,17 +50,24 @@ class _WeekViewState extends State<WeekView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            TodayButton(
+              onPressed: () =>
+                  setState(() => _weekStart = _startOfWeek(DateTime.now())),
+            ),
             IconButton(
               icon: const Icon(Icons.chevron_left_rounded),
               onPressed: () =>
                   setState(() => _weekStart = addDays(_weekStart, -7)),
             ),
-            Text(
-              '${DateFormat.MMMd(locale).format(_weekStart)} '
-              '– ${DateFormat.MMMd(locale).format(weekEnd)}',
-              style: theme.textTheme.titleSmall,
+            Expanded(
+              child: Center(
+                child: Text(
+                  '${DateFormat.MMMd(locale).format(_weekStart)} '
+                  '– ${DateFormat.MMMd(locale).format(weekEnd)}',
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.chevron_right_rounded),

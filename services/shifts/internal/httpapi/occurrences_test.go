@@ -160,4 +160,63 @@ func TestListOccurrences_MyBookingStatusReflectsCaller(t *testing.T) {
 	if len(otherOccurrences) != 1 || otherDriverRC.MyBookingStatus != nil {
 		t.Fatalf("expected my_booking_status nil for a different caller, got %+v", otherOccurrences)
 	}
+	if otherDriverRC.VolunteerID != nil {
+		t.Fatalf("expected volunteer_id hidden for a merely pending booking, even to another shifts:read caller, got %+v", otherDriverRC)
+	}
+}
+
+func TestListOccurrences_VolunteerIDVisibleToAnyoneOnceConfirmed(t *testing.T) {
+	server, issuer := newTestServerWithIssuer(t)
+	configureToken := issuer.token(t, []string{permShiftsConfigure})
+	tpl := createTestTemplate(t, server, configureToken)
+	volunteerToken := issuer.tokenFor(t, testVolunteerID, []string{permShiftsRequest})
+
+	date := futureThursday(t).Format(dateLayout)
+	bookingBody, _ := json.Marshal(createBookingRequest{TemplateID: tpl.ID, Date: date, Role: string(shift.BookingRoleDriver)})
+	bookingReq := httptest.NewRequest(http.MethodPost, "/v1/shift-bookings", bytes.NewReader(bookingBody))
+	bookingReq.Header.Set("Content-Type", "application/json")
+	bookingReq.Header.Set("Authorization", "Bearer "+volunteerToken)
+	bookingRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(bookingRec, bookingReq)
+	if bookingRec.Code != http.StatusCreated {
+		t.Fatalf("setup booking: expected 201, got %d: %s", bookingRec.Code, bookingRec.Body.String())
+	}
+	var booking shift.Booking
+	if err := json.Unmarshal(bookingRec.Body.Bytes(), &booking); err != nil {
+		t.Fatalf("decode booking: %v", err)
+	}
+
+	// A third, uninvolved shifts:read caller — bystander should see nothing
+	// while the booking is pending.
+	bystanderToken := issuer.token(t, []string{permShiftsRead})
+	viewReq := func() shift.RoleCoverage {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/v1/shift-occurrences?from="+date+"&to="+date, nil)
+		req.Header.Set("Authorization", "Bearer "+bystanderToken)
+		rec := httptest.NewRecorder()
+		server.Routes().ServeHTTP(rec, req)
+		var occurrences []shift.Occurrence
+		if err := json.Unmarshal(rec.Body.Bytes(), &occurrences); err != nil {
+			t.Fatalf("decode occurrences response: %v", err)
+		}
+		return roleCoverage(t, occurrences[0], shift.BookingRoleDriver)
+	}
+
+	if rc := viewReq(); rc.VolunteerID != nil {
+		t.Fatalf("expected volunteer_id hidden while pending, got %+v", rc)
+	}
+
+	decideBody, _ := json.Marshal(decideBookingRequest{Status: "confirmed"})
+	decideReq := httptest.NewRequest(http.MethodPatch, "/v1/shift-bookings/"+booking.ID, bytes.NewReader(decideBody))
+	decideReq.Header.Set("Content-Type", "application/json")
+	decideReq.Header.Set("Authorization", "Bearer "+issuer.tokenFor(t, testVolunteerID, []string{permShiftsWrite}))
+	decideRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(decideRec, decideReq)
+	if decideRec.Code != http.StatusOK {
+		t.Fatalf("confirm booking: expected 200, got %d: %s", decideRec.Code, decideRec.Body.String())
+	}
+
+	if rc := viewReq(); rc.VolunteerID == nil || *rc.VolunteerID != testVolunteerID {
+		t.Fatalf("expected volunteer_id=%s once confirmed, visible to any shifts:read caller, got %+v", testVolunteerID, rc)
+	}
 }

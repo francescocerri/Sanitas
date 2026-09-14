@@ -48,7 +48,11 @@ Color statusColor(
 bool roleIsOutlineOnly(RoleCoverage coverage) =>
     coverage.myBookingStatus == MyBookingStatus.pending;
 
-String roleStatusLabel(RoleCoverage coverage) {
+/// [volunteerName] è lo username già risolto di `coverage.volunteerId`
+/// (solo per una figura confermata non mia, vedi
+/// `RoleCoverage.volunteerId`) — se assente (figura non confermata, o
+/// ancora in attesa di risoluzione) si ricade sul testo generico "Completo".
+String roleStatusLabel(RoleCoverage coverage, {String? volunteerName}) {
   switch (coverage.myBookingStatus) {
     case MyBookingStatus.pending:
       return 'shifts.status_mine_pending'.tr();
@@ -56,6 +60,10 @@ String roleStatusLabel(RoleCoverage coverage) {
       return 'shifts.status_mine_confirmed'.tr();
     case null:
       break;
+  }
+  if (coverage.status == ShiftOccurrenceStatus.confirmed &&
+      volunteerName != null) {
+    return 'shifts.status_confirmed_by'.tr(namedArgs: {'name': volunteerName});
   }
   switch (coverage.status) {
     case ShiftOccurrenceStatus.free:
@@ -112,30 +120,45 @@ MyBookingStatus? myAggregateStatus(ShiftOccurrence occurrence) {
   return null;
 }
 
+/// Stato aggettivo del turno nel suo complesso — indipendente da chi guarda
+/// (a differenza di [myAggregateStatus]), calcolato in un unico punto e
+/// riusato identico dal pallino Mese ([occurrenceCardColor]) e dal
+/// riepilogo della card chiusa in tutte le viste (vedi
+/// `occurrenceSummaryLabel`). `pending` vince SEMPRE su `free` non appena
+/// una delle 3 figure operative (vedi [requiredRolesForCompletion]) è in
+/// attesa, anche se resta un'altra figura libera altrove: prima di questa
+/// unificazione un turno con 2 figure confermate e 1 in attesa poteva
+/// ancora apparire "libero" solo perché l'osservatore lo era — bug
+/// segnalato esplicitamente dall'utente (vedi ADR-0025 "Aggiornamento
+/// (stato aggregato del turno...)").
+enum OccurrenceAggregateStatus { free, pending, complete }
+
+OccurrenceAggregateStatus aggregateStatus(ShiftOccurrence occurrence) {
+  if (occurrence.isComplete) return OccurrenceAggregateStatus.complete;
+  final anyOperativePending = occurrence.roles
+      .where((rc) => requiredRolesForCompletion.contains(rc.role))
+      .any((rc) => rc.status == ShiftOccurrenceStatus.pending);
+  return anyOperativePending
+      ? OccurrenceAggregateStatus.pending
+      : OccurrenceAggregateStatus.free;
+}
+
 /// Colore del singolo pallino aggregato per turno usato dalla vista Mese
 /// (un pallino per turno, non uno per figura — il dettaglio per figura
 /// resta nella card espansa). Priorità: una mia figura confermata o in
-/// attesa vince su tutto; altrimenti il turno è "al completo" (grigio, vedi
-/// `ShiftOccurrence.isComplete`) appena autista/leader/soccorritore sono
-/// confermati, indipendentemente dall'osservatore — solo se non è ancora al
-/// completo si guarda se resta almeno una figura libera (verde) o solo
-/// figure in attesa (ambra).
+/// attesa vince su tutto; altrimenti segue [aggregateStatus].
 Color occurrenceCardColor(BuildContext context, ShiftOccurrence occurrence) {
   if (myAggregateStatus(occurrence) != null) {
     return Theme.of(context).colorScheme.primary;
   }
-  if (occurrence.isComplete) {
-    return Theme.of(context).colorScheme.onSurfaceVariant;
+  switch (aggregateStatus(occurrence)) {
+    case OccurrenceAggregateStatus.complete:
+      return Theme.of(context).colorScheme.onSurfaceVariant;
+    case OccurrenceAggregateStatus.pending:
+      return Colors.amber.shade700;
+    case OccurrenceAggregateStatus.free:
+      return Colors.green.shade600;
   }
-  if (occurrence.roles.any((rc) => rc.status == ShiftOccurrenceStatus.free)) {
-    return Colors.green.shade600;
-  }
-  if (occurrence.roles.any(
-    (rc) => rc.status == ShiftOccurrenceStatus.pending,
-  )) {
-    return Colors.amber.shade700;
-  }
-  return Theme.of(context).colorScheme.onSurfaceVariant;
 }
 
 /// true solo quando l'aggregato è "mia richiesta in attesa" — stesso
@@ -143,3 +166,44 @@ Color occurrenceCardColor(BuildContext context, ShiftOccurrence occurrence) {
 /// pallino per turno invece che a quello per figura.
 bool occurrenceCardOutline(ShiftOccurrence occurrence) =>
     myAggregateStatus(occurrence) == MyBookingStatus.pending;
+
+/// Testo del riepilogo compatto di una card chiusa (tutte le viste: Mese,
+/// Settimana, Giorno, Lista) — stessa priorità di [occurrenceCardColor],
+/// così pallino e card non divergono mai. [openCount] è precalcolato dal
+/// chiamante e conta SOLO le figure operative libere (vedi
+/// `requiredRolesForCompletion`, mai l'osservatore — un "3/3 libero" con
+/// l'osservatore ancora libero sarebbe fuorviante): usato dal caso `free`
+/// ("N/3 libero") ma anche da `pending` e dai due casi "mio" (in
+/// attesa/confermato per me), per non far sparire quante figure operative
+/// restano comunque libere — richiesto esplicitamente dall'utente dopo il
+/// fix della priorità pending-su-libero: sapere "sono confermato" o "c'è
+/// una decisione in sospeso" non deve nascondere che restano altri posti
+/// da coprire.
+String occurrenceSummaryLabel(
+  ShiftOccurrence occurrence, {
+  required int openCount,
+}) {
+  final mine = myAggregateStatus(occurrence);
+  if (mine == MyBookingStatus.pending) {
+    return openCount > 0
+        ? 'shifts.card_pending_count'.tr(namedArgs: {'count': '$openCount'})
+        : 'shifts.mine_badge_pending'.tr();
+  }
+  if (mine == MyBookingStatus.confirmed) {
+    return openCount > 0
+        ? 'shifts.card_mine_confirmed_count'.tr(
+            namedArgs: {'count': '$openCount'},
+          )
+        : 'shifts.mine_badge_confirmed'.tr();
+  }
+  switch (aggregateStatus(occurrence)) {
+    case OccurrenceAggregateStatus.complete:
+      return 'shifts.status_confirmed'.tr();
+    case OccurrenceAggregateStatus.pending:
+      return openCount > 0
+          ? 'shifts.card_pending_count'.tr(namedArgs: {'count': '$openCount'})
+          : 'shifts.status_pending'.tr();
+    case OccurrenceAggregateStatus.free:
+      return 'shifts.card_open_count'.tr(namedArgs: {'count': '$openCount'});
+  }
+}

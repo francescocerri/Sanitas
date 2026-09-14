@@ -6,6 +6,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sanitas_app/core/api_client.dart';
 import 'package:sanitas_app/core/auth/auth_controller.dart';
 import 'package:sanitas_app/core/auth/auth_state.dart';
 import 'package:sanitas_app/core/jwt.dart';
@@ -42,7 +43,37 @@ Map<String, dynamic> _role(
   String role,
   String status, {
   String? myBookingStatus,
-}) => {'role': role, 'status': status, 'my_booking_status': ?myBookingStatus};
+  String? volunteerId,
+}) => {
+  'role': role,
+  'status': status,
+  'my_booking_status': ?myBookingStatus,
+  'volunteer_id': ?volunteerId,
+};
+
+/// Un backend `registry` finto — solo `GET /v1/users`, per risolvere il
+/// nome di chi è confermato su una figura (vedi
+/// `OccurrenceCard`/`usersProvider`). Vuoto di default: le figure
+/// confermate senza un utente corrispondente qui ricadono sul testo
+/// generico "Completo", comportamento già atteso dai test che non se ne
+/// occupano.
+Dio _fakeRegistryDio({List<Map<String, dynamic>> users = const []}) {
+  final dio = Dio();
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (options, handler) {
+        if (options.path == '/v1/users') {
+          handler.resolve(
+            Response(requestOptions: options, statusCode: 200, data: users),
+          );
+          return;
+        }
+        handler.resolve(Response(requestOptions: options, statusCode: 200));
+      },
+    ),
+  );
+  return dio;
+}
 
 /// Un backend `shifts` finto che restituisce sempre 3 occorrenze sulla
 /// data `from` richiesta (per ogni vista, qualunque sia il range che
@@ -88,7 +119,7 @@ Dio _fakeShiftsDio(List<RequestOptions> requests) {
                   'end_time': '14:00',
                   'label': 'Turno Mattina',
                   'roles': [
-                    _role('driver', 'confirmed'),
+                    _role('driver', 'confirmed', volunteerId: 'other-vol'),
                     _role('leader', 'confirmed'),
                     _role('rescuer', 'confirmed'),
                     _role('observer', 'confirmed'),
@@ -135,6 +166,7 @@ void main() {
     WidgetTester tester,
     Dio dio, {
     required List<String> permissions,
+    Dio? registryDio,
   }) async {
     tester.view.physicalSize = const Size(500, 1200);
     tester.view.devicePixelRatio = 1;
@@ -146,6 +178,7 @@ void main() {
           overrides: [
             authControllerProvider.overrideWith(() => _Auth(permissions)),
             shiftsDioProvider.overrideWithValue(dio),
+            apiDioProvider.overrideWithValue(registryDio ?? _fakeRegistryDio()),
           ],
           child: EasyLocalization(
             supportedLocales: const [Locale('it')],
@@ -216,11 +249,14 @@ void main() {
       await tester.tap(find.text('Turno Pomeriggio')); // tpl-mine
       await tester.pumpAndSettle();
 
-      // Il badge "Confermato" compare 2 volte per tpl-mine: nel riepilogo
-      // della card (sempre visibile) e sulla riga della figura autista
-      // (visibile solo da espansa) — la legenda usa un testo diverso
-      // ("Confermato per te"), niente collisione.
-      expect(find.text('Confermato'), findsNWidgets(2));
+      // Il badge "Confermato" (senza conteggio) compare sulla riga della
+      // figura autista (visibile solo da espansa) — la legenda usa un testo
+      // diverso ("Confermato per te"), niente collisione. Il riepilogo
+      // della card mostra invece la variante con quante figure OPERATIVE
+      // restano libere (leader/rescuer = 2, l'osservatore libero non conta),
+      // non il semplice "Confermato".
+      expect(find.text('Confermato'), findsOneWidget);
+      expect(find.text('Confermato · 2/3 libero'), findsOneWidget);
       // Le altre 3 figure di tpl-mine sono libere e prenotabili.
       expect(find.byType(Checkbox), findsNWidgets(3));
 
@@ -230,7 +266,46 @@ void main() {
       // tpl-confirmed è tutto confermato da altri: nessuna checkbox in
       // più, nessun badge "Confermato" in più (non è mio).
       expect(find.byType(Checkbox), findsNWidgets(3));
-      expect(find.text('Confermato'), findsNWidgets(2));
+      expect(find.text('Confermato'), findsOneWidget);
+      expect(find.text('Confermato · 2/3 libero'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'shows the resolved volunteer name for a role confirmed by someone '
+    'else, but the generic label while any of it is only pending',
+    (tester) async {
+      final requests = <RequestOptions>[];
+      await mount(
+        tester,
+        _fakeShiftsDio(requests),
+        permissions: const ['shifts:read'],
+        registryDio: _fakeRegistryDio(
+          users: [
+            {
+              'id': 'other-vol',
+              'username': 'giuliarossi',
+              'email': 'giulia@example.org',
+              'roles': <String>[],
+            },
+          ],
+        ),
+      );
+
+      await tester.tap(find.text('Lista'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Turno Mattina')); // tpl-confirmed
+      await tester.pumpAndSettle();
+
+      // L'autista ha un volunteer_id risolvibile: si vede il nome.
+      expect(find.text('Confermato: giuliarossi'), findsOneWidget);
+      // Le altre 3 figure sono confermate ma senza un utente corrispondente
+      // nel fake registry: ricadono sul testo generico "Completo", mai su
+      // un id grezzo — 5 in tutto: la legenda (1), il riepilogo della card
+      // (1, il turno è al completo) e le 3 righe-figura senza nome.
+      expect(find.text('Completo'), findsNWidgets(5));
+      expect(find.textContaining('other-vol'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -274,6 +349,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'no checkbox (nor "Assegna" button) on a past occurrence, even if a '
+    'role is otherwise free — the backend always rejects a booking on a '
+    'past date, and offering the checkbox there used to fail silently with '
+    'just the generic "request failed" message',
+    (tester) async {
+      final requests = <RequestOptions>[];
+      await mount(
+        tester,
+        _fakeShiftsDio(requests),
+        permissions: const ['shifts:read', 'shifts:request'],
+      );
+
+      await tester.tap(find.text('Giorno'));
+      await tester.pumpAndSettle();
+      // Torna indietro di un giorno: la stessa occorrenza tpl-free (4
+      // figure libere) viene comunque restituita dal fake backend, ma per
+      // ieri.
+      await tester.tap(find.byIcon(Icons.chevron_left_rounded));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Turno Serale')); // tpl-free, expand
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Checkbox), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('selecting one role locks the other roles on the same slot '
       '(a volunteer can only hold one role per occurrence)', (tester) async {
     final requests = <RequestOptions>[];
@@ -312,6 +415,166 @@ void main() {
         .toList();
     expect(afterDeselect.every((c) => c.onChanged != null), isTrue);
 
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tapping "Oggi" brings the Giorno view back to today after '
+      'navigating away', (tester) async {
+    final requests = <RequestOptions>[];
+    await mount(
+      tester,
+      _fakeShiftsDio(requests),
+      permissions: const ['shifts:read'],
+    );
+
+    await tester.tap(find.text('Giorno'));
+    await tester.pumpAndSettle();
+
+    final todayLabel = DateFormat.yMMMMEEEEd('it').format(DateTime.now());
+    expect(find.text(todayLabel), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.chevron_right_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text(todayLabel), findsNothing);
+
+    await tester.tap(find.byTooltip('Oggi'));
+    await tester.pumpAndSettle();
+    expect(find.text(todayLabel), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'the "Liberi" filter hides a shift once driver/leader/rescuer are all '
+    'confirmed, even if the observer role is still free',
+    (tester) async {
+      final requests = <RequestOptions>[];
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requests.add(options);
+            if (options.path == '/v1/shift-occurrences') {
+              final from = options.queryParameters['from'] as String;
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: [
+                    {
+                      'template_id': 'tpl-open',
+                      'date': '${from}T00:00:00Z',
+                      'weekday': 4,
+                      'start_time': '20:00',
+                      'end_time': '08:00',
+                      'label': 'Turno Aperto',
+                      'roles': [
+                        _role('driver', 'free'),
+                        _role('leader', 'free'),
+                        _role('rescuer', 'free'),
+                        _role('observer', 'free'),
+                      ],
+                    },
+                    {
+                      'template_id': 'tpl-complete-but-observer',
+                      'date': '${from}T00:00:00Z',
+                      'weekday': 4,
+                      'start_time': '08:00',
+                      'end_time': '14:00',
+                      'label': 'Turno Quasi Completo',
+                      'roles': [
+                        _role('driver', 'confirmed'),
+                        _role('leader', 'confirmed'),
+                        _role('rescuer', 'confirmed'),
+                        // Osservatore ancora libero: non deve bastare a
+                        // farlo comparire sotto "Liberi", il turno è già
+                        // operativo senza — richiesto esplicitamente
+                        // dall'utente.
+                        _role('observer', 'free'),
+                      ],
+                    },
+                  ],
+                ),
+              );
+              return;
+            }
+            handler.resolve(Response(requestOptions: options, statusCode: 200));
+          },
+        ),
+      );
+      await mount(tester, dio, permissions: const ['shifts:read']);
+
+      await tester.tap(find.text('Lista'));
+      await tester.pumpAndSettle();
+      expect(find.text('Turno Aperto'), findsOneWidget);
+      expect(find.text('Turno Quasi Completo'), findsOneWidget);
+
+      await tester.tap(find.text('Liberi'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Turno Aperto'), findsOneWidget);
+      expect(find.text('Turno Quasi Completo'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('the closed card summary shows "In attesa · N/3 libero" when an '
+      'operative role is pending, counting only the 3 operative roles (never '
+      'the observer) — reproduces the bug where it showed "2/4 libero" '
+      'instead, and keeps the still-open count visible instead of just "In '
+      'attesa"', (tester) async {
+    final requests = <RequestOptions>[];
+    final dio = Dio();
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requests.add(options);
+          if (options.path == '/v1/shift-occurrences') {
+            final from = options.queryParameters['from'] as String;
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: [
+                  {
+                    'template_id': 'tpl-pending-with-free',
+                    'date': '${from}T00:00:00Z',
+                    'weekday': 4,
+                    'start_time': '20:00',
+                    'end_time': '08:00',
+                    'label': 'Turno Ambiguo',
+                    'roles': [
+                      _role('driver', 'confirmed'),
+                      // Figura operativa in attesa: deve far vincere "In
+                      // attesa" sul riepilogo, non "2/4 libero".
+                      _role('leader', 'pending'),
+                      _role('rescuer', 'free'),
+                      // Libero ma è l'osservatore: non deve contare nel
+                      // conteggio del riepilogo ("1/3", non "2/3").
+                      _role('observer', 'free'),
+                    ],
+                  },
+                ],
+              ),
+            );
+            return;
+          }
+          handler.resolve(Response(requestOptions: options, statusCode: 200));
+        },
+      ),
+    );
+    await mount(tester, dio, permissions: const ['shifts:read']);
+
+    await tester.tap(find.text('Lista'));
+    await tester.pumpAndSettle();
+
+    // La legenda mostra sempre "In attesa" da sola (1); il riepilogo
+    // della card chiusa mostra la variante con il conteggio dei soli
+    // liberi OPERATIVI rimasti (solo rescuer, l'osservatore libero non
+    // conta) — le due stringhe sono diverse, niente collisione da
+    // contare insieme.
+    expect(find.text('In attesa'), findsOneWidget);
+    expect(find.text('In attesa · 1/3 libero'), findsOneWidget);
+    expect(find.text('2/4 libero'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

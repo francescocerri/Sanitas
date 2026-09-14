@@ -6,6 +6,7 @@ import 'occurrence_card.dart';
 import 'occurrences_async_builder.dart';
 import 'shift_models.dart';
 import 'shifts_filter.dart';
+import 'today_button.dart';
 
 /// Vista Giorno: un giorno alla volta, navigabile avanti/indietro — il
 /// massimo dettaglio fra le 4 viste.
@@ -42,15 +43,21 @@ class _DayViewState extends State<DayView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            TodayButton(
+              onPressed: () => setState(() => _day = dateOnly(DateTime.now())),
+            ),
             IconButton(
               icon: const Icon(Icons.chevron_left_rounded),
               onPressed: () => setState(() => _day = addDays(_day, -1)),
             ),
-            Text(
-              DateFormat.yMMMMEEEEd(context.locale.toString()).format(_day),
-              style: theme.textTheme.titleSmall,
+            Expanded(
+              child: Center(
+                child: Text(
+                  DateFormat.yMMMMEEEEd(context.locale.toString()).format(_day),
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.chevron_right_rounded),

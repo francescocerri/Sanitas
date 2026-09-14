@@ -632,6 +632,9 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.OccurrenceStatus"
+                },
+                "volunteer_id": {
+                    "type": "string"
                 }
             }
         },

@@ -1,16 +1,21 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../manage_users/manage_users_screen.dart' show usersProvider;
+import 'date_math.dart';
 import 'shift_models.dart';
 import 'shift_status_style.dart';
 
 /// Card espandibile per un'occorrenza: chiusa mostra un riepilogo
 /// compatto (quante figure sono ancora libere, o "Tuo turno" se il
 /// chiamante ha già una figura lì); aperta rivela le 4 righe-figura
-/// (autista/leader/soccorritore/osservatore), ciascuna con stato e
-/// checkbox/badge indipendenti — design approvato via mockup interattivo
-/// prima dell'implementazione (vedi ADR-0025 "Aggiornamento").
-class OccurrenceCard extends StatefulWidget {
+/// (autista/leader/soccorritore/osservatore), ciascuna con stato,
+/// checkbox/badge indipendenti e — per chi è confermato — il nome del
+/// volontario (visibile a chiunque abbia `shifts:read`, non solo al
+/// gestore, vedi ADR-0025 "Aggiornamento") — design approvato via mockup
+/// interattivo prima dell'implementazione.
+class OccurrenceCard extends ConsumerStatefulWidget {
   const OccurrenceCard({
     super.key,
     required this.occurrence,
@@ -42,10 +47,10 @@ class OccurrenceCard extends StatefulWidget {
   final void Function(ShiftOccurrence occurrence, ShiftRole role)? onAssign;
 
   @override
-  State<OccurrenceCard> createState() => _OccurrenceCardState();
+  ConsumerState<OccurrenceCard> createState() => _OccurrenceCardState();
 }
 
-class _OccurrenceCardState extends State<OccurrenceCard> {
+class _OccurrenceCardState extends ConsumerState<OccurrenceCard> {
   bool _expanded = false;
 
   /// La figura già selezionata su questa occorrenza (se una c'è) — cerca
@@ -72,10 +77,36 @@ class _OccurrenceCardState extends State<OccurrenceCard> {
     final occurrence = widget.occurrence;
     final dateLabel = DateFormat.MMMd(context.locale.toString())
         .format(occurrence.date);
+    // Risolve id->username per le figure confermate — non c'è ancora nulla
+    // da mostrare finché `usersProvider` non ha caricato (le righe
+    // ricadono sul testo "Completo" nel frattempo, vedi `_RoleRow`), niente
+    // spinner bloccante solo per questo dettaglio accessorio.
+    final usernameById = {
+      for (final u in ref.watch(usersProvider).value ?? const [])
+        u.id: u.username,
+    };
+    // Solo le 3 figure operative contano nel riepilogo (vedi
+    // `requiredRolesForCompletion`) — l'osservatore è facoltativo, un
+    // "3/3 libero" con l'osservatore ancora libero sarebbe fuorviante,
+    // richiesto esplicitamente dall'utente.
     final openCount = occurrence.roles
-        .where((rc) => rc.status == ShiftOccurrenceStatus.free)
+        .where(
+          (rc) =>
+              requiredRolesForCompletion.contains(rc.role) &&
+              rc.status == ShiftOccurrenceStatus.free,
+        )
         .length;
     final mine = myAggregateStatus(occurrence);
+    // Il backend rifiuta sempre una prenotazione (richiesta, assegnazione
+    // diretta) su una data passata (`parseAndValidateBookingDate`), ma le
+    // viste Giorno/Settimana/Mese permettono di navigare liberamente nel
+    // passato — senza questo controllo, checkbox/bottone "Assegna"
+    // restavano comunque visibili lì, e selezionarli produceva solo
+    // l'errore generico di invio senza spiegare perché (bug segnalato
+    // dall'utente). Confrontata a mezzanotte locale, non all'orario: oggi
+    // resta prenotabile fino a fine giornata, coerente col backend
+    // (`date.Before(today)`, non `<=`).
+    final isPast = dateOnly(occurrence.date).isBefore(dateOnly(DateTime.now()));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -131,19 +162,10 @@ class _OccurrenceCardState extends State<OccurrenceCard> {
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        mine == MyBookingStatus.pending
-                            ? 'shifts.mine_badge_pending'.tr()
-                            : mine == MyBookingStatus.confirmed
-                            ? 'shifts.mine_badge_confirmed'.tr()
-                            // Al completo appena autista/leader/soccorritore
-                            // sono confermati (vedi `isComplete`), anche se
-                            // l'osservatore resta libero — niente "1/4
-                            // libero" fuorviante in quel caso.
-                            : occurrence.isComplete
-                            ? 'shifts.status_confirmed'.tr()
-                            : 'shifts.card_open_count'.tr(
-                                namedArgs: {'count': '$openCount'},
-                              ),
+                        occurrenceSummaryLabel(
+                          occurrence,
+                          openCount: openCount,
+                        ),
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: mine != null
                               ? theme.colorScheme.onPrimaryContainer
@@ -177,6 +199,7 @@ class _OccurrenceCardState extends State<OccurrenceCard> {
                           _RoleRow(
                             coverage: coverage,
                             selectable: widget.selectable,
+                            isPast: isPast,
                             // Un volontario può tenere al più una figura
                             // per occorrenza (vedi ADR-0025
                             // "Aggiornamento"): se ne ha già selezionata
@@ -198,6 +221,9 @@ class _OccurrenceCardState extends State<OccurrenceCard> {
                                     occurrence,
                                     coverage.role,
                                   ),
+                            volunteerName: coverage.volunteerId == null
+                                ? null
+                                : usernameById[coverage.volunteerId],
                           ),
                       ],
                     ),
@@ -213,14 +239,28 @@ class _RoleRow extends StatelessWidget {
   const _RoleRow({
     required this.coverage,
     required this.selectable,
+    required this.isPast,
     required this.locked,
     required this.selected,
     required this.onToggle,
     this.onAssign,
+    this.volunteerName,
   });
 
   final RoleCoverage coverage;
   final bool selectable;
+
+  /// true se l'occorrenza è già passata — il backend rifiuta sempre una
+  /// prenotazione su una data passata (vedi `OccurrenceCard.isPast`), quindi
+  /// niente checkbox né bottone "Assegna" qui, per non offrire un'azione
+  /// che fallirebbe comunque.
+  final bool isPast;
+
+  /// Username risolto di `coverage.volunteerId` (solo per una figura
+  /// confermata, vedi `RoleCoverage.volunteerId`) — null se non ancora
+  /// caricato o se la figura non è confermata; in entrambi i casi
+  /// `roleStatusLabel` ricade sul testo generico.
+  final String? volunteerName;
 
   /// true se un'ALTRA figura di questa stessa occorrenza è già stata
   /// selezionata — la checkbox resta visibile ma disabilitata (un
@@ -239,8 +279,11 @@ class _RoleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final showAssignButton =
-        onAssign != null && coverage.status != ShiftOccurrenceStatus.confirmed;
-    final showCheckbox = onAssign == null && selectable && coverage.isBookable;
+        onAssign != null &&
+        !isPast &&
+        coverage.status != ShiftOccurrenceStatus.confirmed;
+    final showCheckbox =
+        onAssign == null && selectable && !isPast && coverage.isBookable;
     final showMineBadge = onAssign == null && coverage.myBookingStatus != null;
 
     return Padding(
@@ -281,7 +324,7 @@ class _RoleRow extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  roleStatusLabel(coverage),
+                  roleStatusLabel(coverage, volunteerName: volunteerName),
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

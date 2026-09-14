@@ -17,11 +17,15 @@ const (
 // pending/confirmed booking of their own for this specific role — distinct
 // from Status (the aggregate coverage across every volunteer for that
 // role) so a client can render "this one is yours" regardless of who else
-// has requested it.
+// has requested it. VolunteerID is set only when Status is confirmed: who
+// is confirmed on a role is visible to anyone with shifts:read (see
+// docs/adr/0025-modello-dati-turni.md "Aggiornamento"), but a merely
+// pending request's identity stays hidden until it's decided.
 type RoleCoverage struct {
 	Role            BookingRole      `json:"role"`
 	Status          OccurrenceStatus `json:"status"`
 	MyBookingStatus *BookingStatus   `json:"my_booking_status,omitempty"`
+	VolunteerID     *string          `json:"volunteer_id,omitempty"`
 }
 
 // Occurrence is a concrete calendar day on which a ShiftTemplate recurs,
