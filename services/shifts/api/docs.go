@@ -193,6 +193,39 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/shift-bookings/pending": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shift-bookings"
+                ],
+                "summary": "List pending booking requests with full detail (requires the shifts:write permission)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication required"
+                    },
+                    "403": {
+                        "description": "Missing required permission: shifts:write"
+                    }
+                }
+            }
+        },
         "/v1/shift-bookings/pending-count": {
             "get": {
                 "security": [
@@ -558,6 +591,14 @@ const docTemplate = `{
                 "label": {
                     "type": "string"
                 },
+                "operational_status": {
+                    "description": "OperationalStatus is set only once Date is in the past — see\nOperationalStatus.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.OperationalStatus"
+                        }
+                    ]
+                },
                 "roles": {
                     "type": "array",
                     "items": {
@@ -588,6 +629,19 @@ const docTemplate = `{
                 "OccurrenceStatusConfirmed"
             ]
         },
+        "github_com_francescocerri_sanitas_services_shifts_internal_shift.OperationalStatus": {
+            "type": "string",
+            "enum": [
+                "complete",
+                "reduced",
+                "closed"
+            ],
+            "x-enum-varnames": [
+                "OperationalStatusComplete",
+                "OperationalStatusReduced",
+                "OperationalStatusClosed"
+            ]
+        },
         "github_com_francescocerri_sanitas_services_shifts_internal_shift.RoleCoverage": {
             "type": "object",
             "properties": {
@@ -599,6 +653,9 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.OccurrenceStatus"
+                },
+                "volunteer_id": {
+                    "type": "string"
                 }
             }
         },

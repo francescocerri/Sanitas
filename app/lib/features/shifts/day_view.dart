@@ -6,6 +6,7 @@ import 'occurrence_card.dart';
 import 'occurrences_async_builder.dart';
 import 'shift_models.dart';
 import 'shifts_filter.dart';
+import 'today_button.dart';
 
 /// Vista Giorno: un giorno alla volta, navigabile avanti/indietro — il
 /// massimo dettaglio fra le 4 viste.
@@ -16,12 +17,17 @@ class DayView extends StatefulWidget {
     required this.selection,
     required this.selectable,
     required this.onToggle,
+    this.onAssign,
   });
 
   final ShiftsFilter filter;
   final Set<String> selection;
   final bool selectable;
   final void Function(ShiftOccurrence occurrence, ShiftRole role) onToggle;
+
+  /// Vedi `OccurrenceCard.onAssign` — non-null solo nella vista Copertura
+  /// del gestore turni.
+  final void Function(ShiftOccurrence occurrence, ShiftRole role)? onAssign;
 
   @override
   State<DayView> createState() => _DayViewState();
@@ -37,15 +43,21 @@ class _DayViewState extends State<DayView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            TodayButton(
+              onPressed: () => setState(() => _day = dateOnly(DateTime.now())),
+            ),
             IconButton(
               icon: const Icon(Icons.chevron_left_rounded),
               onPressed: () => setState(() => _day = addDays(_day, -1)),
             ),
-            Text(
-              DateFormat.yMMMMEEEEd(context.locale.toString()).format(_day),
-              style: theme.textTheme.titleSmall,
+            Expanded(
+              child: Center(
+                child: Text(
+                  DateFormat.yMMMMEEEEd(context.locale.toString()).format(_day),
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.chevron_right_rounded),
@@ -79,6 +91,7 @@ class _DayViewState extends State<DayView> {
                     selectable: widget.selectable,
                     selection: widget.selection,
                     onToggle: widget.onToggle,
+                    onAssign: widget.onAssign,
                   ),
               ],
             );

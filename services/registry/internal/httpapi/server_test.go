@@ -92,6 +92,31 @@ func newTestServer(t *testing.T) (*Server, *user.Repository) {
 	return server, repo
 }
 
+// TestCORS_AllowsAuthorizationHeaderAndPatch guarda da un bug reale: fino ad
+// ora withCORS elencava solo GET/POST in Access-Control-Allow-Methods, mai
+// PATCH — usato da PATCH /v1/users/{id}/roles (modifica ruoli di un
+// utente esistente). Il preflight del browser blocca silenziosamente la
+// PATCH vera e propria in quel caso: curl/chiamate server-to-server (e ogni
+// test esistente, che non passa mai per l'enforcement CORS di un browser
+// reale) continuavano a funzionare, mascherando il problema. Stesso bug già
+// trovato e corretto in `shifts` (vedi il suo `server_test.go`), qui non
+// era mai stato portato.
+func TestCORS_AllowsAuthorizationHeaderAndPatch(t *testing.T) {
+	server, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodOptions, "/v1/users/some-id/roles", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "Authorization") {
+		t.Fatalf("expected Access-Control-Allow-Headers to include Authorization, got %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, "PATCH") {
+		t.Fatalf("expected Access-Control-Allow-Methods to include PATCH, got %q", got)
+	}
+}
+
 // newTestServerWithMailer è come newTestServer ma con un Mailer vero
 // puntato al server SMTP fittizio condiviso (testmail.StartMailpit,
 // avviato una sola volta in TestMain) — stesso codice di produzione,

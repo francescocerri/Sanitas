@@ -20,12 +20,14 @@ class AgendaListView extends StatelessWidget {
     required this.selection,
     required this.selectable,
     required this.onToggle,
+    this.onAssign,
   });
 
   final ShiftsFilter filter;
   final Set<String> selection;
   final bool selectable;
   final void Function(ShiftOccurrence occurrence, ShiftRole role) onToggle;
+  final void Function(ShiftOccurrence occurrence, ShiftRole role)? onAssign;
 
   static const _rangeDays = 30;
 
@@ -83,6 +85,7 @@ class AgendaListView extends StatelessWidget {
                   selectable: selectable,
                   selection: selection,
                   onToggle: onToggle,
+                  onAssign: onAssign,
                 ),
             ],
           ],

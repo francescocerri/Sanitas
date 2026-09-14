@@ -65,6 +65,12 @@ definitions:
         type: string
       label:
         type: string
+      operational_status:
+        allOf:
+        - $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.OperationalStatus'
+        description: |-
+          OperationalStatus is set only once Date is in the past — see
+          OperationalStatus.
       roles:
         items:
           $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.RoleCoverage'
@@ -86,6 +92,16 @@ definitions:
     - OccurrenceStatusFree
     - OccurrenceStatusPending
     - OccurrenceStatusConfirmed
+  github_com_francescocerri_sanitas_services_shifts_internal_shift.OperationalStatus:
+    enum:
+    - complete
+    - reduced
+    - closed
+    type: string
+    x-enum-varnames:
+    - OperationalStatusComplete
+    - OperationalStatusReduced
+    - OperationalStatusClosed
   github_com_francescocerri_sanitas_services_shifts_internal_shift.RoleCoverage:
     properties:
       my_booking_status:
@@ -94,6 +110,8 @@ definitions:
         $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.BookingRole'
       status:
         $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.OccurrenceStatus'
+      volunteer_id:
+        type: string
     type: object
   github_com_francescocerri_sanitas_services_shifts_internal_shift.ShiftTemplate:
     properties:
@@ -365,6 +383,27 @@ paths:
       - BearerAuth: []
       summary: Book a role slot directly for a chosen volunteer, already confirmed
         (requires the shifts:write permission)
+      tags:
+      - shift-bookings
+  /v1/shift-bookings/pending:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_francescocerri_sanitas_services_shifts_internal_shift.Booking'
+            type: array
+        "401":
+          description: Authentication required
+        "403":
+          description: 'Missing required permission: shifts:write'
+      security:
+      - BearerAuth: []
+      summary: List pending booking requests with full detail (requires the shifts:write
+        permission)
       tags:
       - shift-bookings
   /v1/shift-bookings/pending-count:

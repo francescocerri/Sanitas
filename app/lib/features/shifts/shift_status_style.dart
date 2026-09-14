@@ -48,7 +48,11 @@ Color statusColor(
 bool roleIsOutlineOnly(RoleCoverage coverage) =>
     coverage.myBookingStatus == MyBookingStatus.pending;
 
-String roleStatusLabel(RoleCoverage coverage) {
+/// [volunteerName] è lo username già risolto di `coverage.volunteerId`
+/// (solo per una figura confermata non mia, vedi
+/// `RoleCoverage.volunteerId`) — se assente (figura non confermata, o
+/// ancora in attesa di risoluzione) si ricade sul testo generico "Completo".
+String roleStatusLabel(RoleCoverage coverage, {String? volunteerName}) {
   switch (coverage.myBookingStatus) {
     case MyBookingStatus.pending:
       return 'shifts.status_mine_pending'.tr();
@@ -56,6 +60,10 @@ String roleStatusLabel(RoleCoverage coverage) {
       return 'shifts.status_mine_confirmed'.tr();
     case null:
       break;
+  }
+  if (coverage.status == ShiftOccurrenceStatus.confirmed &&
+      volunteerName != null) {
+    return 'shifts.status_confirmed_by'.tr(namedArgs: {'name': volunteerName});
   }
   switch (coverage.status) {
     case ShiftOccurrenceStatus.free:
@@ -112,29 +120,177 @@ MyBookingStatus? myAggregateStatus(ShiftOccurrence occurrence) {
   return null;
 }
 
+/// Stato aggettivo del turno nel suo complesso — indipendente da chi guarda
+/// (a differenza di [myAggregateStatus]), calcolato in un unico punto e
+/// riusato identico dal pallino Mese ([occurrenceCardColor]) e dal
+/// riepilogo della card chiusa in tutte le viste (vedi
+/// `occurrenceSummaryLabel`). `pending` vince SEMPRE su `free` non appena
+/// una delle 3 figure operative (vedi [requiredRolesForCompletion]) è in
+/// attesa, anche se resta un'altra figura libera altrove: prima di questa
+/// unificazione un turno con 2 figure confermate e 1 in attesa poteva
+/// ancora apparire "libero" solo perché l'osservatore lo era — bug
+/// segnalato esplicitamente dall'utente (vedi ADR-0025 "Aggiornamento
+/// (stato aggregato del turno...)").
+enum OccurrenceAggregateStatus { free, pending, complete }
+
+OccurrenceAggregateStatus aggregateStatus(ShiftOccurrence occurrence) {
+  if (occurrence.isComplete) return OccurrenceAggregateStatus.complete;
+  final anyOperativePending = occurrence.roles
+      .where((rc) => requiredRolesForCompletion.contains(rc.role))
+      .any((rc) => rc.status == ShiftOccurrenceStatus.pending);
+  return anyOperativePending
+      ? OccurrenceAggregateStatus.pending
+      : OccurrenceAggregateStatus.free;
+}
+
 /// Colore del singolo pallino aggregato per turno usato dalla vista Mese
 /// (un pallino per turno, non uno per figura — il dettaglio per figura
-/// resta nella card espansa). Priorità: una mia figura confermata o in
-/// attesa vince su tutto; altrimenti almeno una figura ancora libera
-/// (verde) vince su "tutte occupate ma non tutte confermate" (ambra);
-/// tutte e 4 confermate è l'unico caso "completo" (grigio).
+/// resta nella card espansa). Priorità: [ShiftOccurrence.operationalStatus]
+/// (se presente, l'occorrenza è passata: l'esito oggettivo — si è svolta o
+/// no — conta più di chi ci fosse) vince su tutto; altrimenti una mia
+/// figura confermata o in attesa vince sul resto; altrimenti segue
+/// [aggregateStatus]. "Ridotto" usa un blu dedicato (non fa parte della
+/// palette per-comitato, stesso principio di verde/ambra qui sopra);
+/// "chiuso" riusa il grigio di "completo" — la X viene disegnata sopra da
+/// chi consuma [occurrenceCardClosedMarker], il colore da solo non basta a
+/// distinguerli.
 Color occurrenceCardColor(BuildContext context, ShiftOccurrence occurrence) {
+  final operational = occurrence.operationalStatus;
+  if (operational != null) {
+    switch (operational) {
+      case ShiftOperationalStatus.complete:
+      case ShiftOperationalStatus.closed:
+        return Theme.of(context).colorScheme.onSurfaceVariant;
+      case ShiftOperationalStatus.reduced:
+        return Colors.blue.shade600;
+    }
+  }
   if (myAggregateStatus(occurrence) != null) {
     return Theme.of(context).colorScheme.primary;
   }
-  if (occurrence.roles.any((rc) => rc.status == ShiftOccurrenceStatus.free)) {
-    return Colors.green.shade600;
+  switch (aggregateStatus(occurrence)) {
+    case OccurrenceAggregateStatus.complete:
+      return Theme.of(context).colorScheme.onSurfaceVariant;
+    case OccurrenceAggregateStatus.pending:
+      return Colors.amber.shade700;
+    case OccurrenceAggregateStatus.free:
+      return Colors.green.shade600;
   }
-  if (occurrence.roles.any(
-    (rc) => rc.status == ShiftOccurrenceStatus.pending,
-  )) {
-    return Colors.amber.shade700;
-  }
-  return Theme.of(context).colorScheme.onSurfaceVariant;
 }
 
 /// true solo quando l'aggregato è "mia richiesta in attesa" — stesso
 /// trattamento anello-vs-pieno di [roleIsOutlineOnly], applicato al
-/// pallino per turno invece che a quello per figura.
+/// pallino per turno invece che a quello per figura. Mai true su
+/// un'occorrenza passata (`operationalStatus` non nullo): l'esito
+/// oggettivo prende il posto di "mio" anche qui, niente anello.
 bool occurrenceCardOutline(ShiftOccurrence occurrence) =>
+    occurrence.operationalStatus == null &&
     myAggregateStatus(occurrence) == MyBookingStatus.pending;
+
+/// true solo per un'occorrenza passata risultata "chiusa" (autista o
+/// leader non confermati) — chi disegna il pallino Mese ci sovrappone una
+/// piccola X, il colore da solo (uguale a "completo") non li distingue.
+bool occurrenceCardClosedMarker(ShiftOccurrence occurrence) =>
+    occurrence.operationalStatus == ShiftOperationalStatus.closed;
+
+/// Testo del riepilogo compatto di una card chiusa (tutte le viste: Mese,
+/// Settimana, Giorno, Lista) — stessa priorità di [occurrenceCardColor],
+/// così pallino e card non divergono mai. [openCount] è precalcolato dal
+/// chiamante e conta SOLO le figure operative libere (vedi
+/// `requiredRolesForCompletion`, mai l'osservatore — un "3/3 libero" con
+/// l'osservatore ancora libero sarebbe fuorviante): usato dal caso `free`
+/// ("N/3 libero") ma anche da `pending` e dai due casi "mio" (in
+/// attesa/confermato per me), per non far sparire quante figure operative
+/// restano comunque libere — richiesto esplicitamente dall'utente dopo il
+/// fix della priorità pending-su-libero: sapere "sono confermato" o "c'è
+/// una decisione in sospeso" non deve nascondere che restano altri posti
+/// da coprire.
+String occurrenceSummaryLabel(
+  ShiftOccurrence occurrence, {
+  required int openCount,
+}) {
+  final mine = myAggregateStatus(occurrence);
+  if (mine == MyBookingStatus.pending) {
+    return openCount > 0
+        ? 'shifts.card_pending_count'.tr(namedArgs: {'count': '$openCount'})
+        : 'shifts.mine_badge_pending'.tr();
+  }
+  if (mine == MyBookingStatus.confirmed) {
+    return openCount > 0
+        ? 'shifts.card_mine_confirmed_count'.tr(
+            namedArgs: {'count': '$openCount'},
+          )
+        : 'shifts.mine_badge_confirmed'.tr();
+  }
+  switch (aggregateStatus(occurrence)) {
+    case OccurrenceAggregateStatus.complete:
+      return 'shifts.status_confirmed'.tr();
+    case OccurrenceAggregateStatus.pending:
+      return openCount > 0
+          ? 'shifts.card_pending_count'.tr(namedArgs: {'count': '$openCount'})
+          : 'shifts.status_pending'.tr();
+    case OccurrenceAggregateStatus.free:
+      return 'shifts.card_open_count'.tr(namedArgs: {'count': '$openCount'});
+  }
+}
+
+/// Sfondo, testo, icona opzionale ed etichetta del badge di riepilogo
+/// della card chiusa (tutte le viste) — un solo punto che decide TUTTO lo
+/// stile del badge, così `occurrence_card.dart` si limita a disegnarlo.
+/// Se `operationalStatus` è presente (occorrenza passata) ha priorità
+/// assoluta, stesso principio di [occurrenceCardColor]: niente più "mio"
+/// né libero/in attesa, solo l'esito oggettivo — "chiuso" è l'unico caso
+/// con un'icona (una X, richiesta esplicitamente dall'utente nel mockup
+/// approvato). Altrimenti ricade sulla stessa logica "mio"/[aggregateStatus]
+/// di sempre via [occurrenceSummaryLabel].
+typedef OccurrenceSummaryBadge = ({
+  Color background,
+  Color foreground,
+  IconData? icon,
+  String label,
+});
+
+OccurrenceSummaryBadge occurrenceSummaryBadge(
+  BuildContext context,
+  ShiftOccurrence occurrence, {
+  required int openCount,
+}) {
+  final theme = Theme.of(context);
+  final operational = occurrence.operationalStatus;
+  if (operational != null) {
+    switch (operational) {
+      case ShiftOperationalStatus.complete:
+        return (
+          background: theme.colorScheme.surfaceContainerHighest,
+          foreground: theme.colorScheme.onSurfaceVariant,
+          icon: null,
+          label: 'shifts.status_confirmed'.tr(),
+        );
+      case ShiftOperationalStatus.reduced:
+        return (
+          background: Colors.blue.shade50,
+          foreground: Colors.blue.shade800,
+          icon: null,
+          label: 'shifts.status_reduced'.tr(),
+        );
+      case ShiftOperationalStatus.closed:
+        return (
+          background: Colors.red.shade50,
+          foreground: Colors.red.shade800,
+          icon: Icons.close_rounded,
+          label: 'shifts.status_closed'.tr(),
+        );
+    }
+  }
+  final mine = myAggregateStatus(occurrence);
+  return (
+    background: mine != null
+        ? theme.colorScheme.primaryContainer
+        : theme.colorScheme.surfaceContainerHighest,
+    foreground: mine != null
+        ? theme.colorScheme.onPrimaryContainer
+        : theme.colorScheme.onSurfaceVariant,
+    icon: null,
+    label: occurrenceSummaryLabel(occurrence, openCount: openCount),
+  );
+}

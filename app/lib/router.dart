@@ -12,6 +12,7 @@ import 'features/login/login_screen.dart';
 import 'features/manage_users/manage_users_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/reset_password/reset_password_screen.dart';
+import 'features/shifts/manage/shift_manager_screen.dart';
 import 'features/shifts/shifts_screen.dart';
 import 'features/splash/splash_screen.dart';
 
@@ -86,6 +87,11 @@ final routerProvider = Provider<GoRouter>((ref) {
               !(authState.claims?.hasPermission('shifts:read') ?? false)) {
             return '/home';
           }
+          if (location == '/shifts/manage' &&
+              !(authState.claims?.hasPermission('shifts:write') ?? false) &&
+              !(authState.claims?.hasPermission('shifts:configure') ?? false)) {
+            return '/home';
+          }
           // Dopo il login si atterra sulla home (un punto di partenza da
           // cui raggiungere le varie aree dell'app), non più dritti sul
           // profilo — quello resta una delle destinazioni raggiungibili
@@ -113,6 +119,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/shifts',
         pageBuilder: (context, state) =>
             _fadeTransitionPage(const ShiftsScreen()),
+      ),
+      GoRoute(
+        path: '/shifts/manage',
+        pageBuilder: (context, state) =>
+            _fadeTransitionPage(const ShiftManagerScreen()),
       ),
       GoRoute(
         path: '/',

@@ -252,6 +252,13 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, ca
 
 	statusByKey := make(map[roleKey]OccurrenceStatus, len(bookings))
 	mineByKey := make(map[roleKey]BookingStatus, len(bookings))
+	// volunteerByKey only ever holds a CONFIRMED booking's volunteer — a
+	// pending request's identity stays hidden from everyone but the
+	// requester themselves (mineByKey above), see RoleCoverage.VolunteerID.
+	// At most one confirmed booking can exist per key (unique partial
+	// index on (template_id, date, role) WHERE status = 'confirmed'), so
+	// there's never a conflicting write here.
+	volunteerByKey := make(map[roleKey]string, len(bookings))
 	for _, b := range bookings {
 		if b.Status != BookingStatusPending && b.Status != BookingStatusConfirmed {
 			continue
@@ -263,6 +270,7 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, ca
 		status := OccurrenceStatusPending
 		if b.Status == BookingStatusConfirmed {
 			status = OccurrenceStatusConfirmed
+			volunteerByKey[key] = b.VolunteerID
 		}
 		if status == OccurrenceStatusConfirmed || statusByKey[key] != OccurrenceStatusConfirmed {
 			statusByKey[key] = status
@@ -271,6 +279,12 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, ca
 			mineByKey[key] = b.Status
 		}
 	}
+
+	// Same cutoff as parseAndValidateBookingDate in internal/httpapi
+	// (different package, so replicated rather than shared): today itself
+	// still counts as "not passed yet" — a shift happening tonight hasn't
+	// been decided yet, only a day strictly before today has.
+	today := time.Now().UTC().Truncate(24 * time.Hour)
 
 	// Date-outer, template-inner: templates are already ordered by
 	// (weekday, start_time), so this loop produces occurrences already
@@ -294,16 +308,26 @@ func (r *Repository) ListOccurrences(ctx context.Context, from, to time.Time, ca
 				if s, ok := mineByKey[key]; ok {
 					myStatus = &s
 				}
-				roles = append(roles, RoleCoverage{Role: role, Status: status, MyBookingStatus: myStatus})
+				var volunteerID *string
+				if v, ok := volunteerByKey[key]; ok {
+					volunteerID = &v
+				}
+				roles = append(roles, RoleCoverage{Role: role, Status: status, MyBookingStatus: myStatus, VolunteerID: volunteerID})
+			}
+			var operationalStatus *OperationalStatus
+			if d.Before(today) {
+				s := operationalStatusFor(roles)
+				operationalStatus = &s
 			}
 			occurrences = append(occurrences, Occurrence{
-				TemplateID: t.ID,
-				Date:       d,
-				Weekday:    weekday,
-				StartTime:  t.StartTime,
-				EndTime:    t.EndTime,
-				Label:      t.Label,
-				Roles:      roles,
+				TemplateID:        t.ID,
+				Date:              d,
+				Weekday:           weekday,
+				StartTime:         t.StartTime,
+				EndTime:           t.EndTime,
+				Label:             t.Label,
+				Roles:             roles,
+				OperationalStatus: operationalStatus,
 			})
 		}
 	}
@@ -341,6 +365,25 @@ func (r *Repository) HasBookingForVolunteer(ctx context.Context, templateID stri
 		return false, fmt.Errorf("shift: has booking for volunteer: %w", err)
 	}
 	return n > 0, nil
+}
+
+// ListPendingBookings returns every pending booking, oldest slot first — the
+// shift manager's "Richieste" tab detail list (voce 11 del backlog).
+// Deliberately not scoped to a date range (unlike ListOccurrences): a
+// manager needs to see every outstanding request regardless of which
+// calendar range happens to be on screen. Volunteer name and template label
+// are NOT resolved here — the caller already knows both via
+// registry.GET /v1/users and shifts.GET /v1/shift-templates, so this stays
+// a thin read instead of a cross-schema join.
+func (r *Repository) ListPendingBookings(ctx context.Context) ([]Booking, error) {
+	result := []Booking{}
+	if err := r.db.WithContext(ctx).
+		Where("status = ?", BookingStatusPending).
+		Order("date, start_time").
+		Find(&result).Error; err != nil {
+		return nil, fmt.Errorf("shift: list pending bookings: %w", err)
+	}
+	return result, nil
 }
 
 // CountPendingBookings is the shift manager's in-app badge count — global,

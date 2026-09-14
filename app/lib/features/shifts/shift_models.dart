@@ -33,6 +33,28 @@ MyBookingStatus? _parseMyBookingStatus(String? raw) {
   }
 }
 
+/// Esito operativo di un'INTERA occorrenza, non di una singola figura —
+/// diverso da [ShiftOccurrenceStatus]: valorizzato dal backend SOLO quando
+/// la data dell'occorrenza è già passata (vedi
+/// `shift.OperationalStatus`/`operationalStatusFor` in
+/// `services/shifts/internal/shift/occurrence.go`). Finché è null lo stato
+/// libero/in attesa/completo per figura resta l'unico segnale valido —
+/// vedi ADR-0025 "Aggiornamento (stato operativo: completo/ridotto/chiuso)".
+enum ShiftOperationalStatus { complete, reduced, closed }
+
+ShiftOperationalStatus? _parseOperationalStatus(String? raw) {
+  switch (raw) {
+    case 'complete':
+      return ShiftOperationalStatus.complete;
+    case 'reduced':
+      return ShiftOperationalStatus.reduced;
+    case 'closed':
+      return ShiftOperationalStatus.closed;
+    default:
+      return null;
+  }
+}
+
 /// Le 4 figure che compongono un turno (vedi ADR-0025 "Aggiornamento") — un
 /// enum fisso, non configurabile per comitato: composizione di un
 /// equipaggio CRI, non una scelta specifica di Pavullo. Nomi delle
@@ -41,7 +63,9 @@ MyBookingStatus? _parseMyBookingStatus(String? raw) {
 /// conversione manuale da mantenere in sync.
 enum ShiftRole { driver, leader, rescuer, observer }
 
-ShiftRole? _parseRole(String raw) {
+/// Pubblica (non solo per `RoleCoverage.fromJson` qui sotto): riusata anche
+/// da `shifts_providers.dart` per decodificare `PendingBooking.role`.
+ShiftRole? parseShiftRole(String raw) {
   for (final role in ShiftRole.values) {
     if (role.name == raw) return role;
   }
@@ -53,6 +77,17 @@ ShiftRole? _parseRole(String raw) {
 /// `requestBulkBookings` spedisce (vedi `shifts_providers.dart`).
 typedef BookingSelection = ({ShiftOccurrence occurrence, ShiftRole role});
 
+/// Le figure la cui conferma basta perché un turno sia "al completo" —
+/// autista, leader e soccorritore. L'osservatore è facoltativo: un turno
+/// con queste 3 confermate è pienamente operativo anche senza osservatore
+/// (vincolo di dominio esplicitato dall'utente, vedi ADR-0025
+/// "Aggiornamento").
+const requiredRolesForCompletion = {
+  ShiftRole.driver,
+  ShiftRole.leader,
+  ShiftRole.rescuer,
+};
+
 /// Copertura di una singola figura su un'occorrenza — quattro di queste
 /// compongono `ShiftOccurrence.roles`, sempre nello stesso ordine di
 /// `ShiftRole.values` (stesso ordine canonico del backend).
@@ -61,11 +96,20 @@ class RoleCoverage {
     required this.role,
     required this.status,
     required this.myBookingStatus,
+    required this.volunteerId,
   });
 
   final ShiftRole role;
   final ShiftOccurrenceStatus status;
   final MyBookingStatus? myBookingStatus;
+
+  /// Chi è confermato su questa figura — presente SOLO quando `status` è
+  /// `confirmed` (mai per una richiesta ancora in attesa, la cui identità
+  /// resta nascosta finché non viene decisa): visibile a chiunque abbia
+  /// `shifts:read`, non solo al gestore turni (vedi ADR-0025
+  /// "Aggiornamento"). Un id, non un nome: risolto a uno username tramite
+  /// `usersProvider` da chi lo mostra.
+  final String? volunteerId;
 
   /// Prenotabile da un nuovo volontario: libera, oppure già in attesa ma
   /// non ancora confermata (più richieste pending possono coesistere sulla
@@ -74,7 +118,7 @@ class RoleCoverage {
       myBookingStatus == null && status != ShiftOccurrenceStatus.confirmed;
 
   factory RoleCoverage.fromJson(Map<String, dynamic> json) {
-    final role = _parseRole(json['role'] as String);
+    final role = parseShiftRole(json['role'] as String);
     if (role == null) {
       throw FormatException('unknown role in response: ${json['role']}');
     }
@@ -84,6 +128,7 @@ class RoleCoverage {
       myBookingStatus: _parseMyBookingStatus(
         json['my_booking_status'] as String?,
       ),
+      volunteerId: json['volunteer_id'] as String?,
     );
   }
 }
@@ -101,6 +146,7 @@ class ShiftOccurrence {
     required this.endTime,
     required this.label,
     required this.roles,
+    required this.operationalStatus,
   });
 
   final String templateId;
@@ -119,6 +165,10 @@ class ShiftOccurrence {
   /// ordine di `ShiftRole.values`.
   final List<RoleCoverage> roles;
 
+  /// Esito operativo, valorizzato dal backend SOLO se `date` è già
+  /// passata — vedi [ShiftOperationalStatus].
+  final ShiftOperationalStatus? operationalStatus;
+
   /// Solo la parte data, formato `YYYY-MM-DD` — usata sia per la chiave di
   /// selezione sia per il payload della richiesta bulk.
   String get dateKey => date.toIso8601String().split('T').first;
@@ -128,6 +178,12 @@ class ShiftOccurrence {
 
   RoleCoverage coverageFor(ShiftRole role) =>
       roles.firstWhere((rc) => rc.role == role);
+
+  /// Vero quando le 3 figure richieste (vedi [requiredRolesForCompletion])
+  /// sono tutte confermate — l'osservatore, libero o meno, non influisce.
+  bool get isComplete => roles
+      .where((rc) => requiredRolesForCompletion.contains(rc.role))
+      .every((rc) => rc.status == ShiftOccurrenceStatus.confirmed);
 
   factory ShiftOccurrence.fromJson(Map<String, dynamic> json) {
     return ShiftOccurrence(
@@ -140,6 +196,9 @@ class ShiftOccurrence {
       roles: (json['roles'] as List<dynamic>)
           .map((r) => RoleCoverage.fromJson(r as Map<String, dynamic>))
           .toList(),
+      operationalStatus: _parseOperationalStatus(
+        json['operational_status'] as String?,
+      ),
     );
   }
 }

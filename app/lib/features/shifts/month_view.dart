@@ -8,6 +8,7 @@ import 'occurrences_async_builder.dart';
 import 'shift_models.dart';
 import 'shift_status_style.dart';
 import 'shifts_filter.dart';
+import 'today_button.dart';
 
 /// Vista Mese: griglia calendario (pacchetto `table_calendar`, vedi
 /// `docs/backlog.md`) con un pallino colorato per turno sotto ogni giorno
@@ -23,12 +24,14 @@ class MonthView extends StatefulWidget {
     required this.selection,
     required this.selectable,
     required this.onToggle,
+    this.onAssign,
   });
 
   final ShiftsFilter filter;
   final Set<String> selection;
   final bool selectable;
   final void Function(ShiftOccurrence occurrence, ShiftRole role) onToggle;
+  final void Function(ShiftOccurrence occurrence, ShiftRole role)? onAssign;
 
   @override
   State<MonthView> createState() => _MonthViewState();
@@ -62,6 +65,19 @@ class _MonthViewState extends State<MonthView> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // `TableCalendar` ha già un proprio header con frecce
+            // mese-precedente/successivo e il titolo — nessuno slot per un
+            // terzo bottone lì dentro, quindi "torna a oggi" vive in una
+            // riga sottile sopra, allineata a destra.
+            Align(
+              alignment: Alignment.centerRight,
+              child: TodayButton(
+                onPressed: () => setState(() {
+                  _focusedDay = dateOnly(DateTime.now());
+                  _selectedDay = dateOnly(DateTime.now());
+                }),
+              ),
+            ),
             TableCalendar<ShiftOccurrence>(
               locale: context.locale.toString(),
               firstDay: DateTime.now().subtract(const Duration(days: 365)),
@@ -126,27 +142,40 @@ class _MonthViewState extends State<MonthView> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       for (final occurrence in events.take(3))
-                        Container(
-                          width: 6,
-                          height: 6,
-                          margin: const EdgeInsets.symmetric(horizontal: 1),
-                          decoration: occurrenceCardOutline(occurrence)
-                              ? BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: occurrenceCardColor(
-                                      context,
-                                      occurrence,
-                                    ),
-                                    width: 1.2,
-                                  ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 1),
+                          // Un turno "chiuso" (vedi
+                          // `occurrenceCardClosedMarker`) è una X diretta,
+                          // non un pallino con una X sovrapposta: a 6px un
+                          // cerchio più un'icona sopra risultava illeggibile
+                          // — segnalato esplicitamente dall'utente.
+                          child: occurrenceCardClosedMarker(occurrence)
+                              ? Icon(
+                                  Icons.close_rounded,
+                                  size: 9,
+                                  color: Colors.red.shade700,
                                 )
-                              : BoxDecoration(
-                                  color: occurrenceCardColor(
-                                    context,
-                                    occurrence,
-                                  ),
-                                  shape: BoxShape.circle,
+                              : Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: occurrenceCardOutline(occurrence)
+                                      ? BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: occurrenceCardColor(
+                                              context,
+                                              occurrence,
+                                            ),
+                                            width: 1.2,
+                                          ),
+                                        )
+                                      : BoxDecoration(
+                                          color: occurrenceCardColor(
+                                            context,
+                                            occurrence,
+                                          ),
+                                          shape: BoxShape.circle,
+                                        ),
                                 ),
                         ),
                     ],
@@ -181,6 +210,7 @@ class _MonthViewState extends State<MonthView> {
                     selectable: widget.selectable,
                     selection: widget.selection,
                     onToggle: widget.onToggle,
+                    onAssign: widget.onAssign,
                   ),
             ],
           ],
