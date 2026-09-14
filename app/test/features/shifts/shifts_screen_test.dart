@@ -12,8 +12,11 @@ import 'package:sanitas_app/core/auth/auth_state.dart';
 import 'package:sanitas_app/core/jwt.dart';
 import 'package:sanitas_app/core/shifts_api_client.dart';
 import 'package:sanitas_app/core/theme/committee_theme.dart';
+import 'package:sanitas_app/features/shifts/occurrence_card.dart';
+import 'package:sanitas_app/features/shifts/shift_models.dart';
 import 'package:sanitas_app/features/shifts/shifts_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 class _Translations extends AssetLoader {
   const _Translations();
@@ -167,8 +170,11 @@ void main() {
     Dio dio, {
     required List<String> permissions,
     Dio? registryDio,
+    // Stretto (mobile) di default, come sempre — solo il test dedicato
+    // allo schermo largo lo sovrascrive.
+    Size size = const Size(500, 1200),
   }) async {
-    tester.view.physicalSize = const Size(500, 1200);
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -503,7 +509,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(todayLabel), findsNothing);
 
-    await tester.tap(find.byTooltip('Oggi'));
+    await tester.tap(find.text('Oggi'));
     await tester.pumpAndSettle();
     expect(find.text(todayLabel), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -641,6 +647,45 @@ void main() {
     expect(find.text('In attesa'), findsOneWidget);
     expect(find.text('In attesa · 1/3 libero'), findsOneWidget);
     expect(find.text('2/4 libero'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('on a wide screen (desktop breakpoint) the Mese day detail shows '
+      'occurrence cards two per row instead of stacked one under the other '
+      '— fixes the calendar feeling too small/stretched on a laptop, '
+      'reported by the user', (tester) async {
+    final requests = <RequestOptions>[];
+    await mount(
+      tester,
+      _fakeShiftsDio(requests),
+      permissions: const ['shifts:read'],
+      size: const Size(1400, 900),
+    );
+
+    // Mese è già la vista di default. Tutte e 3 le occorrenze del fake
+    // backend cadono il primo giorno del range interrogato (vedi
+    // `_fakeShiftsDio`), cioè il 1° del mese mostrato — con
+    // `outsideDaysVisible: false` è l'unico "1" nella griglia.
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byType(TableCalendar<ShiftOccurrence>),
+            matching: find.text('1'),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+
+    final cards = find.byType(OccurrenceCard);
+    expect(cards, findsNWidgets(3));
+    final firstTop = tester.getTopLeft(cards.at(0));
+    final secondTop = tester.getTopLeft(cards.at(1));
+    final thirdTop = tester.getTopLeft(cards.at(2));
+    // Prime due card affiancate (stessa riga)...
+    expect(firstTop.dy, secondTop.dy);
+    expect(secondTop.dx, greaterThan(firstTop.dx));
+    // ...la terza va a capo sulla riga successiva.
+    expect(thirdTop.dy, greaterThan(firstTop.dy));
     expect(tester.takeException(), isNull);
   });
 }

@@ -16,6 +16,7 @@ import '../shifts_filter.dart';
 import '../shifts_legend.dart';
 import '../shifts_providers.dart';
 import '../shifts_screen.dart' show ShiftsView;
+import '../shifts_toolbar.dart';
 import '../week_view.dart';
 import 'shift_templates_tab.dart';
 import 'volunteer_picker.dart';
@@ -133,53 +134,59 @@ class _CoverageTabState extends ConsumerState<_CoverageTab> {
     }
   }
 
+  // Stessa soglia di `ShiftsScreen` (schermata del volontario) — riapplicata
+  // qui perché questa tab usa lo stesso `MonthView` e lo stesso
+  // `ConstrainedBox` fisso a 720, causa dello stesso "calendario troppo
+  // piccolo su desktop" segnalato dall'utente.
+  static const _wideBreakpoint = 840.0;
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
+        constraints: BoxConstraints(maxWidth: isWide ? 1100 : 720),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: SegmentedButton<ShiftsView>(
-                segments: [
-                  ButtonSegment(
-                    value: ShiftsView.day,
-                    label: Text('shifts.view_day'.tr()),
-                  ),
-                  ButtonSegment(
-                    value: ShiftsView.week,
-                    label: Text('shifts.view_week'.tr()),
-                  ),
-                  ButtonSegment(
-                    value: ShiftsView.month,
-                    label: Text('shifts.view_month'.tr()),
-                  ),
-                  ButtonSegment(
-                    value: ShiftsView.list,
-                    label: Text('shifts.view_list'.tr()),
-                  ),
-                ],
-                selected: {_view},
-                onSelectionChanged: (selection) =>
-                    setState(() => _view = selection.first),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Wrap(
-                spacing: 8,
+              child: ShiftsToolbarCard(
                 children: [
-                  ChoiceChip(
-                    label: Text('shifts.filter_all'.tr()),
+                  SegmentedButton<ShiftsView>(
+                    style: segmentedButtonStyle(theme),
+                    showSelectedIcon: false,
+                    segments: [
+                      ButtonSegment(
+                        value: ShiftsView.day,
+                        label: Text('shifts.view_day'.tr()),
+                      ),
+                      ButtonSegment(
+                        value: ShiftsView.week,
+                        label: Text('shifts.view_week'.tr()),
+                      ),
+                      ButtonSegment(
+                        value: ShiftsView.month,
+                        label: Text('shifts.view_month'.tr()),
+                      ),
+                      ButtonSegment(
+                        value: ShiftsView.list,
+                        label: Text('shifts.view_list'.tr()),
+                      ),
+                    ],
+                    selected: {_view},
+                    onSelectionChanged: (selection) =>
+                        setState(() => _view = selection.first),
+                  ),
+                  FilterChipPill(
+                    label: 'shifts.filter_all'.tr(),
                     selected: _filter == ShiftsFilter.all,
                     onSelected: (_) =>
                         setState(() => _filter = ShiftsFilter.all),
                   ),
-                  ChoiceChip(
-                    label: Text('shifts.filter_free'.tr()),
+                  FilterChipPill(
+                    label: 'shifts.filter_free'.tr(),
                     selected: _filter == ShiftsFilter.free,
                     onSelected: (_) =>
                         setState(() => _filter = ShiftsFilter.free),
@@ -215,6 +222,7 @@ class _CoverageTabState extends ConsumerState<_CoverageTab> {
                     selectable: false,
                     onToggle: (_, _) {},
                     onAssign: _handleAssign,
+                    isWide: isWide,
                   ),
                   ShiftsView.list => AgendaListView(
                     filter: _filter,

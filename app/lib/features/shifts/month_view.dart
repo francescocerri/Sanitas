@@ -24,6 +24,7 @@ class MonthView extends StatefulWidget {
     required this.selection,
     required this.selectable,
     required this.onToggle,
+    required this.isWide,
     this.onAssign,
   });
 
@@ -32,6 +33,15 @@ class MonthView extends StatefulWidget {
   final bool selectable;
   final void Function(ShiftOccurrence occurrence, ShiftRole role) onToggle;
   final void Function(ShiftOccurrence occurrence, ShiftRole role)? onAssign;
+
+  /// Sopra la soglia di `ShiftsScreen` (schermo largo, es. laptop):
+  /// celle/pallini più grandi e le card del dettaglio giorno affiancate a
+  /// coppie invece che impilate — la shell attorno è già più larga
+  /// (`ConstrainedBox` in `shifts_screen.dart`), qui si usa davvero quello
+  /// spazio in più. Sotto la soglia il rendering resta identico a prima
+  /// (tablet/mobile verificati, non da toccare — richiesto esplicitamente
+  /// dall'utente).
+  final bool isWide;
 
   @override
   State<MonthView> createState() => _MonthViewState();
@@ -87,6 +97,12 @@ class _MonthViewState extends State<MonthView> {
               // (vedi date_math.dart/_startOfWeek), non la domenica di
               // default del pacchetto.
               startingDayOfWeek: StartingDayOfWeek.monday,
+              // 52 è il default del pacchetto, reso esplicito qui — su
+              // schermo largo le celle diventano davvero più grandi (non
+              // solo più larghe), richiesto esplicitamente dall'utente dopo
+              // aver visto il calendario troppo piccolo su un laptop da
+              // 15".
+              rowHeight: widget.isWide ? 96 : 52,
               headerStyle: const HeaderStyle(
                 formatButtonVisible: false,
                 titleCentered: true,
@@ -95,22 +111,33 @@ class _MonthViewState extends State<MonthView> {
               // (cerchi pieni, quella "selezionato" pure di un blu che non
               // c'entra col tema) e sovradimensionate rispetto ai puntini
               // di stato: "oggi" resta un anello sottile nel colore del
-              // comitato; "selezionato" un riempimento leggero (stesso
-              // colore, non il blu di default) con testo in grassetto —
-              // nessuno dei due un cerchio pieno e marcato. `cellMargin`
-              // più ampio del default riduce anche la dimensione fisica di
-              // entrambi rispetto alla cella.
+              // comitato su schermo stretto (comportamento verificato,
+              // invariato); su schermo largo diventa un cerchio pieno, più
+              // invitante con celle così più grandi (mockup approvato).
+              // "selezionato" un riempimento leggero (stesso colore, non il
+              // blu di default) con testo in grassetto in entrambi i casi.
+              // `cellMargin` più ampio del default riduce anche la
+              // dimensione fisica di entrambi rispetto alla cella.
               calendarStyle: CalendarStyle(
                 outsideDaysVisible: false,
                 cellMargin: const EdgeInsets.all(8),
-                todayDecoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: theme.colorScheme.primary,
-                    width: 1.5,
-                  ),
+                todayDecoration: widget.isWide
+                    ? BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.colorScheme.primary,
+                      )
+                    : BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: theme.colorScheme.primary,
+                          width: 1.5,
+                        ),
+                      ),
+                todayTextStyle: TextStyle(
+                  color: widget.isWide
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.primary,
                 ),
-                todayTextStyle: TextStyle(color: theme.colorScheme.primary),
                 selectedDecoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: theme.colorScheme.primary.withValues(alpha: 0.16),
@@ -138,6 +165,8 @@ class _MonthViewState extends State<MonthView> {
               calendarBuilders: CalendarBuilders(
                 markerBuilder: (context, day, events) {
                   if (events.isEmpty) return null;
+                  final dotSize = widget.isWide ? 8.0 : 6.0;
+                  final xSize = widget.isWide ? 12.0 : 9.0;
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -152,12 +181,12 @@ class _MonthViewState extends State<MonthView> {
                           child: occurrenceCardClosedMarker(occurrence)
                               ? Icon(
                                   Icons.close_rounded,
-                                  size: 9,
+                                  size: xSize,
                                   color: Colors.red.shade700,
                                 )
                               : Container(
-                                  width: 6,
-                                  height: 6,
+                                  width: dotSize,
+                                  height: dotSize,
                                   decoration: occurrenceCardOutline(occurrence)
                                       ? BoxDecoration(
                                           shape: BoxShape.circle,
@@ -203,7 +232,7 @@ class _MonthViewState extends State<MonthView> {
                     ),
                   ),
                 )
-              else
+              else if (!widget.isWide)
                 for (final occurrence in selectedItems)
                   OccurrenceCard(
                     occurrence: occurrence,
@@ -211,6 +240,45 @@ class _MonthViewState extends State<MonthView> {
                     selection: widget.selection,
                     onToggle: widget.onToggle,
                     onAssign: widget.onAssign,
+                  )
+              else
+                // Schermo largo: le card (ad altezza variabile, si
+                // espandono al tocco) si affiancano a coppie invece di
+                // restare impilate in un'unica colonna stretta — niente
+                // `GridView` (richiede un aspect ratio fisso, qui l'altezza
+                // cambia quando una card si espande): ogni riga è
+                // semplicemente larga quanto la sua card più alta, la
+                // successiva parte sotto.
+                for (var i = 0; i < selectedItems.length; i += 2)
+                  // `OccurrenceCard` porta già il proprio margine inferiore
+                  // (8px): niente Padding aggiuntivo qui, altrimenti lo
+                  // spazio fra una riga e la successiva raddoppierebbe
+                  // rispetto alla colonna singola di sotto la soglia.
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: OccurrenceCard(
+                          occurrence: selectedItems[i],
+                          selectable: widget.selectable,
+                          selection: widget.selection,
+                          onToggle: widget.onToggle,
+                          onAssign: widget.onAssign,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: i + 1 < selectedItems.length
+                            ? OccurrenceCard(
+                                occurrence: selectedItems[i + 1],
+                                selectable: widget.selectable,
+                                selection: widget.selection,
+                                onToggle: widget.onToggle,
+                                onAssign: widget.onAssign,
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
                   ),
             ],
           ],

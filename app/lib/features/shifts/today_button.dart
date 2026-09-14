@@ -13,10 +13,22 @@ class TodayButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: 'shifts.today'.tr(),
-      icon: const Icon(Icons.today_rounded),
+    final scheme = Theme.of(context).colorScheme;
+    // Pillola con etichetta invece della sola icona — rifinitura richiesta
+    // esplicitamente dall'utente dopo il mockup ("i bottoni erano fatti
+    // meglio"), stesso trattamento di `FilterChipPill`/`ShiftsToolbarCard`
+    // (bordo sottile, angoli pieni, nessun riempimento marcato).
+    return OutlinedButton.icon(
       onPressed: onPressed,
+      icon: const Icon(Icons.today_rounded, size: 16),
+      label: Text('shifts.today'.tr()),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: scheme.onSurfaceVariant,
+        side: BorderSide(color: scheme.outlineVariant),
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        textStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }

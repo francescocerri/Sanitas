@@ -13,6 +13,7 @@ import 'shift_models.dart';
 import 'shifts_filter.dart';
 import 'shifts_legend.dart';
 import 'shifts_providers.dart';
+import 'shifts_toolbar.dart';
 import 'week_view.dart';
 
 enum ShiftsView { day, week, month, list }
@@ -35,6 +36,14 @@ class ShiftsScreen extends ConsumerStatefulWidget {
 class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
   ShiftsView _view = ShiftsView.month;
   ShiftsFilter _filter = ShiftsFilter.all;
+
+  /// Stessa soglia di [AuthShell] (`core/widgets/auth_shell.dart`) — sotto
+  /// resta il layout di sempre (verificato bene su tablet/mobile, non da
+  /// toccare), sopra la schermata usa lo spazio in più invece di restare
+  /// compressa in una colonna stretta anche su un laptop da 15" (bug
+  /// segnalato dall'utente: `ConstrainedBox` fissa a 720 indipendentemente
+  /// dallo schermo).
+  static const _wideBreakpoint = 840.0;
 
   // Chiave = ShiftOccurrence.keyFor(role) — una selezione è sempre una
   // COPPIA occorrenza+figura, non solo un'occorrenza (un turno ha 4 figure
@@ -73,8 +82,10 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final canRequest = ref.watch(canRequestShiftsProvider);
     final selection = _selected.keys.toSet();
+    final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
 
     return Scaffold(
       appBar: AppBar(
@@ -89,55 +100,53 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
+            constraints: BoxConstraints(maxWidth: isWide ? 1100 : 720),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: SegmentedButton<ShiftsView>(
-                    segments: [
-                      ButtonSegment(
-                        value: ShiftsView.day,
-                        label: Text('shifts.view_day'.tr()),
-                      ),
-                      ButtonSegment(
-                        value: ShiftsView.week,
-                        label: Text('shifts.view_week'.tr()),
-                      ),
-                      ButtonSegment(
-                        value: ShiftsView.month,
-                        label: Text('shifts.view_month'.tr()),
-                      ),
-                      ButtonSegment(
-                        value: ShiftsView.list,
-                        label: Text('shifts.view_list'.tr()),
-                      ),
-                    ],
-                    selected: {_view},
-                    onSelectionChanged: (selection) =>
-                        setState(() => _view = selection.first),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: Wrap(
-                    spacing: 8,
+                  child: ShiftsToolbarCard(
                     children: [
-                      ChoiceChip(
-                        label: Text('shifts.filter_all'.tr()),
+                      SegmentedButton<ShiftsView>(
+                        style: segmentedButtonStyle(theme),
+                        showSelectedIcon: false,
+                        segments: [
+                          ButtonSegment(
+                            value: ShiftsView.day,
+                            label: Text('shifts.view_day'.tr()),
+                          ),
+                          ButtonSegment(
+                            value: ShiftsView.week,
+                            label: Text('shifts.view_week'.tr()),
+                          ),
+                          ButtonSegment(
+                            value: ShiftsView.month,
+                            label: Text('shifts.view_month'.tr()),
+                          ),
+                          ButtonSegment(
+                            value: ShiftsView.list,
+                            label: Text('shifts.view_list'.tr()),
+                          ),
+                        ],
+                        selected: {_view},
+                        onSelectionChanged: (selection) =>
+                            setState(() => _view = selection.first),
+                      ),
+                      FilterChipPill(
+                        label: 'shifts.filter_all'.tr(),
                         selected: _filter == ShiftsFilter.all,
                         onSelected: (_) =>
                             setState(() => _filter = ShiftsFilter.all),
                       ),
-                      ChoiceChip(
-                        label: Text('shifts.filter_free'.tr()),
+                      FilterChipPill(
+                        label: 'shifts.filter_free'.tr(),
                         selected: _filter == ShiftsFilter.free,
                         onSelected: (_) =>
                             setState(() => _filter = ShiftsFilter.free),
                       ),
-                      ChoiceChip(
-                        label: Text('shifts.filter_mine'.tr()),
+                      FilterChipPill(
+                        label: 'shifts.filter_mine'.tr(),
                         selected: _filter == ShiftsFilter.mine,
                         onSelected: (_) =>
                             setState(() => _filter = ShiftsFilter.mine),
@@ -170,6 +179,7 @@ class _ShiftsScreenState extends ConsumerState<ShiftsScreen> {
                         selection: selection,
                         selectable: canRequest,
                         onToggle: _toggle,
+                        isWide: isWide,
                       ),
                       ShiftsView.list => AgendaListView(
                         filter: _filter,
